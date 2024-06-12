@@ -18,7 +18,7 @@ SUBROUTINE do_wann()
   USE constants,            ONLY : tpi
   USE cell_base,            ONLY : at,alat
   USE westcom,              ONLY : iuwfc,lrwfc,westpp_range,westpp_wannier_tr_rel,wannier_tr_rel,&
-                                 & logfile
+                                 & logfile,westpp_wann_sym,wann_sym,wann_b,wann_ng,wann_w,wann_m
   USE mp_world,             ONLY : mpime,root
   USE mp,                   ONLY : mp_bcast,mp_sum
   USE mp_global,            ONLY : inter_image_comm,my_image_id,intra_bgrp_comm
@@ -28,7 +28,7 @@ SUBROUTINE do_wann()
   USE control_flags,        ONLY : gamma_only
   USE buffers,              ONLY : get_buffer
   USE types_bz_grid,        ONLY : k_grid
-  USE wann_loc_wfc,         ONLY : wann_calc_proj,wann_jade
+  USE wann_loc_wfc,         ONLY : wann_init,wann_calc_proj,wann_jade
   USE distribution_center,  ONLY : aband
   USE class_idistribute,    ONLY : idistribute
   USE io_push,              ONLY : io_push_title
@@ -44,7 +44,7 @@ SUBROUTINE do_wann()
   ! Workspace
   !
   INTEGER :: nstate,local_ib,global_ib,global_jb,ib,jb
-  INTEGER :: iks,ir,il
+  INTEGER :: iks,ir,il,ik
   INTEGER :: iunit
   INTEGER :: dffts_nnr
   REAL(DP) :: reduce
@@ -78,9 +78,12 @@ SUBROUTINE do_wann()
   CALL allocate_gpu()
 #endif
   !
-  ALLOCATE(amat(nstate,nstate,6))
+  wann_sym = westpp_wann_sym
+  CALL wann_init()
+  !
+  ALLOCATE(amat(nstate,nstate,2*wann_ng))
   ALLOCATE(umat(nstate,nstate))
-  ALLOCATE(proj(dffts%nnr,6))
+  ALLOCATE(proj(dffts%nnr,2*wann_ng))
   ALLOCATE(aux(dffts%nnr))
   !$acc enter data create(proj,aux)
   !
@@ -145,7 +148,7 @@ SUBROUTINE do_wann()
               !
               CALL double_invfft_gamma(dffts,npw,npwx,evc(:,jb),evc(:,jb+1),psic,'Wave')
               !
-              DO il = 1,6
+              DO il = 1,2*wann_ng
                  !
                  reduce = 0._DP
                  !
@@ -159,10 +162,10 @@ SUBROUTINE do_wann()
                  !
               ENDDO
               !
-              amat(global_ib,global_jb,1:6) = val(1:6)
-              IF(ib /= jb) amat(global_jb,global_ib,1:6) = val(1:6)
+              amat(global_ib,global_jb,1:2*wann_ng) = val(1:2*wann_ng)
+              IF(ib /= jb) amat(global_jb,global_ib,1:2*wann_ng) = val(1:2*wann_ng)
               !
-              DO il = 1,6
+              DO il = 1,2*wann_ng
                  !
                  reduce = 0._DP
                  !
@@ -176,8 +179,8 @@ SUBROUTINE do_wann()
                  !
               ENDDO
               !
-              amat(global_ib,global_jb+1,1:6) = val(1:6)
-              IF(ib /= jb+1) amat(global_jb+1,global_ib,1:6) = val(1:6)
+              amat(global_ib,global_jb+1,1:2*wann_ng) = val(1:2*wann_ng)
+              IF(ib /= jb+1) amat(global_jb+1,global_ib,1:2*wann_ng) = val(1:2*wann_ng)
               !
               CALL update_bar_type(barra,'westpp',2)
               !
@@ -185,7 +188,7 @@ SUBROUTINE do_wann()
               !
               CALL single_invfft_gamma(dffts,npw,npwx,evc(:,jb),psic,'Wave')
               !
-              DO il = 1,6
+              DO il = 1,2*wann_ng
                  !
                  reduce = 0._DP
                  !
@@ -199,8 +202,8 @@ SUBROUTINE do_wann()
                  !
               ENDDO
               !
-              amat(global_ib,global_jb,1:6) = val(1:6)
-              IF(ib /= jb) amat(global_jb,global_ib,1:6) = val(1:6)
+              amat(global_ib,global_jb,1:2*wann_ng) = val(1:2*wann_ng)
+              IF(ib /= jb) amat(global_jb,global_ib,1:2*wann_ng) = val(1:2*wann_ng)
               !
               CALL update_bar_type(barra,'westpp',1)
               !
@@ -213,7 +216,7 @@ SUBROUTINE do_wann()
      CALL mp_sum(amat,intra_bgrp_comm)
      CALL mp_sum(amat,inter_image_comm)
      !
-     CALL wann_jade(nstate,amat,6,umat)
+     CALL wann_jade(nstate,amat,2*wann_ng,umat)
      !
      IF(mpime == root) THEN
         !
@@ -226,15 +229,22 @@ SUBROUTINE do_wann()
         !
         DO ib = 1,nstate
            !
-           tmp(1) = AIMAG(LOG(CMPLX(amat(ib,ib,1),amat(ib,ib,2),KIND=DP))) / tpi
-           tmp(2) = AIMAG(LOG(CMPLX(amat(ib,ib,3),amat(ib,ib,4),KIND=DP))) / tpi
-           tmp(3) = AIMAG(LOG(CMPLX(amat(ib,ib,5),amat(ib,ib,6),KIND=DP))) / tpi
+           tmp(1) = AIMAG(LOG(CMPLX(amat(ib,ib,1),amat(ib,ib,2),KIND=DP))) !/ tpi
+           tmp(2) = AIMAG(LOG(CMPLX(amat(ib,ib,3),amat(ib,ib,4),KIND=DP))) !/ tpi
+           tmp(3) = AIMAG(LOG(CMPLX(amat(ib,ib,5),amat(ib,ib,6),KIND=DP))) !/ tpi
            !
-           tmp(1) = MODULO(tmp(1),1._DP)
-           tmp(2) = MODULO(tmp(2),1._DP)
-           tmp(3) = MODULO(tmp(3),1._DP)
+           !tmp(1) = MODULO(tmp(1),1._DP)
+           !tmp(2) = MODULO(tmp(2),1._DP)
+           !tmp(3) = MODULO(tmp(3),1._DP)
            !
-           wan_center(:) = tmp(1)*at(:,1)*alat + tmp(2)*at(:,2)*alat + tmp(3)*at(:,3)*alat
+           !wan_center(:) = tmp(1)*at(:,1)*alat + tmp(2)*at(:,2)*alat + tmp(3)*at(:,3)*alat
+           wan_center(:) = 0._DP
+           DO il = 1,3
+              DO ik = 1,3
+                 wan_center(il) = wan_center(il) &
+                 &+ tmp(ik)*wann_m(ik,il)/SQRT(wann_b(1,ik)**2+wann_b(2,ik)**2+wann_b(3,ik)**2)
+              ENDDO
+           ENDDO
            !
            WRITE(label_b,'(I6)') ib
            !

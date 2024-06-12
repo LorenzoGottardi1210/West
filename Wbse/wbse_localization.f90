@@ -15,7 +15,7 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
   !----------------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP
-  USE westcom,              ONLY : localization
+  USE westcom,              ONLY : localization,wann_ng
   USE fft_base,             ONLY : dffts
   USE fft_at_gamma,         ONLY : double_invfft_gamma,single_invfft_gamma
   USE pwcom,                ONLY : npw,npwx
@@ -25,7 +25,7 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
   USE qbox_interface,       ONLY : load_qbox_wfc
   USE check_ovl_wfc,        ONLY : check_ovl_wannier,read_bisection_loc,check_ovl_bisection
   USE wbse_io,              ONLY : write_umatrix_and_omatrix,read_umatrix_and_omatrix
-  USE wann_loc_wfc,         ONLY : wann_calc_proj,wann_jade
+  USE wann_loc_wfc,         ONLY : wann_init,wann_calc_proj,wann_jade
   USE distribution_center,  ONLY : band_group
   USE class_idistribute,    ONLY : idistribute
   USE io_push,              ONLY : io_push_title
@@ -87,10 +87,12 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
         band_group = idistribute()
         CALL band_group%init(nbnd_do,'i','wann_local',.TRUE.)
         !
+        CALL wann_init()
+        !
         ! compute unitary rotation matrix
         !
-        ALLOCATE(proj(dffts_nnr,6))
-        ALLOCATE(a_matrix(nbnd_do,nbnd_do,6))
+        ALLOCATE(proj(dffts_nnr,2*wann_ng))
+        ALLOCATE(a_matrix(nbnd_do,nbnd_do,2*wann_ng))
         ALLOCATE(aux(dffts_nnr))
         ALLOCATE(aux2(dffts_nnr))
         !$acc enter data create(aux,aux2)
@@ -133,7 +135,7 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
                  !
                  CALL double_invfft_gamma(dffts,npw,npwx,evc(:,jbnd_g),evc(:,jbnd_g+1),psic,'Wave')
                  !
-                 DO il = 1,6
+                 DO il = 1,2*wann_ng
                     !
                     reduce = 0._DP
                     !
@@ -147,10 +149,10 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
                     !
                  ENDDO
                  !
-                 a_matrix(ibnd,jbnd,1:6) = val(1:6)
-                 IF(ibnd /= jbnd) a_matrix(jbnd,ibnd,1:6) = val(1:6)
+                 a_matrix(ibnd,jbnd,1:2*wann_ng) = val(1:2*wann_ng)
+                 IF(ibnd /= jbnd) a_matrix(jbnd,ibnd,1:2*wann_ng) = val(1:2*wann_ng)
                  !
-                 DO il = 1,6
+                 DO il = 1,2*wann_ng
                     !
                     reduce = 0._DP
                     !
@@ -164,14 +166,14 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
                     !
                  ENDDO
                  !
-                 a_matrix(ibnd,jbnd+1,1:6) = val(1:6)
-                 IF(ibnd /= jbnd+1) a_matrix(jbnd+1,ibnd,1:6) = val(1:6)
+                 a_matrix(ibnd,jbnd+1,1:2*wann_ng) = val(1:2*wann_ng)
+                 IF(ibnd /= jbnd+1) a_matrix(jbnd+1,ibnd,1:2*wann_ng) = val(1:2*wann_ng)
                  !
               ELSE
                  !
                  CALL single_invfft_gamma(dffts,npw,npwx,evc(:,jbnd_g),psic,'Wave')
                  !
-                 DO il = 1,6
+                 DO il = 1,2*wann_ng
                     !
                     reduce = 0._DP
                     !
@@ -185,8 +187,8 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
                     !
                  ENDDO
                  !
-                 a_matrix(ibnd,jbnd,1:6) = val(1:6)
-                 IF(ibnd /= jbnd) a_matrix(jbnd,ibnd,1:6) = val(1:6)
+                 a_matrix(ibnd,jbnd,1:2*wann_ng) = val(1:2*wann_ng)
+                 IF(ibnd /= jbnd) a_matrix(jbnd,ibnd,1:2*wann_ng) = val(1:2*wann_ng)
                  !
               ENDIF
               !
@@ -201,7 +203,7 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
         !
         CALL stop_bar_type(barra,'wann')
         !
-        CALL wann_jade(nbnd_do,a_matrix,6,u_real)
+        CALL wann_jade(nbnd_do,a_matrix,2*wann_ng,u_real)
         !
         u_matrix(:,:) = CMPLX(u_real,KIND=DP)
         !

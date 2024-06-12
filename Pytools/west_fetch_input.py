@@ -81,6 +81,7 @@ default["westpp_control"]["westpp_n_liouville_to_use"] = 1
 default["westpp_control"]["westpp_l_spin_flip"] = False
 default["westpp_control"]["westpp_l_compute_tdm"] = False
 default["westpp_control"]["westpp_wannier_tr_rel"] = 1.0e-6
+default["westpp_control"]["westpp_wann_sym"] = "cubic"
 default["westpp_control"]["westpp_l_dipole_realspace"] = False
 # server_control
 default["server_control"] = {}
@@ -93,6 +94,7 @@ default["wbse_init_control"]["bse_method"] = "PDEP"
 default["wbse_init_control"]["n_pdep_eigen_to_use"] = 1  # dynamically set to the number of electrons
 default["wbse_init_control"]["localization"] = "N"
 default["wbse_init_control"]["wannier_tr_rel"] = 1.0e-6
+default["wbse_init_control"]["wann_sym"] = "cubic"
 default["wbse_init_control"]["wfc_from_qbox"] = "qb_wfc"
 default["wbse_init_control"]["bisection_info"] = "bis_info"
 default["wbse_init_control"]["chi_kernel"] = "CHI"

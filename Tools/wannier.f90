@@ -19,6 +19,102 @@ MODULE wann_loc_wfc
   CONTAINS
     !
     !------------------------------------------------------------------------
+    SUBROUTINE wann_init()
+      !------------------------------------------------------------------------
+      !
+      USE kinds,                 ONLY : DP
+      USE constants,             ONLY : tpi
+      USE fft_base,              ONLY : dffts
+      USE scatter_mod,           ONLY : scatter_grid
+      USE cell_base,             ONLY : at,alat
+      USE westcom,               ONLY : wann_sym,wann_b,wann_g,wann_ng,wann_w,wann_m
+      !
+      IMPLICIT NONE
+      !
+      ! Workspace
+      !
+      INTEGER :: i
+      REAL(DP) :: det
+      REAL(DP) :: m(3,3)
+      !
+      wann_b(:,:) = 0._DP
+      wann_g(:,:) = 0._DP
+      wann_w(:) = 0._DP
+      wann_m(:,:) = 0._DP
+      !
+      SELECT CASE(wann_sym)
+      CASE('cubic')
+      !
+      wann_b(1,1) = tpi/alat
+      wann_b(2,2) = tpi/alat
+      wann_b(3,3) = tpi/alat
+      wann_g(:,1) = wann_b(:,1)
+      wann_g(:,2) = wann_b(:,2)
+      wann_g(:,3) = wann_b(:,3)
+      wann_ng = 3
+      wann_w(1) = 1._DP
+      wann_w(2) = 1._DP
+      wann_w(3) = 1._DP
+      !
+      CASE('orthorhombic')
+      !
+      wann_b(1,1) = tpi/alat
+      wann_b(2,2) = tpi/alat/at(2,2)
+      wann_b(3,3) = tpi/alat/at(3,3)
+      wann_g(:,1) = wann_b(:,1)
+      wann_g(:,2) = wann_b(:,2)
+      wann_g(:,3) = wann_b(:,3)
+      wann_ng = 3
+      wann_w(1) = 1._DP
+      wann_w(2) = at(2,2)**2
+      wann_w(3) = at(3,3)**2
+      !
+      CASE('hexagonal')
+      !
+      wann_b(1,1) = tpi/alat
+      wann_b(2,1) = tpi/alat/SQRT(3._DP)
+      wann_b(2,2) = tpi/alat/SQRT(3._DP)*2
+      wann_b(3,3) = tpi/alat/at(3,3)
+      wann_g(:,1) = wann_b(:,1)
+      wann_g(:,2) = wann_b(:,2)
+      wann_g(:,3) = wann_b(:,3)
+      wann_g(:,4) = wann_b(:,1) - wann_b(:,2)
+      wann_ng = 4
+      wann_w(1) = 0.5_DP
+      wann_w(2) = 0.5_DP
+      wann_w(4) = 0.5_DP
+      wann_w(3) = at(3,3)**2
+      !
+      CASE DEFAULT
+         CALL errore('wann_init','Supercell symmetry not implemented',1)
+      END SELECT
+      !
+      m(:,:) = 0._DP
+      m(:,1) = wann_b(:,1) / SQRT(wann_b(1,1)**2 + wann_b(2,1)**2 + wann_b(3,1)**2)
+      m(:,2) = wann_b(:,2) / SQRT(wann_b(1,2)**2 + wann_b(2,2)**2 + wann_b(3,2)**2)
+      m(:,3) = wann_b(:,3) / SQRT(wann_b(1,3)**2 + wann_b(2,3)**2 + wann_b(3,3)**2)
+      !
+      det = m(1,1)*(m(2,2)*m(3,3) - m(2,3)*m(3,2)) - &
+            m(1,2)*(m(2,1)*m(3,3) - m(2,3)*m(3,1)) + &
+            m(1,3)*(m(2,1)*m(3,2) - m(2,3)*m(3,1))
+      !
+      wann_m(1,1) = (m(2,2)*m(3,3) - m(2,3)*m(3,2)) / det
+      wann_m(1,2) = -(m(1,2)*m(3,3) - m(1,3)*m(3,2)) / det
+      wann_m(1,3) = (m(1,2)*m(2,3) - m(1,3)*m(2,2)) / det
+      wann_m(2,1) = -(m(2,1)*m(3,3) - m(2,3)*m(3,1)) / det
+      wann_m(2,2) = (m(1,1)*m(3,3) - m(1,3)*m(3,1)) / det
+      wann_m(2,3) = -(m(1,1)*m(2,3) - m(1,3)*m(2,1)) / det
+      wann_m(3,1) = (m(2,1)*m(3,2) - m(2,3)*m(3,1)) / det
+      wann_m(3,2) = -(m(1,1)*m(3,2) - m(1,2)*m(3,1)) / det
+      wann_m(3,3) = (m(1,1)*m(2,2) - m(1,2)*m(2,1)) / det
+      !
+      DO i = 1,3
+         print '(3F8.3)', wann_m(i,:)
+      ENDDO
+      !
+    END SUBROUTINE
+    !
+    !------------------------------------------------------------------------
     SUBROUTINE wann_calc_proj(proj)
       !------------------------------------------------------------------------
       !
@@ -26,31 +122,36 @@ MODULE wann_loc_wfc
       USE constants,             ONLY : tpi
       USE fft_base,              ONLY : dffts
       USE scatter_mod,           ONLY : scatter_grid
+      USE cell_base,             ONLY : at,alat
+      USE westcom,               ONLY : wann_sym,wann_b,wann_g,wann_ng,wann_w
       !
       IMPLICIT NONE
       !
       ! I/O
       !
-      REAL(DP),INTENT(OUT) :: proj(dffts%nnr,6)
+      REAL(DP),INTENT(OUT) :: proj(dffts%nnr,2*wann_ng)
       !
       ! Workspace
       !
       INTEGER :: il,ir,ix,iy,iz
-      REAL(DP) :: nx,ny,nz,wcx,wcy,wcz,wsx,wsy,wsz
+      REAL(DP) :: nx,ny,nz,cry_x,cry_y,cry_z,cart_x,cart_y,cart_z
+      REAL(DP) :: wc1,wc2,wc3,wc4,ws1,ws2,ws3,ws4
       !
       REAL(DP),ALLOCATABLE :: prod_gat(:)
       REAL(DP),ALLOCATABLE :: prod_distr(:)
+      REAL(DP),ALLOCATABLE :: tmp(:)
       !
       proj = 0._DP
       !
       ALLOCATE(prod_gat(dffts%nr1x*dffts%nr2x*dffts%nr3x))
       ALLOCATE(prod_distr(dffts%nnr))
+      ALLOCATE(tmp(4))
       !
       nx = REAL(dffts%nr1,KIND=DP)
       ny = REAL(dffts%nr2,KIND=DP)
       nz = REAL(dffts%nr3,KIND=DP)
       !
-      DO il = 1,6
+      DO il = 1,2*wann_ng
          !
          prod_gat = 0._DP
          prod_distr = 0._DP
@@ -58,26 +159,48 @@ MODULE wann_loc_wfc
          ir = 0
          DO ix = 1,dffts%nr1
             !
-            wcx = COS(tpi*REAL(ix-1,KIND=DP)/nx)
-            wsx = SIN(tpi*REAL(ix-1,KIND=DP)/nx)
+            cry_x = REAL(ix-1,KIND=DP)/nx
             !
             DO iy = 1,dffts%nr2
                !
-               wcy = COS(tpi*REAL(iy-1,KIND=DP)/ny)
-               wsy = SIN(tpi*REAL(iy-1,KIND=DP)/ny)
+               cry_y = REAL(iy-1,KIND=DP)/ny
                !
                DO iz = 1,dffts%nr3
                   !
-                  wcz = COS(tpi*REAL(iz-1,KIND=DP)/nz)
-                  wsz = SIN(tpi*REAL(iz-1,KIND=DP)/nz)
+                  cry_z = REAL(iz-1,KIND=DP)/nz
+                  !
+                  cart_x = cry_x*at(1,1) + cry_y*at(1,2) + cry_z*at(1,3)
+                  cart_y = cry_x*at(2,1) + cry_y*at(2,2) + cry_z*at(2,3)
+                  cart_z = cry_x*at(3,1) + cry_y*at(3,2) + cry_z*at(3,3)
+                  !
+                  cart_x = cart_x*alat
+                  cart_y = cart_y*alat
+                  cart_z = cart_z*alat
+                  !
+                  tmp(:) = 0._DP
+                  tmp(1) = wann_g(1,1)*cart_x + wann_g(2,1)*cart_y + wann_g(3,1)*cart_z
+                  tmp(2) = wann_g(1,2)*cart_x + wann_g(2,2)*cart_y + wann_g(3,2)*cart_z
+                  tmp(3) = wann_g(1,3)*cart_x + wann_g(2,3)*cart_y + wann_g(3,3)*cart_z
+                  tmp(4) = wann_g(1,4)*cart_x + wann_g(2,4)*cart_y + wann_g(3,4)*cart_z
+                  !
+                  wc1 = COS(tmp(1))*SQRT(wann_w(1))
+                  ws1 = SIN(tmp(1))*SQRT(wann_w(1))
+                  wc2 = COS(tmp(2))*SQRT(wann_w(2))
+                  ws2 = SIN(tmp(2))*SQRT(wann_w(2))
+                  wc3 = COS(tmp(3))*SQRT(wann_w(3))
+                  ws3 = SIN(tmp(3))*SQRT(wann_w(3))
+                  wc4 = COS(tmp(4))*SQRT(wann_w(4))
+                  ws4 = SIN(tmp(4))*SQRT(wann_w(4))
                   !
                   ir = (iz-1)*(dffts%nr1x*dffts%nr2x) + (iy-1)*dffts%nr1x + ix
-                  IF(il == 1) prod_gat(ir) = wcx
-                  IF(il == 2) prod_gat(ir) = wsx
-                  IF(il == 3) prod_gat(ir) = wcy
-                  IF(il == 4) prod_gat(ir) = wsy
-                  IF(il == 5) prod_gat(ir) = wcz
-                  IF(il == 6) prod_gat(ir) = wsz
+                  IF(il == 1) prod_gat(ir) = wc1
+                  IF(il == 2) prod_gat(ir) = ws1
+                  IF(il == 3) prod_gat(ir) = wc2
+                  IF(il == 4) prod_gat(ir) = ws2
+                  IF(il == 5) prod_gat(ir) = wc3
+                  IF(il == 6) prod_gat(ir) = ws3
+                  IF(il == 7) prod_gat(ir) = wc4
+                  IF(il == 8) prod_gat(ir) = ws4
                ENDDO
                !
             ENDDO
@@ -94,6 +217,7 @@ MODULE wann_loc_wfc
       !
       DEALLOCATE(prod_gat)
       DEALLOCATE(prod_distr)
+      DEALLOCATE(tmp)
       !
     END SUBROUTINE
     !

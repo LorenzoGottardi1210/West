@@ -16,7 +16,7 @@ SUBROUTINE do_wann()
   !
   USE kinds,                ONLY : DP
   USE constants,            ONLY : tpi
-  USE cell_base,            ONLY : at,alat
+  USE cell_base,            ONLY : at,alat,bg
   USE westcom,              ONLY : iuwfc,lrwfc,westpp_range,westpp_wannier_tr_rel,wannier_tr_rel,&
                                  & logfile,westpp_wann_sym,wann_sym,wann_b,wann_ng,wann_w,wann_m
   USE mp_world,             ONLY : mpime,root
@@ -50,7 +50,7 @@ SUBROUTINE do_wann()
   REAL(DP) :: reduce
   REAL(DP) :: val(6)
   REAL(DP) :: tmp(3)
-  REAL(DP) :: wan_center(3)
+  REAL(DP) :: wan_center(3),wan_center_cry(3)
   REAL(DP), ALLOCATABLE :: proj(:,:)
   REAL(DP), ALLOCATABLE :: amat(:,:,:)
   REAL(DP), ALLOCATABLE :: umat(:,:)
@@ -229,15 +229,10 @@ SUBROUTINE do_wann()
         !
         DO ib = 1,nstate
            !
-           tmp(1) = AIMAG(LOG(CMPLX(amat(ib,ib,1),amat(ib,ib,2),KIND=DP))) !/ tpi
-           tmp(2) = AIMAG(LOG(CMPLX(amat(ib,ib,3),amat(ib,ib,4),KIND=DP))) !/ tpi
-           tmp(3) = AIMAG(LOG(CMPLX(amat(ib,ib,5),amat(ib,ib,6),KIND=DP))) !/ tpi
+           tmp(1) = AIMAG(LOG(CMPLX(amat(ib,ib,1),amat(ib,ib,2),KIND=DP)))
+           tmp(2) = AIMAG(LOG(CMPLX(amat(ib,ib,3),amat(ib,ib,4),KIND=DP)))
+           tmp(3) = AIMAG(LOG(CMPLX(amat(ib,ib,5),amat(ib,ib,6),KIND=DP)))
            !
-           !tmp(1) = MODULO(tmp(1),1._DP)
-           !tmp(2) = MODULO(tmp(2),1._DP)
-           !tmp(3) = MODULO(tmp(3),1._DP)
-           !
-           !wan_center(:) = tmp(1)*at(:,1)*alat + tmp(2)*at(:,2)*alat + tmp(3)*at(:,3)*alat
            wan_center(:) = 0._DP
            DO il = 1,3
               DO ik = 1,3
@@ -245,6 +240,16 @@ SUBROUTINE do_wann()
                  &+ tmp(ik)*wann_m(ik,il)/SQRT(wann_b(1,ik)**2+wann_b(2,ik)**2+wann_b(3,ik)**2)
               ENDDO
            ENDDO
+           !
+           wan_center_cry(:) = wan_center(1)*bg(1,:)/alat + wan_center(2)*bg(2,:)/alat &
+                   & + wan_center(3)*bg(3,:)/alat
+           !
+           wan_center_cry(1) = MODULO(wan_center_cry(1),1._DP)
+           wan_center_cry(2) = MODULO(wan_center_cry(2),1._DP)
+           wan_center_cry(3) = MODULO(wan_center_cry(3),1._DP)
+           !
+           wan_center(:) = wan_center_cry(1)*at(:,1)*alat + wan_center_cry(2)*at(:,2)*alat &
+                   & + wan_center_cry(3)*at(:,3)*alat
            !
            WRITE(label_b,'(I6)') ib
            !

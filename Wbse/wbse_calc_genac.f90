@@ -8,10 +8,9 @@
 ! This file is part of WEST.
 !
 ! Contributors to this file:
-! Yu Jin, Victor Yu
-!
+! 
 !-----------------------------------------------------------------------
-SUBROUTINE wbse_calc_forces(dvg_exc_tmp)
+SUBROUTINE wbse_calc_genac(dvg_exc_tmp)
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -66,9 +65,9 @@ SUBROUTINE wbse_calc_forces(dvg_exc_tmp)
   !
   ! drhox1
   !
-  CALL wbse_calc_drhox1(dvg_exc_tmp, drhox1)
+  CALL wbse_calc_drhox1_nac(dvg_exc_tmp, drhox1)
   !
-  CALL wbse_forces_drhox1(n, dvg_exc_tmp, drhox1, forces)
+  CALL wbse_forces_drhox1_nac(n, dvg_exc_tmp, drhox1, forces)
   !
   ! < dvg | dvg >
   !
@@ -77,15 +76,15 @@ SUBROUTINE wbse_calc_forces(dvg_exc_tmp)
   !$acc update device(evc1_all)
 #endif
   !
-  CALL wbse_calc_dvgdvg_mat(dvg_exc_tmp, dvgdvg_mat)
+  CALL wbse_calc_dvgdvg_mat_nac(dvg_exc_tmp, dvgdvg_mat)
   !
   ! drhox2
   !
   ALLOCATE(drhox2(dffts%nnr, nspin))
   !
-  CALL wbse_calc_drhox2(dvgdvg_mat, drhox2)
+  CALL wbse_calc_drhox2_nac(dvgdvg_mat, drhox2)
   !
-  CALL wbse_forces_drhox2(n, dvgdvg_mat, drhox2, forces)
+  CALL wbse_forces_drhox2_nac(n, dvgdvg_mat, drhox2, forces)
   !
   ! Z vector
   !
@@ -97,15 +96,18 @@ SUBROUTINE wbse_calc_forces(dvg_exc_tmp)
   CALL allocate_bse_gpu(band_group%nlocx)
 #endif
   !
-  CALL build_rhs_zvector_eq(dvg_exc_tmp, dvgdvg_mat, drhox1, drhox2, z_rhs_vec)
+  !!! SPV
+  ! CALL build_rhs_zvector_eq(dvg_exc_tmp, dvgdvg_mat, drhox1, drhox2, z_rhs_vec)
   !
-  CALL solve_zvector_eq_cg(z_rhs_vec, zvector)
+  ! CALL solve_zvector_eq_cg(z_rhs_vec, zvector)
+  CALL solve_zvector_eq_cg(dvg_exc_tmp, zvector)
+  !!!
   !
 #if defined(__CUDA)
   CALL deallocate_bse_gpu()
 #endif
   !
-  CALL wbse_forces_drhoz(n, zvector, forces)
+  CALL wbse_forces_drhoz_nac(n, zvector, forces)
   !
   !$acc exit data delete(z_rhs_vec,zvector)
   DEALLOCATE(z_rhs_vec)
@@ -191,7 +193,7 @@ SUBROUTINE wbse_calc_forces(dvg_exc_tmp)
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE wbse_calc_drhox1(dvg_exc_tmp, drhox1)
+SUBROUTINE wbse_calc_drhox1_nac(dvg_exc_tmp, drhox1)
   !-----------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP
@@ -342,7 +344,7 @@ SUBROUTINE wbse_calc_drhox1(dvg_exc_tmp, drhox1)
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE wbse_forces_drhox1(n, dvg_exc_tmp, drhox1, forces)
+SUBROUTINE wbse_forces_drhox1_nac(n, dvg_exc_tmp, drhox1, forces)
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -452,7 +454,7 @@ SUBROUTINE wbse_forces_drhox1(n, dvg_exc_tmp, drhox1, forces)
         !
         ! 1) | dvpsi_i >
         !
-        CALL wbse_get_dvpsi_gamma_nonlocal(ia, dvg_exc_tmp(:,:,iks), dvpsi)
+        CALL wbse_get_dvpsi_gamma_nonlocal_nac(ia, dvg_exc_tmp(:,:,iks), dvpsi)
         !
         ! 2) forces_drhox1_i = < dvg | dvpsi_i >
         !
@@ -557,7 +559,7 @@ SUBROUTINE wbse_forces_drhox1(n, dvg_exc_tmp, drhox1, forces)
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE wbse_calc_dvgdvg_mat(dvg_exc_tmp, dvgdvg_mat)
+SUBROUTINE wbse_calc_dvgdvg_mat_nac(dvg_exc_tmp, dvgdvg_mat)
   !-----------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP
@@ -654,7 +656,7 @@ SUBROUTINE wbse_calc_dvgdvg_mat(dvg_exc_tmp, dvgdvg_mat)
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE wbse_calc_drhox2(dvgdvg_mat, drhox2)
+SUBROUTINE wbse_calc_drhox2_nac(dvgdvg_mat, drhox2)
   !-----------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP
@@ -815,7 +817,7 @@ SUBROUTINE wbse_calc_drhox2(dvgdvg_mat, drhox2)
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE wbse_forces_drhox2(n, dvgdvg_mat, drhox2, forces)
+SUBROUTINE wbse_forces_drhox2_nac(n, dvgdvg_mat, drhox2, forces)
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -954,7 +956,7 @@ SUBROUTINE wbse_forces_drhox2(n, dvgdvg_mat, drhox2, forces)
         !
         ! 1) | dvpsi_i >
         !
-        CALL wbse_get_dvpsi_gamma_nonlocal(ia, aux1, dvpsi)
+        CALL wbse_get_dvpsi_gamma_nonlocal_nac(ia, aux1, dvpsi)
         !
         ! 2) forces_drhox2 = < evc_iv2 | dvpsi_ia_iv >
         !
@@ -1067,7 +1069,7 @@ SUBROUTINE wbse_forces_drhox2(n, dvgdvg_mat, drhox2, forces)
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE wbse_forces_drhoz(n, zvector, forces)
+SUBROUTINE wbse_forces_drhoz_nac(n, zvector, forces)
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -1206,7 +1208,7 @@ SUBROUTINE wbse_forces_drhoz(n, zvector, forces)
         !
         ! 1) | dvpsi_i >
         !
-        CALL wbse_get_dvpsi_gamma_nonlocal(ia, aux1, dvpsi)
+        CALL wbse_get_dvpsi_gamma_nonlocal_nac(ia, aux1, dvpsi)
         !
         ! 2) forces_drhoz_i = < z_vector | dvpsi_i >
         !
@@ -1317,7 +1319,7 @@ SUBROUTINE wbse_forces_drhoz(n, zvector, forces)
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE wbse_get_dvpsi_gamma_nonlocal(i_at, dvg_tmp, dvpsi)
+SUBROUTINE wbse_get_dvpsi_gamma_nonlocal_nac(i_at, dvg_tmp, dvpsi)
   !-----------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP

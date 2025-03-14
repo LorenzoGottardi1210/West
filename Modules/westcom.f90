@@ -344,6 +344,9 @@ MODULE wbse_center
   REAL(DP) :: ddvxc_fd_coeff
   INTEGER :: forces_inexact_krylov
   REAL(DP) :: forces_inexact_krylov_tr
+  !!! SPV
+  LOGICAL :: l_nac
+  !!!
   !
   ! FOR global variables
   !

@@ -31,7 +31,8 @@ SUBROUTINE wbse_davidson_diago ( )
                                  & wstat_calculation,n_pdep_read_from_file,n_steps_write_restart,&
                                  & trev_pdep_rel,l_is_wstat_converged,nbnd_occ,lrwfc,iuwfc,dvg_exc,&
                                  & dng_exc,nbndval0x,n_trunc_bands,l_preconditioning,l_pre_shift,&
-                                 & l_spin_flip,l_forces,forces_state
+                                 & l_spin_flip,l_forces,forces_state,&
+                                 & l_nac !!! SPV
   USE plep_db,              ONLY : plep_db_write,plep_db_read
   USE davidson_restart,     ONLY : davidson_restart_write,davidson_restart_clear,&
                                  & davidson_restart_read
@@ -555,7 +556,8 @@ SUBROUTINE wbse_davidson_diago ( )
   !
   CALL stop_clock( 'chidiago' )
   !
-  IF(l_forces) THEN
+  !!! SPV
+  IF(l_forces .OR. l_nac) THEN
      !
      IF(.NOT. l_is_wstat_converged) &
      & CALL errore('chidiago','davidson not converged, cannot compute forces',1)
@@ -572,7 +574,8 @@ SUBROUTINE wbse_davidson_diago ( )
      !
      ! root image computes forces
      !
-     CALL wbse_calc_forces( dvg_exc_tmp )
+     IF (l_forces) CALL wbse_calc_forces( dvg_exc_tmp )
+     IF (l_nac) CALL wbse_calc_genac( dvg_exc_tmp )
      !
      !$acc exit data delete(dvg_exc_tmp)
      DEALLOCATE( dvg_exc_tmp )
@@ -584,6 +587,7 @@ SUBROUTINE wbse_davidson_diago ( )
      DEALLOCATE( dvg_exc_tmp )
      !
   ENDIF
+  !!! 
   !
 #if defined(__CUDA)
   CALL deallocate_gpu()

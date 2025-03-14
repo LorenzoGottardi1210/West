@@ -36,7 +36,8 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
                              & trev_liouville_rel,wbse_ipol,l_dipole_realspace,wbse_epsinfty,&
                              & spin_excitation,l_preconditioning,l_pre_shift,l_spin_flip,&
                              & l_spin_flip_kernel,l_spin_flip_alda0,l_print_spin_flip_kernel,&
-                             & spin_flip_cut,l_forces,forces_state,forces_zeq_cg_tr,&
+                             & spin_flip_cut,l_forces,forces_state,forces_zeq_cg_tr,& 
+                             & l_nac,& !!! SPV
                              & forces_zeq_n_cg_maxiter,ddvxc_fd_coeff,forces_inexact_krylov,&
                              & forces_inexact_krylov_tr,main_input_file,logfile
   USE kinds,            ONLY : DP
@@ -385,6 +386,9 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
         IERR = return_dict%getitem(l_print_spin_flip_kernel, 'l_print_spin_flip_kernel')
         IERR = return_dict%getitem(spin_flip_cut, 'spin_flip_cut')
         IERR = return_dict%getitem(l_forces, 'l_forces')
+        !!! SPV
+        IERR = return_dict%getitem(l_nac, 'l_nac')
+        !!!
         IERR = return_dict%get(forces_state, 'forces_state', DUMMY_DEFAULT)
         IERR = return_dict%getitem(forces_zeq_cg_tr, 'forces_zeq_cg_tr')
         IERR = return_dict%get(forces_zeq_n_cg_maxiter, 'forces_zeq_n_cg_maxiter', DUMMY_DEFAULT)
@@ -662,6 +666,9 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      CALL mp_bcast(l_print_spin_flip_kernel,root,world_comm)
      CALL mp_bcast(spin_flip_cut,root,world_comm)
      CALL mp_bcast(l_forces,root,world_comm)
+     !!! SPV
+     CALL mp_bcast(l_nac,root,world_comm)
+     !!!
      CALL mp_bcast(forces_state,root,world_comm)
      CALL mp_bcast(forces_zeq_cg_tr,root,world_comm)
      CALL mp_bcast(forces_zeq_n_cg_maxiter,root,world_comm)
@@ -705,6 +712,9 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
         IF(n_lanczos < 1) CALL errore('fetch_input','Err: n_lanczos<1',1)
         IF(n_lanczos == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_lanczos',1)
         IF(l_forces) CALL errore('fetch_input', 'Err: forces calculation must use Davidson', 1)
+        !!! SPV
+        IF(l_nac) CALL errore('fetch_input', 'Err: non-adiabatic calculation must use Davidson', 1)
+        !!!
      CASE DEFAULT
         CALL errore('fetch_input','Err: wbse_calculation/=(D,L)',1)
      END SELECT

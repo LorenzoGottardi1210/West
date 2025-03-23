@@ -228,6 +228,7 @@ MODULE wfreq_center
 #endif
   COMPLEX(DP), ALLOCATABLE :: eri_w(:,:,:,:)
   LOGICAL :: l_qdet_verbose
+  LOGICAL :: l_qdet_fcidump
   !
   ! output
   !

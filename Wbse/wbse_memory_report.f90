@@ -21,7 +21,8 @@ SUBROUTINE wbse_memory_report()
   USE mp_global,           ONLY : nbgrp
   USE mp_world,            ONLY : mpime,root
   USE westcom,             ONLY : l_bse,l_hybrid_tddft,l_forces,l_local_repr,l_lanczos,nbndval0x,&
-                                & n_trunc_bands,n_pdep_basis,npwqx,logfile
+                                & n_trunc_bands,n_pdep_basis,npwqx,logfile,&
+                                & l_nac !!! SPV
   USE distribution_center, ONLY : pert,kpt_pool
   USE noncollin_module,    ONLY : npol
   USE json_module,         ONLY : json_file
@@ -162,6 +163,21 @@ SUBROUTINE wbse_memory_report()
      mem_tot = mem_tot + mem_partial
   ENDIF
   !
+  !!! SPV
+  !
+  IF( l_nac ) THEN
+     nbndall = nbndloc*4
+     IF( l_bse .OR. l_hybrid_tddft ) THEN
+        nbndall = nbndall+nbndval0x-n_trunc_bands
+     ENDIF
+     mem_partial = (1.0_DP/Mb)*complex_size*npwx*kpt_pool%nloc*nbndall
+     WRITE(stdout,'(5x,"[MEM] non-adiabatic couplings ",f10.2," Mb", 5x,"(",i7,",",i5,")")') &
+        mem_partial, npwx, kpt_pool%nloc*nbndall
+     IF( mpime == root ) CALL json%add( 'memory.nacs', mem_partial )
+     mem_tot = mem_tot + mem_partial
+  ENDIF
+  !
+  !!!
   WRITE(stdout,'(5x,"[MEM] ----------------------------------------------------------")')
   WRITE(stdout,'(5x,"[MEM] Total estimate          ",f10.2," Mb", 5x)') mem_tot
   WRITE(stdout,'(5x,"[MEM] ----------------------------------------------------------")')

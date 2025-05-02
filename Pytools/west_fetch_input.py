@@ -123,6 +123,9 @@ default["wbse_control"]["l_spin_flip_alda0"] = False
 default["wbse_control"]["l_print_spin_flip_kernel"] = False
 default["wbse_control"]["spin_flip_cut"] = 1.0e-3
 default["wbse_control"]["l_forces"] = False
+### SPV
+default["wbse_control"]["l_nac"] = False
+###
 default["wbse_control"]["forces_state"] = 1
 default["wbse_control"]["forces_zeq_cg_tr"] = 1.0e-10
 default["wbse_control"]["forces_zeq_n_cg_maxiter"] = 500

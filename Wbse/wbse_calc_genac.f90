@@ -46,9 +46,9 @@ SUBROUTINE wbse_calc_genac(dvg_exc_tmp)
   TYPE(json_file) :: json
   INTEGER :: iunit
   !
-  CALL start_clock('calc_force')
+  CALL start_clock('calc_geNAC')
   !
-  CALL io_push_title('Compute forces')
+  CALL io_push_title('Compute geNAC')
   !
   n = 3 * nat
   !
@@ -65,9 +65,9 @@ SUBROUTINE wbse_calc_genac(dvg_exc_tmp)
   !
   ! drhox1
   !
-  CALL wbse_calc_drhox1_nac(dvg_exc_tmp, drhox1)
+  ! CALL wbse_calc_drhox1_nac(dvg_exc_tmp, drhox1)
   !
-  CALL wbse_forces_drhox1_nac(n, dvg_exc_tmp, drhox1, forces)
+  ! CALL wbse_forces_drhox1_nac(n, dvg_exc_tmp, drhox1, forces)
   !
   ! < dvg | dvg >
   !
@@ -76,15 +76,15 @@ SUBROUTINE wbse_calc_genac(dvg_exc_tmp)
   !$acc update device(evc1_all)
 #endif
   !
-  CALL wbse_calc_dvgdvg_mat_nac(dvg_exc_tmp, dvgdvg_mat)
+  ! CALL wbse_calc_dvgdvg_mat_nac(dvg_exc_tmp, dvgdvg_mat)
   !
   ! drhox2
   !
   ALLOCATE(drhox2(dffts%nnr, nspin))
   !
-  CALL wbse_calc_drhox2_nac(dvgdvg_mat, drhox2)
+  ! CALL wbse_calc_drhox2_nac(dvgdvg_mat, drhox2)
   !
-  CALL wbse_forces_drhox2_nac(n, dvgdvg_mat, drhox2, forces)
+  ! CALL wbse_forces_drhox2_nac(n, dvgdvg_mat, drhox2, forces)
   !
   ! Z vector
   !
@@ -186,7 +186,7 @@ SUBROUTINE wbse_calc_genac(dvg_exc_tmp)
   DEALLOCATE(drhox1)
   DEALLOCATE(drhox2)
   !
-  CALL stop_clock('calc_force')
+  CALL stop_clock('calc_geNAC')
   !
 9035 FORMAT(5X,'atom ',I4,' type ',I2,'   force = ',3F14.8)
   !
@@ -1236,7 +1236,9 @@ SUBROUTINE wbse_forces_drhoz_nac(n, zvector, forces)
              !$acc end parallel
            ENDIF
            !
-           forces_drhoz(3*ia-3+ipol) = forces_drhoz(3*ia-3+ipol) + 2._DP*this_wk*reduce
+           !!! SPV no need for the c.c.
+           ! forces_drhoz(3*ia-3+ipol) = forces_drhoz(3*ia-3+ipol) + 2._DP*this_wk*reduce
+           forces_drhoz(3*ia-3+ipol) = forces_drhoz(3*ia-3+ipol) + this_wk*reduce
            !
         ENDDO
         !
@@ -1256,7 +1258,8 @@ SUBROUTINE wbse_forces_drhoz_nac(n, zvector, forces)
   !
   CALL wbse_calc_dens(zvector, drhoz, .FALSE.)
   !
-  drhoz(:,:) = 2._DP*drhoz
+  !!! SPV no need for the c.c.
+  ! drhoz(:,:) = 2._DP*drhoz
   rdrhoz(:,:) = REAL(drhoz,KIND=DP)
   !
   IF(nspin == 2) THEN

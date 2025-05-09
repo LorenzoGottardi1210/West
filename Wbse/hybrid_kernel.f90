@@ -164,7 +164,7 @@ SUBROUTINE hybrid_kernel_term2(current_spin, evc1, hybrid_kd2, sf)
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE hybrid_kernel_term3(current_spin, evc1, hybrid_kd3, sf)
+SUBROUTINE hybrid_kernel_term3(current_spin, evc1_J, hybrid_kd3, sf)
   !-----------------------------------------------------------------------
   !
   ! \sum_{v'} (\int v_c a_{v'} \phi_{v}) a_{v'}
@@ -188,7 +188,7 @@ SUBROUTINE hybrid_kernel_term3(current_spin, evc1, hybrid_kd3, sf)
   ! I/O
   !
   INTEGER, INTENT(IN) :: current_spin
-  COMPLEX(DP), INTENT(IN) :: evc1(npwx,band_group%nlocx,kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: evc1_J(npwx,band_group%nlocx,kpt_pool%nloc)
   LOGICAL, INTENT(IN) :: sf
   COMPLEX(DP), INTENT(INOUT) :: hybrid_kd3(npwx,band_group%nlocx)
   !
@@ -258,7 +258,7 @@ SUBROUTINE hybrid_kernel_term3(current_spin, evc1, hybrid_kd3, sf)
         !
         DO jbnd = 1, flnbndval - n_trunc_bands ! index to be summed
            !
-           ! product of evc1 and evc
+           ! product of evc1_I and evc
            !
            CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,jbnd,ikq),evc(:,ibndp),psic,'Wave')
            !
@@ -278,7 +278,10 @@ SUBROUTINE hybrid_kernel_term3(current_spin, evc1, hybrid_kd3, sf)
            ENDDO
            !$acc end parallel
            !
-           CALL double_invfft_gamma(dffts,npw,npwx,gaux,evc1_all(:,jbnd,ikq),caux,'Wave')
+           ! CALL double_invfft_gamma(dffts,npw,npwx,gaux,evc1_all(:,jbnd,ikq),caux,'Wave')
+           !!! SPV
+           CALL double_invfft_gamma(dffts,npw,npwx,gaux,evc1_J(:,jbnd,ikq),caux,'Wave')
+           !!!
            !
            !$acc parallel loop present(caux)
            DO ir = 1, dffts_nnr
@@ -331,7 +334,7 @@ SUBROUTINE hybrid_kernel_term3(current_spin, evc1, hybrid_kd3, sf)
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE hybrid_kernel_term4(current_spin, evc1, hybrid_kd4, sf)
+SUBROUTINE hybrid_kernel_term4(current_spin, evc1_J, hybrid_kd4, sf)
   !-----------------------------------------------------------------------
   !
   ! \sum_{v'} (\int v_c a_{v'} a_{v}) \phi_{v'}
@@ -355,7 +358,7 @@ SUBROUTINE hybrid_kernel_term4(current_spin, evc1, hybrid_kd4, sf)
   ! I/O
   !
   INTEGER, INTENT(IN) :: current_spin
-  COMPLEX(DP), INTENT(IN) :: evc1(npwx,band_group%nlocx,kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: evc1_J(npwx,band_group%nlocx,kpt_pool%nloc)
   LOGICAL, INTENT(IN) :: sf
   COMPLEX(DP), INTENT(INOUT) :: hybrid_kd4(npwx,band_group%nlocx)
   !
@@ -425,9 +428,9 @@ SUBROUTINE hybrid_kernel_term4(current_spin, evc1, hybrid_kd4, sf)
            !
            jbndp = jbnd + n_trunc_bands
            !
-           ! product of evc1 and evc1
+           ! product of evc1_I and evc1_J
            !
-           CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,ibnd,iks_do),evc1_all(:,jbnd,iks_do),&
+           CALL double_invfft_gamma(dffts,npw,npwx,evc1_J(:,ibnd,iks_do),evc1_all(:,jbnd,iks_do),&
            & psic,'Wave')
            !
            !$acc parallel loop present(caux)

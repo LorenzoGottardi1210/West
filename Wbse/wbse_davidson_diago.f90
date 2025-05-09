@@ -32,7 +32,7 @@ SUBROUTINE wbse_davidson_diago ( )
                                  & trev_pdep_rel,l_is_wstat_converged,nbnd_occ,lrwfc,iuwfc,dvg_exc,&
                                  & dng_exc,nbndval0x,n_trunc_bands,l_preconditioning,l_pre_shift,&
                                  & l_spin_flip,l_forces,forces_state,&
-                                 & l_nac !!! SPV
+                                 & l_nac,eeNAC_state !!! SPV
   USE plep_db,              ONLY : plep_db_write,plep_db_read
   USE davidson_restart,     ONLY : davidson_restart_write,davidson_restart_clear,&
                                  & davidson_restart_read
@@ -68,8 +68,11 @@ SUBROUTINE wbse_davidson_diago ( )
   REAL(DP), ALLOCATABLE :: ew(:)
   REAL(DP), ALLOCATABLE :: hr_distr(:,:), vr_distr(:,:)
   COMPLEX(DP), ALLOCATABLE :: dng_exc_tmp(:,:,:), dvg_exc_tmp(:,:,:)
+  !!! SPV
+  COMPLEX(DP), ALLOCATABLE :: dvg_exc_tmp_J(:,:,:)
+  !!!
 #if defined(__CUDA)
-  ATTRIBUTES(PINNED) :: dng_exc_tmp, dvg_exc_tmp
+  ATTRIBUTES(PINNED) :: dng_exc_tmp, dvg_exc_tmp, dvg_exc_tmp_J !!! SPV
 #endif
   !
   INTEGER :: iks,il1,ig1,lbnd,ibnd,iks_do
@@ -125,6 +128,13 @@ SUBROUTINE wbse_davidson_diago ( )
   IF( ierr /= 0 ) &
      CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
   !$acc enter data create(dvg_exc_tmp)
+  !
+  !!! SPV
+  ALLOCATE( dvg_exc_tmp_J( npwx, band_group%nlocx, kpt_pool%nloc), STAT=ierr )
+  IF( ierr /= 0 ) &
+  CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
+  !$acc enter data create(dvg_exc_tmp_J)
+  !!!
   !
   ALLOCATE( dng_exc( npwx, band_group%nlocx, kpt_pool%nloc, pert%nlocx ), STAT=ierr )
   IF( ierr /= 0 ) &
@@ -575,7 +585,25 @@ SUBROUTINE wbse_davidson_diago ( )
      ! root image computes forces
      !
      IF (l_forces) CALL wbse_calc_forces( dvg_exc_tmp )
-     IF (l_nac) CALL wbse_calc_genac( dvg_exc_tmp )
+     !!! flow need to be unified with the geNAC calculation
+     ! IF (l_nac) CALL wbse_calc_genac( dvg_exc_tmp )
+     IF (l_nac) THEN 
+       !
+       ! send eeNAC_state to root image
+       !
+       ! il1 is just a dummy variable which contains the info from eeNAC_state
+       CALL pert%g2l(eeNAC_state,il1,owner)
+       !
+       CALL west_mp_get(dvg_exc_tmp_J,dvg_exc(:,:,:,il1),my_image_id,0,owner,owner,inter_image_comm)
+       !
+       !$acc update device(dvg_exc_tmp_J)
+       !
+       CALL wbse_calc_eenac( dvg_exc_tmp, dvg_exc_tmp_J )
+       !
+       !$acc exit data delete(dvg_exc_tmp_J)
+       DEALLOCATE( dvg_exc_tmp_J )
+       !
+     ENDIF
      !
      !$acc exit data delete(dvg_exc_tmp)
      DEALLOCATE( dvg_exc_tmp )

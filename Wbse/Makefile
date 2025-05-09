@@ -32,6 +32,7 @@ wbse_bgrp.o \
 wbse_calc_dens.o \
 wbse_calc_forces.o \
 wbse_calc_genac.o \
+wbse_calc_eenac.o \
 wbse_davidson_diago.o \
 wbse_dot.o \
 wbse_dv.o \

@@ -1088,11 +1088,14 @@ SUBROUTINE compute_ddvxc_5p( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc ) !!! TODO
   ! Workspace
   !
   INTEGER :: iks,ir,indk
-  REAL(DP), ALLOCATABLE :: aux_vxc(:,:,:), vxc(:,:), rdvrs_I(:,:),  rdvrs_J(:,:)
+  REAL(DP), ALLOCATABLE :: aux_vxc(:,:,:), vxc(:,:), rdvrs(:,:), rdvrs_I(:,:),  rdvrs_J(:,:)
   REAL(DP) :: etxc,vtxc
   TYPE (scf_type) :: a_rho
   COMPLEX(DP), ALLOCATABLE :: dvrs_I(:,:)
   COMPLEX(DP), ALLOCATABLE :: dvrs_J(:,:)
+  INTEGER :: isgn
+  INTEGER, DIMENSION(2) :: signs = [-1, 1]
+  COMPLEX(DP), ALLOCATABLE :: ddvxc_tmp(:,:,:)
   !
 #if defined(__CUDA)
   CALL start_clock_gpu('ddvxc_5p')
@@ -1106,7 +1109,9 @@ SUBROUTINE compute_ddvxc_5p( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc ) !!! TODO
   ALLOCATE(vxc(dffts%nnr, nspin))
   ALLOCATE(dvrs_I(dffts%nnr,nspin))
   ALLOCATE(dvrs_J(dffts%nnr,nspin))
+  ALLOCATE(ddvxc_tmp(dffts%nnr, nspin, 2))
   !$acc enter data create(dvrs_I,dvrs_J)
+  ALLOCATE(rdvrs(dffts%nnr, nspin))
   ALLOCATE(rdvrs_I(dffts%nnr, nspin))
   ALLOCATE(rdvrs_J(dffts%nnr, nspin))
   !
@@ -1134,41 +1139,47 @@ SUBROUTINE compute_ddvxc_5p( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc ) !!! TODO
      !
   ENDIF
   !
-  DO indk = 1, 5
-     !
-     vxc(:,:) = 0._DP
-     !
-     a_rho%of_r(:,:) = rho%of_r + REAL((indk-3),KIND=DP) * ddvxc_fd_coeff * rdvrs
-     !
-     DO iks = 1, nspin
-        !
-        psic(:) = a_rho%of_r(:,iks)
-        CALL fwfft ('Rho', psic, dffts)
-        a_rho%of_g(:,iks) = psic(dffts%nl)
-        !
-     ENDDO
-     !
-     CALL v_xc(a_rho, rho_core, rhog_core, etxc, vtxc, vxc)
-     !
-     aux_vxc(:,:,indk) = vxc
-     !
+  DO isgn = 0, 1 ! signs=[-1,+1]
+    DO indk = 1, 5
+       !
+       vxc(:,:) = 0._DP
+       !
+       rdvrs = rdvrs_I + signs(isgn)*rdvrs_J
+       a_rho%of_r(:,:) = rho%of_r + REAL((indk-3),KIND=DP) * ddvxc_fd_coeff * rdvrs
+       !
+       DO iks = 1, nspin
+          !
+          psic(:) = a_rho%of_r(:,iks)
+          CALL fwfft ('Rho', psic, dffts)
+          a_rho%of_g(:,iks) = psic(dffts%nl)
+          !
+       ENDDO
+       !
+       CALL v_xc(a_rho, rho_core, rhog_core, etxc, vtxc, vxc)
+       !
+       aux_vxc(:,:,indk) = vxc
+       !
+    ENDDO
+    !
+    ! compute ddvxc !!! TODO
+    !
+    DO iks = 1,nspin
+       DO ir = 1,dffts%nnr
+          ddvxc_tmp(ir,iks,isgn) = CMPLX( (-1._DP*aux_vxc(ir,iks,1)+16._DP*aux_vxc(ir,iks,2) &
+          &                       -30._DP*aux_vxc(ir,iks,3)+16._DP*aux_vxc(ir,iks,4) &
+          &                       -1._DP*aux_vxc(ir,iks,5)), KIND=DP ) / (12._DP*ddvxc_fd_coeff**2)
+       ENDDO
+    ENDDO
   ENDDO
   !
-  ! compute ddvxc !!! TODO
-  !
-  DO iks = 1,nspin
-     DO ir = 1,dffts%nnr
-        ddvxc(ir,iks) = CMPLX( (-1._DP*aux_vxc(ir,iks,1)+16._DP*aux_vxc(ir,iks,2) &
-        &                       -30._DP*aux_vxc(ir,iks,3)+16._DP*aux_vxc(ir,iks,4) &
-        &                       -1._DP*aux_vxc(ir,iks,5)), KIND=DP ) / (12._DP*ddvxc_fd_coeff**2)
-     ENDDO
-  ENDDO
+  ddvxc(:,:) = 0.25D0 * ( ddvxc_tmp(:,:,1) - ddvxc_tmp(:,:,0) ) 
   !
   DEALLOCATE(aux_vxc)
   DEALLOCATE(vxc)
   !$acc exit data delete(dvrs_I,dvrs_J)
   DEALLOCATE(dvrs_I)
   DEALLOCATE(dvrs_J)
+  DEALLOCATE(rdvrs)
   DEALLOCATE(rdvrs_I)
   DEALLOCATE(rdvrs_J)
   !

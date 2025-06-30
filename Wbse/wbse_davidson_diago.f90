@@ -26,6 +26,7 @@ SUBROUTINE wbse_davidson_diago ( )
   USE west_mp,              ONLY : west_mp_get
   USE io_global,            ONLY : stdout
   USE pwcom,                ONLY : npw,npwx,ngk
+  USE noncollin_module,     ONLY : npol
   USE distribution_center,  ONLY : pert,kpt_pool,band_group
   USE class_idistribute,    ONLY : idistribute,IDIST_BLK
   USE io_push,              ONLY : io_push_title
@@ -121,20 +122,20 @@ SUBROUTINE wbse_davidson_diago ( )
   !
   IF ( nvec > nvecx / 2 ) CALL errore( 'chidiago', 'nvecx is too small', 1 )
   !
-  ALLOCATE( dvg_exc( npwx, band_group%nlocx, kpt_pool%nloc, pert%nlocx ), STAT=ierr )
+  ALLOCATE( dvg_exc( npwx*npol, band_group%nlocx, kpt_pool%nloc, pert%nlocx ), STAT=ierr )
   IF( ierr /= 0 ) &
      CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
   !
-  ALLOCATE( dvg_exc_tmp( npwx, band_group%nlocx, kpt_pool%nloc), STAT=ierr )
+  ALLOCATE( dvg_exc_tmp( npwx*npol, band_group%nlocx, kpt_pool%nloc), STAT=ierr )
   IF( ierr /= 0 ) &
      CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
   !$acc enter data create(dvg_exc_tmp)
   !
-  ALLOCATE( dng_exc( npwx, band_group%nlocx, kpt_pool%nloc, pert%nlocx ), STAT=ierr )
+  ALLOCATE( dng_exc( npwx*npol, band_group%nlocx, kpt_pool%nloc, pert%nlocx ), STAT=ierr )
   IF( ierr /= 0 ) &
      CALL errore( 'chidiago',' cannot allocate dng ', ABS(ierr) )
   !
-  ALLOCATE( dng_exc_tmp( npwx, band_group%nlocx, kpt_pool%nloc ), STAT=ierr )
+  ALLOCATE( dng_exc_tmp( npwx*npol, band_group%nlocx, kpt_pool%nloc ), STAT=ierr )
   IF( ierr /= 0 ) &
      CALL errore( 'chidiago',' cannot allocate dng ', ABS(ierr) )
   !$acc enter data create(dng_exc_tmp)
@@ -783,6 +784,7 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
   USE gvect,                ONLY : gstart
   USE mp,                   ONLY : mp_sum,mp_bcast
   USE pwcom,                ONLY : npw,npwx,ngk
+  USE noncollin_module,     ONLY : npol
   USE westcom,              ONLY : nbnd_occ,n_trunc_bands
   USE control_flags,        ONLY : gamma_only
   USE distribution_center,  ONLY : pert,kpt_pool,band_group
@@ -795,7 +797,7 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
   ! I/O
   !
   INTEGER,INTENT(IN) :: m_global_start,m_global_end
-  COMPLEX(DP),INTENT(INOUT) :: amat(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
+  COMPLEX(DP),INTENT(INOUT) :: amat(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
   LOGICAL,INTENT(IN) :: sf
   !
   ! Workspace
@@ -829,7 +831,7 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
      factor = 1._DP
   ENDIF
   !
-  ALLOCATE(vec(npwx,band_group%nlocx,kpt_pool%nloc))
+  ALLOCATE(vec(npwx*npol,band_group%nlocx,kpt_pool%nloc))
   ALLOCATE(zbraket(pert%nloc))
   !
   !$acc enter data create(vec,zbraket)
@@ -891,7 +893,7 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
               !
               !$acc parallel loop collapse(2) reduction(+:anorm) present(amat) copy(anorm)
               DO lbnd = 1,nbnd_do
-                 DO ig = 1,npw
+                 DO ig = 1,npw*npol
                     anorm = anorm+factor*REAL(amat(ig,lbnd,iks,k_local),KIND=DP)**2 &
                     & +factor*AIMAG(amat(ig,lbnd,iks,k_local))**2
                  ENDDO
@@ -917,7 +919,7 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
            za = CMPLX(1._DP/SQRT(anorm),KIND=DP)
            !
            !$acc host_data use_device(amat)
-           CALL ZSCAL(npwx*band_group%nlocx*kpt_pool%nloc,za,amat(1,1,1,k_local),1)
+           CALL ZSCAL(npwx*npol*band_group%nlocx*kpt_pool%nloc,za,amat(1,1,1,k_local),1)
            !$acc end host_data
            !
         ENDIF
@@ -925,7 +927,7 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
         ! 5) Copy the current vector into V
         !
         !$acc host_data use_device(amat,vec)
-        CALL ZCOPY(npwx*band_group%nlocx*kpt_pool%nloc,amat(1,1,1,k_local),1,vec,1)
+        CALL ZCOPY(npwx*npol*band_group%nlocx*kpt_pool%nloc,amat(1,1,1,k_local),1,vec,1)
         !$acc end host_data
         !
         !$acc update host(vec)
@@ -1019,7 +1021,7 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
                  !
                  !$acc parallel loop collapse(2) reduction(+:tmp_c) present(vec,amat) copy(tmp_c)
                  DO lbnd = 1,nbnd_do
-                    DO ig = 1,npw
+                    DO ig = 1,npw*npol
                        tmp_c = tmp_c+CONJG(vec(ig,lbnd,iks))*amat(ig,lbnd,iks,ip)
                     ENDDO
                  ENDDO
@@ -1042,8 +1044,8 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
         ncol = m_local_end-j_local+1
         !
         !$acc host_data use_device(vec,zbraket,amat)
-        CALL ZGERU(npwx*band_group%nlocx*kpt_pool%nloc,ncol,mone,vec,1,zbraket(j_local),1,&
-        & amat(1,1,1,j_local),npwx*band_group%nlocx*kpt_pool%nloc)
+        CALL ZGERU(npwx*npol*band_group%nlocx*kpt_pool%nloc,ncol,mone,vec,1,zbraket(j_local),1,&
+        & amat(1,1,1,j_local),npwx*npol*band_group%nlocx*kpt_pool%nloc)
         !$acc end host_data
         !
      ENDIF
@@ -1150,7 +1152,8 @@ SUBROUTINE wbse_vc_initialize(amat,mglobalstart,mglobalend,sf)
   USE io_global,            ONLY : stdout
   USE wavefunctions,        ONLY : evc
   USE buffers,              ONLY : get_buffer
-  USE pwcom,                ONLY : npwx,nbnd,et,nspin
+  USE pwcom,                ONLY : npwx,nbnd,et,nspin,nkstot
+  USE noncollin_module,     ONLY : npol
   USE mp_global,            ONLY : inter_image_comm,my_image_id,inter_pool_comm,my_pool_id,&
                                  & my_bgrp_id
   USE mp,                   ONLY : mp_sum,mp_bcast,mp_max
@@ -1163,7 +1166,7 @@ SUBROUTINE wbse_vc_initialize(amat,mglobalstart,mglobalend,sf)
   ! I/O
   !
   INTEGER,INTENT(IN) :: mglobalstart,mglobalend
-  COMPLEX(DP),INTENT(INOUT) :: amat(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
+  COMPLEX(DP),INTENT(INOUT) :: amat(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
   LOGICAL,INTENT(IN) :: sf
   !
   ! Workspace
@@ -1185,7 +1188,7 @@ SUBROUTINE wbse_vc_initialize(amat,mglobalstart,mglobalend,sf)
   !
   ! get global copy of occupation
   !
-  ALLOCATE(occ(nspin))
+  ALLOCATE(occ(nkstot))
   !
   occ(:) = 0._DP
   DO is = 1, kpt_pool%nloc
@@ -1200,13 +1203,13 @@ SUBROUTINE wbse_vc_initialize(amat,mglobalstart,mglobalend,sf)
   nbnd_c_window = MIN(CEILING(SQRT(REAL(4*nvec,KIND=DP))), nbnd-MAXVAL(occ))
   npair = nbnd_v_window*nbnd_c_window
   !
-  ALLOCATE(e_diff(nspin*npair))
-  ALLOCATE(e_diff_order(nspin*npair))
+  ALLOCATE(e_diff(nkstot*npair))
+  ALLOCATE(e_diff_order(nkstot*npair))
   !
   IF(my_pool_id == 0) THEN
      !
      ib = 0
-     DO iks = 1,nspin
+     DO iks = 1,nkstot
         !
         IF(sf) THEN
            iks_do = flks(iks)
@@ -1226,7 +1229,7 @@ SUBROUTINE wbse_vc_initialize(amat,mglobalstart,mglobalend,sf)
         !
      ENDDO
      !
-     CALL heapsort(nspin*npair,e_diff,e_diff_order)
+     CALL heapsort(nkstot*npair,e_diff,e_diff_order)
      !
   ENDIF
   !

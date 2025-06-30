@@ -25,7 +25,7 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
   USE pwcom,                ONLY : npw,npwx,current_k,current_spin,isk,lsda,xk,ngk,igk_k,nbnd
   USE mp,                   ONLY : mp_bcast
   USE mp_global,            ONLY : inter_image_comm,my_image_id
-  USE noncollin_module,     ONLY : npol
+  USE noncollin_module,     ONLY : noncolin,npol,nspin_mag,domag
   USE buffers,              ONLY : get_buffer
   USE fft_at_gamma,         ONLY : single_fwfft_gamma,single_invfft_gamma,double_fwfft_gamma,&
                                  & double_invfft_gamma
@@ -41,7 +41,7 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
   USE xc_lib,               ONLY : stop_exx,start_exx,xclib_dft_is
   USE wbse_bgrp,            ONLY : gather_bands
   USE west_mp,              ONLY : west_mp_wait
-  USE wavefunctions,        ONLY : evc,psic
+  USE wavefunctions,        ONLY : evc,psic,psic_nc
   USE wvfct,                ONLY : et
 #if defined(__CUDA)
   USE west_gpu,             ONLY : factors,dvrs,hevc1,reallocate_ps_gpu
@@ -61,6 +61,7 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
   INTEGER :: dffts_nnr,band_group_myoffset
   INTEGER :: req
   REAL(DP) :: factor
+  COMPLEX(DP) :: tmp1, tmp2
 #if !defined(__CUDA)
   REAL(DP), ALLOCATABLE :: factors(:)
   COMPLEX(DP), ALLOCATABLE :: dvrs(:,:)
@@ -80,7 +81,11 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
 #if !defined(__CUDA)
   ALLOCATE(factors(band_group%nlocx))
   ALLOCATE(hevc1(npwx*npol,band_group%nlocx))
-  ALLOCATE(dvrs(dffts%nnr,nspin))
+  IF(noncolin) THEN
+     ALLOCATE(dvrs(dffts%nnr, nspin_mag))
+  ELSE 
+     ALLOCATE(dvrs(dffts%nnr, nspin))
+  ENDIF
 #endif
   !
   ! Calculation of the charge density response
@@ -226,25 +231,61 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
            !
         ELSE
            !
-           ! only single bands
+           ! noncolin case
+           ! be very careful with sign convention here; be consistent with sign convention of charge density matrix
            !
-           DO lbnd = 1,nbnd_do
-              !
-              ibnd = band_group%l2g(lbnd)+n_trunc_bands
-              !
-              CALL single_invfft_k(dffts,npw,npwx,evc(:,ibnd),psic,'Wave',igk_k(:,current_k))
-              !
-              !$acc parallel loop present(psic,dvrs)
-              DO ir = 1,dffts_nnr
-                 psic(ir) = psic(ir)*dvrs(ir,current_spin)
+           IF (noncolin) THEN
+              DO lbnd = 1,nbnd_do
+                 !
+                 ibnd = band_group%l2g(lbnd)+n_trunc_bands
+                 !
+                 CALL single_invfft_k(dffts,npw,npwx,evc(1:npwx,ibnd),psic_nc(:,1),'Wave',igk_k(:,current_k))
+                 CALL single_invfft_k(dffts,npw,npwx,evc(npwx+1:npwx*2,ibnd),psic_nc(:,2),'Wave',igk_k(:,current_k))
+                 !
+                 !$acc parallel loop present(psic_nc,dvrs)
+                 IF (domag) THEN
+                  DO ir = 1,dffts_nnr
+                     tmp1 = (dvrs(ir,1) + dvrs(ir,4)) * psic_nc(ir,1) + (dvrs(ir,2) - (0._DP,1._DP) * dvrs(ir,3)) * psic_nc(ir,2)
+                     tmp2 = (dvrs(ir,2) + (0._DP,1._DP) * dvrs(ir,3)) * psic_nc(ir,1) + (dvrs(ir,1) - dvrs(ir,4)) * psic_nc(ir,2)
+                     psic_nc(ir,1) = tmp1
+                     psic_nc(ir,2) = tmp2
+                  ENDDO
+                 ELSE
+                  DO ir = 1,dffts_nnr
+                     tmp1 = dvrs(ir,1) * psic_nc(ir,1) 
+                     tmp2 = dvrs(ir,1) * psic_nc(ir,2)
+                     psic_nc(ir,1) = tmp1
+                     psic_nc(ir,2) = tmp2
+                  ENDDO
+                 ENDIF
+                 !$acc end parallel
+                 !
+                 CALL single_fwfft_k(dffts,npw,npwx,psic_nc(:,1),evc1_new(1:npwx,lbnd,iks),'Wave',igk_k(:,current_k))
+                 CALL single_fwfft_k(dffts,npw,npwx,psic_nc(:,2),evc1_new(npwx+1:npwx*2,lbnd,iks),'Wave',igk_k(:,current_k))
+                 !
               ENDDO
-              !$acc end parallel
+           ELSE             
               !
-              CALL single_fwfft_k(dffts,npw,npwx,psic,evc1_new(:,lbnd,iks),'Wave',igk_k(:,current_k))
+              ! only single bands
               !
-           ENDDO
-           !
-        ENDIF
+              DO lbnd = 1,nbnd_do
+                 !
+                 ibnd = band_group%l2g(lbnd)+n_trunc_bands
+                 !
+                 CALL single_invfft_k(dffts,npw,npwx,evc(:,ibnd),psic,'Wave',igk_k(:,current_k))
+                 !
+                 !$acc parallel loop present(psic,dvrs)
+                 DO ir = 1,dffts_nnr
+                    psic(ir) = psic(ir)*dvrs(ir,current_spin)
+                 ENDDO
+                 !$acc end parallel
+                 !
+                 CALL single_fwfft_k(dffts,npw,npwx,psic,evc1_new(:,lbnd,iks),'Wave',igk_k(:,current_k))
+                 !
+              ENDDO
+              !
+           ENDIF
+        ENDIF           
         !
      ENDIF
      !
@@ -324,9 +365,8 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
      !
      !$acc parallel loop collapse(2) present(evc1_new,hevc1,factors,evc1)
      DO lbnd = 1,nbnd_do
-        DO ig = 1,npw
-           evc1_new(ig,lbnd,iks) = evc1_new(ig,lbnd,iks)+hevc1(ig,lbnd) &
-           & -factors(lbnd)*evc1(ig,lbnd,iks)
+        DO ig = 1,npwx*npol
+           evc1_new(ig,lbnd,iks) = evc1_new(ig,lbnd,iks)+hevc1(ig,lbnd)-factors(lbnd)*evc1(ig,lbnd,iks)
         ENDDO
      ENDDO
      !$acc end parallel

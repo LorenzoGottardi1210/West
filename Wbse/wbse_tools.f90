@@ -50,13 +50,14 @@ MODULE wbse_tools
       USE westcom,              ONLY : nbnd_occ,n_trunc_bands
       USE gvect,                ONLY : gstart
       USE west_mp,              ONLY : west_mp_circ_shift
+      USE noncollin_module,     ONLY : npol
       !
       IMPLICIT NONE
       !
       ! I/O
       !
-      COMPLEX(DP),INTENT(INOUT) :: ag(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
-      COMPLEX(DP),INTENT(IN) :: bg(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
+      COMPLEX(DP),INTENT(INOUT) :: ag(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
+      COMPLEX(DP),INTENT(IN) :: bg(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
       INTEGER,INTENT(IN) :: l2_s,l2_e
       REAL(DP),INTENT(INOUT) :: c_distr(pert%nglob,pert%nlocx)
       INTEGER,INTENT(IN) :: g_e
@@ -145,7 +146,7 @@ MODULE wbse_tools
                      !
                      !$acc loop collapse(2) reduction(+:reduce)
                      DO lbnd = 1,nbndval
-                        DO il3 = 1,npw
+                        DO il3 = 1,npw*npol
                            reduce = reduce+2._DP*REAL(ag(il3,lbnd,iks,il1),KIND=DP)*REAL(bg(il3,lbnd,iks,il2),KIND=DP) &
                            & +2._DP*AIMAG(ag(il3,lbnd,iks,il1))*AIMAG(bg(il3,lbnd,iks,il2))
                         ENDDO
@@ -213,13 +214,14 @@ MODULE wbse_tools
       USE pwcom,                ONLY : npwx,npw,ngk
       USE westcom,              ONLY : nbnd_occ,n_trunc_bands
       USE west_mp,              ONLY : west_mp_circ_shift
+      USE noncollin_module,     ONLY : npol
       !
       IMPLICIT NONE
       !
       ! I/O
       !
-      COMPLEX(DP),INTENT(INOUT) :: ag(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
-      COMPLEX(DP),INTENT(IN) :: bg(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
+      COMPLEX(DP),INTENT(INOUT) :: ag(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
+      COMPLEX(DP),INTENT(IN) :: bg(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
       INTEGER,INTENT(IN) :: l2_s,l2_e
       COMPLEX(DP),INTENT(INOUT) :: c_distr(pert%nglob,pert%nlocx)
       INTEGER,INTENT(IN) :: g_e
@@ -308,7 +310,7 @@ MODULE wbse_tools
                      !
                      !$acc loop collapse(2) reduction(+:reduce)
                      DO lbnd = 1,nbndval
-                        DO il3 = 1,npw
+                        DO il3 = 1,npw*npol
                            reduce = reduce+CONJG(ag(il3,lbnd,iks,il1))*bg(il3,lbnd,iks,il2)
                         ENDDO
                      ENDDO
@@ -364,13 +366,14 @@ MODULE wbse_tools
       USE pwcom,                ONLY : npwx,npw,ngk
       USE westcom,              ONLY : nbnd_occ,n_trunc_bands
       USE west_mp,              ONLY : west_mp_circ_shift
+      USE noncollin_module,     ONLY : npol
       !
       IMPLICIT NONE
       !
       ! I/O
       !
-      COMPLEX(DP),INTENT(INOUT) :: ag(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
-      COMPLEX(DP),INTENT(INOUT) :: bg(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
+      COMPLEX(DP),INTENT(INOUT) :: ag(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
+      COMPLEX(DP),INTENT(INOUT) :: bg(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
       INTEGER,INTENT(IN) :: nselect,n,lda
       REAL(DP),INTENT(IN) :: vr_distr(lda,pert%nlocx)
       REAL(DP),INTENT(IN) :: ew(lda)
@@ -429,7 +432,7 @@ MODULE wbse_tools
          !
       ENDDO
       !
-      ALLOCATE(hg(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx))
+      ALLOCATE(hg(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx))
       !
       !$acc enter data create(hg) copyin(vr_distr,ew,nbnd_loc)
       !
@@ -475,7 +478,7 @@ MODULE wbse_tools
                      !
                      !$acc loop collapse(2)
                      DO lbnd = 1,nbndval
-                        DO il3 = 1,npw
+                        DO il3 = 1,npw*npol
                            hg(il3,lbnd,iks,il2) = dconst*ag(il3,lbnd,iks,il1)+hg(il3,lbnd,iks,il2)
                         ENDDO
                      ENDDO
@@ -521,7 +524,7 @@ MODULE wbse_tools
                !
                !$acc loop collapse(2)
                DO lbnd = 1,nbndval
-                  DO il3 = 1,npw
+                  DO il3 = 1,npw*npol
                      ag(il3,lbnd,iks,il2) = dconst*hg(il3,lbnd,iks,il2)
                   ENDDO
                ENDDO
@@ -575,7 +578,7 @@ MODULE wbse_tools
                      !
                      !$acc loop collapse(2)
                      DO lbnd = 1,nbndval
-                        DO il3 = 1,npw
+                        DO il3 = 1,npw*npol
                            hg(il3,lbnd,iks,il2) = dconst*bg(il3,lbnd,iks,il1)+hg(il3,lbnd,iks,il2)
                         ENDDO
                      ENDDO
@@ -614,7 +617,7 @@ MODULE wbse_tools
                !
                !$acc loop collapse(2)
                DO lbnd = 1,nbndval
-                  DO il3 = 1,npw
+                  DO il3 = 1,npw*npol
                      ag(il3,lbnd,iks,il2) = ag(il3,lbnd,iks,il2)+hg(il3,lbnd,iks,il2)
                   ENDDO
                ENDDO
@@ -642,13 +645,14 @@ MODULE wbse_tools
       USE pwcom,                ONLY : npwx,npw,ngk
       USE westcom,              ONLY : nbnd_occ,n_trunc_bands
       USE west_mp,              ONLY : west_mp_circ_shift
+      USE noncollin_module,     ONLY : npol
       !
       IMPLICIT NONE
       !
       ! I/O
       !
-      COMPLEX(DP),INTENT(INOUT) :: ag(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
-      COMPLEX(DP),INTENT(INOUT) :: bg(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
+      COMPLEX(DP),INTENT(INOUT) :: ag(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
+      COMPLEX(DP),INTENT(INOUT) :: bg(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
       INTEGER,INTENT(IN) :: nselect,n,lda
       COMPLEX(DP),INTENT(IN) :: vr_distr(lda,pert%nlocx)
       REAL(DP),INTENT(IN) :: ew(lda)
@@ -707,7 +711,7 @@ MODULE wbse_tools
          !
       ENDDO
       !
-      ALLOCATE(hg(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx))
+      ALLOCATE(hg(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx))
       !
       !$acc enter data create(hg) copyin(vr_distr,ew,nbnd_loc)
       !
@@ -753,7 +757,7 @@ MODULE wbse_tools
                      !
                      !$acc loop collapse(2)
                      DO lbnd = 1,nbndval
-                        DO il3 = 1,npw
+                        DO il3 = 1,npw*npol
                            hg(il3,lbnd,iks,il2) = zconst*ag(il3,lbnd,iks,il1)+hg(il3,lbnd,iks,il2)
                         ENDDO
                      ENDDO
@@ -799,7 +803,7 @@ MODULE wbse_tools
                !
                !$acc loop collapse(2)
                DO lbnd = 1,nbndval
-                  DO il3 = 1,npw
+                  DO il3 = 1,npw*npol
                      ag(il3,lbnd,iks,il2) = zconst*hg(il3,lbnd,iks,il2)
                   ENDDO
                ENDDO
@@ -853,7 +857,7 @@ MODULE wbse_tools
                      !
                      !$acc loop collapse(2)
                      DO lbnd = 1,nbndval
-                        DO il3 = 1,npw
+                        DO il3 = 1,npw*npol
                            hg(il3,lbnd,iks,il2) = zconst*bg(il3,lbnd,iks,il1)+hg(il3,lbnd,iks,il2)
                         ENDDO
                      ENDDO
@@ -892,7 +896,7 @@ MODULE wbse_tools
                !
                !$acc loop collapse(2)
                DO lbnd = 1,nbndval
-                  DO il3 = 1,npw
+                  DO il3 = 1,npw*npol
                      ag(il3,lbnd,iks,il2) = ag(il3,lbnd,iks,il2)+hg(il3,lbnd,iks,il2)
                   ENDDO
                ENDDO
@@ -920,12 +924,13 @@ MODULE wbse_tools
       USE pwcom,                ONLY : npwx,npw,ngk
       USE westcom,              ONLY : nbnd_occ,n_trunc_bands
       USE west_mp,              ONLY : west_mp_circ_shift
+      USE noncollin_module,     ONLY : npol
       !
       IMPLICIT NONE
       !
       ! I/O
       !
-      COMPLEX(DP),INTENT(INOUT) :: ag(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
+      COMPLEX(DP),INTENT(INOUT) :: ag(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
       INTEGER,INTENT(IN) :: nselect,n,lda
       REAL(DP),INTENT(IN) :: vr_distr(lda,pert%nlocx)
       LOGICAL,INTENT(IN) :: sf
@@ -976,7 +981,7 @@ MODULE wbse_tools
          !
       ENDDO
       !
-      ALLOCATE(hg(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx))
+      ALLOCATE(hg(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx))
       !
       !$acc enter data create(hg) copyin(vr_distr,nbnd_loc)
       !
@@ -1022,7 +1027,7 @@ MODULE wbse_tools
                      !
                      !$acc loop collapse(2)
                      DO lbnd = 1,nbndval
-                        DO il3 = 1,npw
+                        DO il3 = 1,npw*npol
                            hg(il3,lbnd,iks,il2) = dconst*ag(il3,lbnd,iks,il1)+hg(il3,lbnd,iks,il2)
                         ENDDO
                      ENDDO
@@ -1071,7 +1076,7 @@ MODULE wbse_tools
                !
                !$acc loop collapse(2)
                DO lbnd = 1,nbndval
-                  DO il3 = 1,npw
+                  DO il3 = 1,npw*npol
                      ag(il3,lbnd,iks,il2) = hg(il3,lbnd,iks,il2)
                   ENDDO
                ENDDO
@@ -1105,7 +1110,7 @@ MODULE wbse_tools
                !
                !$acc loop collapse(2)
                DO lbnd = 1,nbndval
-                  DO il3 = 1,npw
+                  DO il3 = 1,npw*npol
                      ag(il3,lbnd,iks,il2) = 0._DP
                   ENDDO
                ENDDO
@@ -1133,12 +1138,13 @@ MODULE wbse_tools
       USE pwcom,                ONLY : npwx,npw,ngk
       USE westcom,              ONLY : nbnd_occ,n_trunc_bands
       USE west_mp,              ONLY : west_mp_circ_shift
+      USE noncollin_module,     ONLY : npol
       !
       IMPLICIT NONE
       !
       ! I/O
       !
-      COMPLEX(DP),INTENT(INOUT) :: ag(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
+      COMPLEX(DP),INTENT(INOUT) :: ag(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
       INTEGER,INTENT(IN) :: nselect,n,lda
       COMPLEX(DP),INTENT(IN) :: vr_distr(lda,pert%nlocx)
       LOGICAL,INTENT(IN) :: sf
@@ -1189,7 +1195,7 @@ MODULE wbse_tools
          !
       ENDDO
       !
-      ALLOCATE(hg(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx))
+      ALLOCATE(hg(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx))
       !
       !$acc enter data create(hg) copyin(vr_distr,nbnd_loc)
       !
@@ -1235,7 +1241,7 @@ MODULE wbse_tools
                      !
                      !$acc loop collapse(2)
                      DO lbnd = 1,nbndval
-                        DO il3 = 1,npw
+                        DO il3 = 1,npw*npol
                            hg(il3,lbnd,iks,il2) = zconst*ag(il3,lbnd,iks,il1)+hg(il3,lbnd,iks,il2)
                         ENDDO
                      ENDDO
@@ -1284,7 +1290,7 @@ MODULE wbse_tools
                !
                !$acc loop collapse(2)
                DO lbnd = 1,nbndval
-                  DO il3 = 1,npw
+                  DO il3 = 1,npw*npol
                      ag(il3,lbnd,iks,il2) = hg(il3,lbnd,iks,il2)
                   ENDDO
                ENDDO
@@ -1318,7 +1324,7 @@ MODULE wbse_tools
                !
                !$acc loop collapse(2)
                DO lbnd = 1,nbndval
-                  DO il3 = 1,npw
+                  DO il3 = 1,npw*npol
                      ag(il3,lbnd,iks,il2) = (0._DP,0._DP)
                   ENDDO
                ENDDO
@@ -1346,12 +1352,13 @@ MODULE wbse_tools
       USE pwcom,                ONLY : npwx
       USE westcom,              ONLY : nbnd_occ,n_trunc_bands
       USE wvfct,                ONLY : g2kin,et
+      USE noncollin_module,     ONLY : npol, noncolin
       !
       IMPLICIT NONE
       !
       ! I/O
       !
-      COMPLEX(DP),INTENT(INOUT) :: ag(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
+      COMPLEX(DP),INTENT(INOUT) :: ag(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
       INTEGER,INTENT(IN) :: nselect,n
       LOGICAL,INTENT(IN) :: turn_shift
       LOGICAL,INTENT(IN) :: sf
@@ -1454,6 +1461,30 @@ MODULE wbse_tools
                      ag(ig,lbnd,iks,il1) = ag(ig,lbnd,iks,il1)/tmp
                      !
                   ENDDO
+                  IF (noncolin) THEN
+                     DO ig = 1,npwx
+                        !
+                        ! ibnd = band_group%l2g(lbnd)
+                        !
+                        ibnd = band_group_myoffset+lbnd
+                        !
+                        IF(turn_shift) THEN
+                           tmp = g2kin_save(ig,iks)-et(ibnd+n_trunc_bands,iks_do)
+                        ELSE
+                           tmp = g2kin_save(ig,iks)
+                        ENDIF
+                        !
+                        ! Same as the following line but without thread divergence
+                        ! IF(ABS(tmp) < minimum) tmp = SIGN(minimum,tmp)
+                        !
+                        tmp_abs = MAX(ABS(tmp),minimum)
+                        tmp_sgn = SIGN(1._DP,tmp)
+                        tmp = tmp_sgn*tmp_abs
+                        !
+                        ag(npwx+ig,lbnd,iks,il1) = ag(npwx+ig,lbnd,iks,il1)/tmp
+                        !
+                     ENDDO
+                  ENDIF
                ENDDO
                !
             ENDDO

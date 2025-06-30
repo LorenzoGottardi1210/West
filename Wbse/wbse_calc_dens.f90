@@ -22,7 +22,7 @@ SUBROUTINE wbse_calc_dens(devc, drho, sf)
   USE control_flags,          ONLY : gamma_only
   USE fft_base,               ONLY : dffts
   USE lsda_mod,               ONLY : nspin,lsda
-  USE noncollin_module,       ONLY : npol
+  USE noncollin_module,       ONLY : noncolin,npol,nspin_mag,domag
   USE pwcom,                  ONLY : npw,npwx,igk_k,current_k,current_spin,isk,wg,ngk
   USE mp,                     ONLY : mp_sum,mp_bcast
   USE mp_global,              ONLY : my_image_id,inter_image_comm,inter_pool_comm,inter_bgrp_comm
@@ -31,9 +31,9 @@ SUBROUTINE wbse_calc_dens(devc, drho, sf)
   USE fft_at_gamma,           ONLY : double_invfft_gamma
   USE fft_at_k,               ONLY : single_fwfft_k,single_invfft_k
   USE distribution_center,    ONLY : kpt_pool,band_group
-  USE wavefunctions,          ONLY : evc,psic
+  USE wavefunctions,          ONLY : evc,psic,psic_nc
 #if defined(__CUDA)
-  USE west_gpu,               ONLY : tmp_r,psic2
+  USE west_gpu,               ONLY : tmp_r,psic2,psic_nc2
 #endif
   !
   IMPLICIT NONE
@@ -41,8 +41,12 @@ SUBROUTINE wbse_calc_dens(devc, drho, sf)
   ! I/O
   !
   COMPLEX(DP), INTENT(IN) :: devc(npwx*npol,band_group%nlocx,kpt_pool%nloc)
-  COMPLEX(DP), INTENT(OUT) :: drho(dffts%nnr,nspin)
+  ! the perturbed wfcs in reciprocal space
+  COMPLEX(DP), INTENT(OUT) :: drho(dffts%nnr,nspin_mag)
+  ! the change in charge density matrix (change in (rho_tot, mx, my, mz) if noncolin)
   LOGICAL, INTENT(IN) :: sf
+  ! REAL(DP), INTENT(IN) :: rsign
+  ! the sign in front of the response of the magnetization density
   !
   ! Workspace
   !
@@ -51,6 +55,9 @@ SUBROUTINE wbse_calc_dens(devc, drho, sf)
 #if !defined(__CUDA)
   REAL(DP), ALLOCATABLE :: tmp_r(:)
   COMPLEX(DP), ALLOCATABLE :: psic2(:)
+  ! the perturbed wfcs in real space
+  COMPLEX(DP), ALLOCATABLE :: psic_nc2(:,:)
+  ! the perturbed wfcs in real space for noncolin case
 #endif
   INTEGER, PARAMETER :: flks(2) = [2,1]
   !
@@ -66,7 +73,11 @@ SUBROUTINE wbse_calc_dens(devc, drho, sf)
   IF(gamma_only) THEN
      ALLOCATE(tmp_r(dffts%nnr))
   ELSE
-     ALLOCATE(psic2(dffts%nnr))
+     IF(noncolin) THEN
+        ALLOCATE(psic_nc2(dffts%nnr, npol))
+     ELSE
+        ALLOCATE(psic2(dffts%nnr))
+     ENDIF
   ENDIF
 #endif
   !
@@ -130,27 +141,63 @@ SUBROUTINE wbse_calc_dens(devc, drho, sf)
         !
      ELSE
         !
-        ! only single bands
+        ! noncolin case
         !
-        DO lbnd = 1, band_group%nloc
-           !
-           ibnd = band_group%l2g(lbnd)+n_trunc_bands
-           IF(ibnd < 1 .OR. ibnd > nbndval) CYCLE
-           !
-           w1 = wg(ibnd,iks_do)/omega
-           !
-           CALL single_invfft_k(dffts,npw,npwx,evc(:,ibnd),psic,'Wave',igk_k(:,current_k))
-           CALL single_invfft_k(dffts,npw,npwx,devc(:,lbnd,iks),psic2,'Wave',igk_k(:,current_k))
-           !
-           !$acc parallel loop present(drho,psic,psic2)
-           DO ir = 1, dffts_nnr
-              drho(ir,current_spin) = drho(ir,current_spin) + w1*CONJG(psic(ir))*psic2(ir)
+        IF (noncolin) THEN
+           DO lbnd = 1, band_group%nloc
+              !
+              ibnd = band_group%l2g(lbnd)+n_trunc_bands
+              IF(ibnd < 1 .OR. ibnd > nbndval) CYCLE
+              !
+              w1 = wg(ibnd,iks_do)/omega
+              !
+              CALL single_invfft_k(dffts,npw,npwx,evc(1:npwx,ibnd),psic_nc(:,1),'Wave',igk_k(:,current_k))
+              CALL single_invfft_k(dffts,npw,npwx,evc(npwx+1:npwx*2,ibnd),psic_nc(:,2),'Wave',igk_k(:,current_k))
+              CALL single_invfft_k(dffts,npw,npwx,devc(1:npwx,lbnd,iks),psic_nc2(:,1),'Wave',igk_k(:,current_k))
+              CALL single_invfft_k(dffts,npw,npwx,devc(npwx+1:npwx*2,lbnd,iks),psic_nc2(:,2),'Wave',igk_k(:,current_k))
+              !
+              !$acc parallel loop present(drho,psic_nc,psic_nc2)
+              DO ir = 1, dffts_nnr
+                 drho(ir,1) = drho(ir,1) + w1*(CONJG(psic_nc(ir,1))*psic_nc2(ir,1) + &
+                                              CONJG(psic_nc(ir,2))*psic_nc2(ir,2) )
+              ENDDO
+              IF (domag) THEN
+               DO ir = 1, dffts_nnr
+                  drho(ir,2) = drho(ir,2) + w1 * (CONJG(psic_nc(ir,1))*psic_nc2(ir,2) &
+                                                  + CONJG(psic_nc(ir,2))*psic_nc2(ir,1) )
+                  drho(ir,3) = drho(ir,3) + w1 * (CONJG(psic_nc(ir,1))*psic_nc2(ir,2) &
+                                                  - CONJG(psic_nc(ir,2))*psic_nc2(ir,1) ) * (0.d0,-1.d0)
+                  drho(ir,4) = drho(ir,4) + w1 * (CONJG(psic_nc(ir,1))*psic_nc2(ir,1) &
+                                                  - CONJG(psic_nc(ir,2))*psic_nc2(ir,2) )
+               ENDDO
+              ENDIF
+              !$acc end parallel
+              !
            ENDDO
-           !$acc end parallel
+        ELSE
            !
-        ENDDO
-        !
-     ENDIF
+           ! only single bands
+           !
+           DO lbnd = 1, band_group%nloc
+              !
+              ibnd = band_group%l2g(lbnd)+n_trunc_bands
+              IF(ibnd < 1 .OR. ibnd > nbndval) CYCLE
+              !
+              w1 = wg(ibnd,iks_do)/omega
+              !
+              CALL single_invfft_k(dffts,npw,npwx,evc(:,ibnd),psic,'Wave',igk_k(:,current_k))
+              CALL single_invfft_k(dffts,npw,npwx,devc(:,lbnd,iks),psic2,'Wave',igk_k(:,current_k))
+              !
+              !$acc parallel loop present(drho,psic,psic2)
+              DO ir = 1, dffts_nnr
+                 drho(ir,current_spin) = drho(ir,current_spin) + w1*CONJG(psic(ir))*psic2(ir)
+              ENDDO
+              !$acc end parallel
+              !
+           ENDDO
+           !
+         ENDIF
+     ENDIF   
      !
   ENDDO
   !
@@ -162,7 +209,11 @@ SUBROUTINE wbse_calc_dens(devc, drho, sf)
   IF(gamma_only) THEN
      DEALLOCATE(tmp_r)
   ELSE
-     DEALLOCATE(psic2)
+     IF(noncolin) THEN
+        DEALLOCATE(psic_nc2)
+     ELSE
+        DEALLOCATE(psic2)
+     ENDIF
   ENDIF
 #endif
   !

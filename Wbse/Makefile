@@ -22,6 +22,7 @@ MODFLAGS = $(BASEMOD_FLAGS) \
 WBSE_OBJS = \
 bse_kernel.o \
 build_rhs_zvector_eq.o \
+build_rhs_zvector_eq_nac.o \
 calc_tau.o \
 check_ovl_wfc.o \
 hybrid_kernel.o \

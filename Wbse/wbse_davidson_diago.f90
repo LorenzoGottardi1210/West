@@ -69,6 +69,7 @@ SUBROUTINE wbse_davidson_diago ( )
   REAL(DP), ALLOCATABLE :: hr_distr(:,:), vr_distr(:,:)
   COMPLEX(DP), ALLOCATABLE :: dng_exc_tmp(:,:,:), dvg_exc_tmp(:,:,:)
   !!! SPV
+  REAL(DP) :: omega_JI
   COMPLEX(DP), ALLOCATABLE :: dvg_exc_tmp_J(:,:,:)
   !!!
 #if defined(__CUDA)
@@ -558,7 +559,7 @@ SUBROUTINE wbse_davidson_diago ( )
   !
   DEALLOCATE( conv )
   DEALLOCATE( ew )
-  DEALLOCATE( ev )
+  IF (.NOT.l_nac) DEALLOCATE( ev ) !!! SPV
   DEALLOCATE( hr_distr )
   DEALLOCATE( vr_distr )
   !
@@ -580,7 +581,7 @@ SUBROUTINE wbse_davidson_diago ( )
      !
      !$acc update device(dvg_exc_tmp)
      !
-     DEALLOCATE( dvg_exc )
+     IF (.NOT.l_nac) DEALLOCATE( dvg_exc ) 
      !
      ! root image computes forces
      !
@@ -598,10 +599,19 @@ SUBROUTINE wbse_davidson_diago ( )
        !
        !$acc update device(dvg_exc_tmp_J)
        !
-       CALL wbse_calc_eenac( dvg_exc_tmp, dvg_exc_tmp_J )
+       DEALLOCATE( dvg_exc )
+       !
+       IF (eeNAC_state==forces_state) THEN
+         omega_JI = 1._DP
+       ELSE
+         omega_JI = ev(eeNAC_state) - ev(forces_state)
+       ENDIF
+       WRITE(stdout,'(A,F12.6)') "omega_JI = ", omega_JI
+       CALL wbse_calc_eenac( dvg_exc_tmp, dvg_exc_tmp_J, omega_JI )
        !
        !$acc exit data delete(dvg_exc_tmp_J)
        DEALLOCATE( dvg_exc_tmp_J )
+       DEALLOCATE( ev )
        !
      ENDIF
      !

@@ -10,7 +10,7 @@
 ! Contributors to this file:
 ! 
 !-----------------------------------------------------------------------
-SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J)
+SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -36,6 +36,7 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J)
   !
   COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc)
   COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
+  REAL(DP), INTENT(IN)  :: omega_JI !!! SPV
   !
   ! Workspace
   !
@@ -47,9 +48,9 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J)
   TYPE(json_file) :: json
   INTEGER :: iunit
   !
-  CALL start_clock('calc_geNAC')
+  CALL start_clock('calc_eeNAC')
   !
-  CALL io_push_title('Compute geNAC')
+  CALL io_push_title('Compute eeNAC')
   !
   n = 3 * nat
   !
@@ -68,7 +69,7 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J)
   !
   CALL wbse_calc_drhox1_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
   !
-  ! CALL wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, forces)
+  CALL wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, forces, omega_JI)
   !
   ! < dvg | dvg >
   !
@@ -85,7 +86,7 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J)
   !
   CALL wbse_calc_drhox2_eenac(dvgdvg_mat, drhox2)
   !
-  ! CALL wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces)
+  CALL wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces, omega_JI)
   !
   ! Z vector
   !
@@ -98,7 +99,7 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J)
 #endif
   !
   !!! SPV
-  CALL build_rhs_zvector_eq(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drhox1, drhox2, z_rhs_vec)
+  CALL build_rhs_zvector_eq_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drhox1, drhox2, z_rhs_vec, omega_JI)
   !
   CALL solve_zvector_eq_cg(z_rhs_vec, zvector)
   !!!
@@ -186,7 +187,7 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J)
   DEALLOCATE(drhox1)
   DEALLOCATE(drhox2)
   !
-  CALL stop_clock('calc_geNAC')
+  CALL stop_clock('calc_eeNAC')
   !
 9035 FORMAT(5X,'atom ',I4,' type ',I2,'   force = ',3F14.8)
   !
@@ -238,6 +239,11 @@ SUBROUTINE wbse_calc_drhox1_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
   ALLOCATE(tmp_r(dffts%nnr))
   !$acc enter data create(tmp_r)
   !
+  !!! SPV
+  ALLOCATE(psic_J(dffts%nnr))
+  !$acc enter data create(psic_J)
+  !!!
+  !
   barra_load = 0
   !
   DO iks = 1,kpt_pool%nloc
@@ -284,8 +290,9 @@ SUBROUTINE wbse_calc_drhox1_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
      !
      npw = ngk(iks)
      !
-     !$acc kernels present(tmp_r)
+     !$acc kernels present(tmp_r,psic_J)
      tmp_r(:) = 0._DP
+     psic_J(:) = 0._DP
      !$acc end kernels
      !
      ! double bands @ gamma
@@ -360,7 +367,7 @@ SUBROUTINE wbse_calc_drhox1_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, drhox1, forces)
+SUBROUTINE wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, forces, omega_JI)
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -393,6 +400,10 @@ SUBROUTINE wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, drhox1, forces)
   !
   INTEGER, INTENT(IN) :: n
   COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc), drhox1(dffts%nnr, nspin)
+  !!! SPV
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
+  REAL(DP), INTENT(IN)  :: omega_JI
+  !!!
   REAL(DP), INTENT(INOUT) :: forces(n)
   !
   ! Workspace
@@ -478,11 +489,11 @@ SUBROUTINE wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, drhox1, forces)
            !
            reduce = 0._DP
            !
-           !$acc parallel loop collapse(2) reduction(+:reduce) present(dvg_exc_tmp_I,dvpsi) copy(reduce)
+           !$acc parallel loop collapse(2) reduction(+:reduce) present(dvg_exc_tmp_J,dvpsi) copy(reduce)
            DO lbnd = 1,nbnd_do
               DO ig = 1,npw
-                 reduce = reduce + REAL(dvg_exc_tmp_I(ig,lbnd,iks),KIND=DP)*REAL(dvpsi(ig,lbnd,ipol),KIND=DP) &
-                 &               + AIMAG(dvg_exc_tmp_I(ig,lbnd,iks))*AIMAG(dvpsi(ig,lbnd,ipol))
+                 reduce = reduce + REAL(dvg_exc_tmp_J(ig,lbnd,iks),KIND=DP)*REAL(dvpsi(ig,lbnd,ipol),KIND=DP) &
+                 &               + AIMAG(dvg_exc_tmp_J(ig,lbnd,iks))*AIMAG(dvpsi(ig,lbnd,ipol))
               ENDDO
            ENDDO
            !$acc end parallel
@@ -490,9 +501,9 @@ SUBROUTINE wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, drhox1, forces)
            reduce = 2._DP*reduce
            !
            IF(gstart == 2) THEN
-              !$acc parallel loop reduction(+:reduce) present(dvg_exc_tmp_I,dvpsi) copy(reduce)
+              !$acc parallel loop reduction(+:reduce) present(dvg_exc_tmp_J,dvpsi) copy(reduce)
               DO lbnd = 1,nbnd_do
-                 reduce = reduce - REAL(dvg_exc_tmp_I(1,lbnd,iks),KIND=DP)*REAL(dvpsi(1,lbnd,ipol),KIND=DP)
+                 reduce = reduce - REAL(dvg_exc_tmp_J(1,lbnd,iks),KIND=DP)*REAL(dvpsi(1,lbnd,ipol),KIND=DP)
               ENDDO
               !$acc end parallel
            ENDIF
@@ -526,9 +537,10 @@ SUBROUTINE wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, drhox1, forces)
   !
   forcelc(:,:) = -factor*forcelc
   !
+  !!! SPV I have to multiply by omega_JI^-1
   DO ia = 1,nat
      DO ipol = 1,3
-        forces_drhox1(3*ia-3+ipol) = forces_drhox1(3*ia-3+ipol) + forcelc(ipol,ia)
+        forces_drhox1(3*ia-3+ipol) = ( forces_drhox1(3*ia-3+ipol) + forcelc(ipol,ia) ) / omega_JI
      ENDDO
   ENDDO
   !
@@ -836,7 +848,7 @@ SUBROUTINE wbse_calc_drhox2_eenac(dvgdvg_mat, drhox2)
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces)
+SUBROUTINE wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces, omega_JI)
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -874,6 +886,7 @@ SUBROUTINE wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces)
   REAL(DP), INTENT(IN) :: dvgdvg_mat(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc)
   COMPLEX(DP), INTENT(IN) :: drhox2(dffts%nnr, nspin)
   REAL(DP), INTENT(INOUT) :: forces(n)
+  REAL(DP), INTENT(IN)  :: omega_JI !!! SPV
   !
   ! Workspace
   !
@@ -1037,9 +1050,10 @@ SUBROUTINE wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces)
   !
   forcelc(:,:) = -factor*forcelc
   !
+  !!! SPV I have to multiply by omega_JI^-1
   DO ia = 1,nat
      DO ipol = 1,3
-        forces_drhox2(3*ia-3+ipol) = forces_drhox2(3*ia-3+ipol)+forcelc(ipol,ia)
+        forces_drhox2(3*ia-3+ipol) = ( forces_drhox2(3*ia-3+ipol)+forcelc(ipol,ia) ) / omega_JI
      ENDDO
   ENDDO
   !

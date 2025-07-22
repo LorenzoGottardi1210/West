@@ -691,7 +691,7 @@ SUBROUTINE rhs_zvector_part2_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) !!! 
            !
            DO lbnd = 1,nbnd_do-MOD(nbnd_do,2),2
               !
-              CALL double_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp_I(:,lbnd,iks_do),dvg_exc_tmp_I(:,lbnd+1,iks_do),psic,'Wave')
+              CALL double_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp_J(:,lbnd,iks_do),dvg_exc_tmp_J(:,lbnd+1,iks_do),psic,'Wave')
               !
               !$acc parallel loop present(dvrs)
               DO ir = 1,dffts_nnr
@@ -709,7 +709,7 @@ SUBROUTINE rhs_zvector_part2_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) !!! 
               !
               lbnd = nbnd_do
               !
-              CALL single_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp_I(:,lbnd,iks_do),psic,'Wave')
+              CALL single_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp_J(:,lbnd,iks_do),psic,'Wave')
               !
               !$acc parallel loop present(dvrs)
               DO ir = 1,dffts_nnr
@@ -833,8 +833,8 @@ SUBROUTINE rhs_zvector_part2_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) !!! 
            !
            !$acc update device(dv_vv_mat)
            !
-           !$acc host_data use_device(dvg_exc_tmp_I,dv_vv_mat,dpcpart)
-           CALL DGEMM('N','T',2*npwx*npol,nbndval-n_trunc_bands,nbnd_do,-1._DP,dvg_exc_tmp_I(1,1,iks),&
+           !$acc host_data use_device(dvg_exc_tmp_J,dv_vv_mat,dpcpart)
+           CALL DGEMM('N','T',2*npwx*npol,nbndval-n_trunc_bands,nbnd_do,-1._DP,dvg_exc_tmp_J(1,1,iks),&
            & 2*npwx*npol,dv_vv_mat,nbndval0x-n_trunc_bands,0._DP,dpcpart,2*npwx*npol)
            !$acc end host_data
            !
@@ -1209,7 +1209,7 @@ SUBROUTINE compute_ddvxc_5p_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc )
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE compute_ddvxc_sf_nac( dvg_exc_tmp_I, ddvxc ) !!! TODO
+SUBROUTINE compute_ddvxc_sf_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc ) !!! TO CHECK
   !-----------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP
@@ -1234,13 +1234,14 @@ SUBROUTINE compute_ddvxc_sf_nac( dvg_exc_tmp_I, ddvxc ) !!! TODO
   ! I/O
   !
   COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
   COMPLEX(DP), INTENT(OUT) :: ddvxc(dffts%nnr, nspin)
   !
   ! Workspace
   !
   INTEGER :: ir,is,is1
   REAL(DP) :: tmp1,tmp2
-  COMPLEX(DP), ALLOCATABLE :: drho_sf(:,:),drho_sf_copy(:,:)
+  COMPLEX(DP), ALLOCATABLE :: drho_sf_I(:,:),drho_sf_J(:,:),drho_sf_copy(:,:)
   CHARACTER(LEN=:), ALLOCATABLE :: fname
   !
 #if defined(__CUDA)
@@ -1251,15 +1252,17 @@ SUBROUTINE compute_ddvxc_sf_nac( dvg_exc_tmp_I, ddvxc ) !!! TODO
   !
   IF(nlcc_any) CALL errore('compute_ddvxc_sf_nac', 'nlcc_any not supported', 1)
   !
-  ALLOCATE(drho_sf(dffts%nnr,2))
-  !$acc enter data create(drho_sf)
+  ALLOCATE(drho_sf_I(dffts%nnr,2))
+  ALLOCATE(drho_sf_J(dffts%nnr,2))
+  !$acc enter data create(drho_sf_I,drho_sf_J)
   ALLOCATE(drho_sf_copy(dffts%nnr,2))
   !
-  CALL wbse_calc_dens(dvg_exc_tmp_I,drho_sf,.TRUE.)
+  CALL wbse_calc_dens(dvg_exc_tmp_I,drho_sf_I,.TRUE.)
+  CALL wbse_calc_dens(dvg_exc_tmp_J,drho_sf_J,.TRUE.)
   !
   DO ir = 1,dffts%nnr
-     tmp1 = REAL(drho_sf(ir,1),KIND=DP)**2
-     tmp2 = REAL(drho_sf(ir,2),KIND=DP)**2
+     tmp1 = REAL(drho_sf_I(ir,1),KIND=DP)*REAL(drho_sf_J(ir,1),KIND=DP)
+     tmp2 = REAL(drho_sf_I(ir,2),KIND=DP)*REAL(drho_sf_J(ir,2),KIND=DP)
      drho_sf_copy(ir,1) = CMPLX(tmp1+tmp2,KIND=DP)
      drho_sf_copy(ir,2) = -CMPLX(tmp1+tmp2,KIND=DP)
   ENDDO
@@ -1313,11 +1316,17 @@ SUBROUTINE compute_ddvxc_sf_nac( dvg_exc_tmp_I, ddvxc ) !!! TODO
      fname=TRIM(wbse_save_dir)//'/rho_diff.cube'
      CALL write_wfc_cube_r(dffts, fname, rho%of_r(ir,2))
      !
-     fname=TRIM(wbse_save_dir)//'/drho_sf_up.cube'
-     CALL write_wfc_cube_r(dffts, fname, REAL(drho_sf(:,1),KIND=DP))
+     fname=TRIM(wbse_save_dir)//'/drhoI_sf_up.cube'
+     CALL write_wfc_cube_r(dffts, fname, REAL(drho_sf_I(:,1),KIND=DP))
      !
-     fname=TRIM(wbse_save_dir)//'/drho_sf_down.cube'
-     CALL write_wfc_cube_r(dffts, fname, REAL(drho_sf(:,2),KIND=DP))
+     fname=TRIM(wbse_save_dir)//'/drhoI_sf_down.cube'
+     CALL write_wfc_cube_r(dffts, fname, REAL(drho_sf_I(:,2),KIND=DP))
+     !
+     fname=TRIM(wbse_save_dir)//'/drhoJ_sf_up.cube'
+     CALL write_wfc_cube_r(dffts, fname, REAL(drho_sf_J(:,1),KIND=DP))
+     !
+     fname=TRIM(wbse_save_dir)//'/drhoJ_sf_down.cube'
+     CALL write_wfc_cube_r(dffts, fname, REAL(drho_sf_J(:,2),KIND=DP))
      !
      fname=TRIM(wbse_save_dir)//'/drho_sq_rho_diff_up.cube'
      CALL write_wfc_cube_r(dffts, fname, REAL(drho_sf_copy(:,1),KIND=DP))
@@ -1333,8 +1342,9 @@ SUBROUTINE compute_ddvxc_sf_nac( dvg_exc_tmp_I, ddvxc ) !!! TODO
      !
   ENDIF
   !
-  !$acc exit data delete(drho_sf)
-  DEALLOCATE(drho_sf)
+  !$acc exit data delete(drho_sf_I,drho_sf_J)
+  DEALLOCATE(drho_sf_I)
+  DEALLOCATE(drho_sf_J)
   DEALLOCATE(drho_sf_copy)
   !
 #if defined(__CUDA)

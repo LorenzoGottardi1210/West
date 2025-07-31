@@ -59,7 +59,9 @@ SUBROUTINE build_rhs_zvector_eq_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dr
   !
   ! part2: d < a | K1e | a > / d | v >
   !
+  !!! SPV two calls because of the derivative wrt to real and complex orbitals
   IF(.NOT. l_bse_triplet) CALL rhs_zvector_part2_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
+  IF(.NOT. l_bse_triplet) CALL rhs_zvector_part2_nac( dvg_exc_tmp_J, dvg_exc_tmp_I, z_rhs_vec )
   !
   ! part3: d^2 vxc / d rho^2 contribution to d < a | K1e | a > / d | v >
   !
@@ -114,7 +116,7 @@ SUBROUTINE build_rhs_zvector_eq_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dr
      !$acc parallel loop collapse(2) present(z_rhs_vec)
      DO lbnd = 1,nbnd_do
         DO ig = 1,npw
-           z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks) * 1._DP / omega_JI
+           z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks) * -1._DP / omega_JI
         ENDDO
      ENDDO
      !$acc end parallel
@@ -288,13 +290,34 @@ SUBROUTINE rhs_zvector_part1_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drho
         !
      ENDIF
      !
+     !!! SPV
+     ! factor 2 from the derivative wrt real and complex orbitals
+     z_rhs_vec_part1 = 2._DP*z_rhs_vec_part1
+     !!!
      IF(l_bse) CALL errore('build_rhs_zvector_eq_nac', 'BSE forces not implemented', 1) !!! TODO
      !
      IF(l_hybrid_tddft) THEN
         !
         !!! SPV
-        ! CALL hybrid_kernel_term3(current_spin,dvg_exc_tmp_I,z_rhs_vec_part1(:,:,iks),l_spin_flip) 
+        ! hybrid_kernel called once for a_I and once for a_J
+        ! it uses global variable evc1_all, first time it contains a_I, second time it contains a_J
         CALL hybrid_kernel_term3(current_spin,dvg_exc_tmp_J,z_rhs_vec_part1(:,:,iks),l_spin_flip) 
+        !
+        ! the content of dvg_exc_tmp_J goes into evc1_all 
+        CALL gather_bands(dvg_exc_tmp_J(:,:,iks),evc1_all(:,:,iks),req)
+        CALL west_mp_wait(req)
+#if !defined(__GPU_MPI)
+        !$acc update device(evc1_all(:,:,iks))
+#endif
+        !
+        CALL hybrid_kernel_term3(current_spin,dvg_exc_tmp_I,z_rhs_vec_part1(:,:,iks),l_spin_flip) 
+        ! the content of dvg_exc_tmp_I goes back into evc1_all 
+        CALL gather_bands(dvg_exc_tmp_I(:,:,iks),evc1_all(:,:,iks),req)
+        CALL west_mp_wait(req)
+#if !defined(__GPU_MPI)
+        !$acc update device(evc1_all(:,:,iks))
+#endif        
+        !
         !!!
         !
         IF(l_spin_flip) THEN
@@ -303,8 +326,9 @@ SUBROUTINE rhs_zvector_part1_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drho
            iks_do = iks
         ENDIF
         !
+        !!! SPV the factor 2 is from the derivative wrt to real and complex orbitals 
         !$acc host_data use_device(evc,dvgdvg_mat,tmp_vec)
-        CALL DGEMM('N','N',2*npwx*npol,nbnd_do,nbndval-n_trunc_bands,-1._DP,evc(1,1+n_trunc_bands),&
+        CALL DGEMM('N','N',2*npwx*npol,nbnd_do,nbndval-n_trunc_bands,-2._DP,evc(1,1+n_trunc_bands),&
         & 2*npwx*npol,dvgdvg_mat(1,1,iks_do),nbndval0x-n_trunc_bands,0._DP,tmp_vec(1,1,iks),2*npwx*npol)
         !$acc end host_data
         !
@@ -911,7 +935,7 @@ SUBROUTINE rhs_zvector_part2_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) !!! 
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE rhs_zvector_part3_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) !!! Serve solo capire come modificare ddvxc_5p
+SUBROUTINE rhs_zvector_part3_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) 
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -1050,9 +1074,10 @@ SUBROUTINE rhs_zvector_part3_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) !!! 
      ENDIF
      !
      !$acc parallel loop collapse(2) present(z_rhs_vec,z_rhs_vec_part3)
+     !!! SPV the factor 2 is from the derivative wrt to real and complex orbitals
      DO lbnd = 1,nbnd_do
         DO ig = 1,npw
-           z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks)-z_rhs_vec_part3(ig,lbnd,iks)
+           z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks)-2._DP*z_rhs_vec_part3(ig,lbnd,iks)
         ENDDO
      ENDDO
      !$acc end parallel
@@ -1390,11 +1415,11 @@ SUBROUTINE rhs_zvector_part4_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   INTEGER :: band_group_myoffset
   REAL(DP) :: reduce
   COMPLEX(DP), ALLOCATABLE :: dotp(:)
-  COMPLEX(DP), ALLOCATABLE :: z_rhs_vec_part4(:,:,:),tmp_vec(:,:)
-  REAL(DP), ALLOCATABLE :: dv_vv_mat(:,:)
-  COMPLEX(DP), ALLOCATABLE :: dpcpart(:,:)
+  COMPLEX(DP), ALLOCATABLE :: z_rhs_vec_part4(:,:,:),tmp_vec_I(:,:),tmp_vec_J(:,:)
+  REAL(DP), ALLOCATABLE :: dv_vv_mat_I(:,:), dv_vv_mat_J(:,:)
+  COMPLEX(DP), ALLOCATABLE :: dpcpart_I(:,:), dpcpart_J(:,:)
 #if defined(__CUDA)
-  ATTRIBUTES(PINNED) :: dpcpart
+  ATTRIBUTES(PINNED) :: dpcpart_I, dpcpart_J
 #endif
   TYPE(bar_type) :: barra
   INTEGER, PARAMETER :: flks(2) = [2,1]
@@ -1404,21 +1429,28 @@ SUBROUTINE rhs_zvector_part4_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   band_group_myoffset = band_group%myoffset
   !
   ALLOCATE(z_rhs_vec_part4(npwx*npol, band_group%nlocx, kpt_pool%nloc))
-  ALLOCATE(dv_vv_mat(nbndval0x-n_trunc_bands, band_group%nlocx))
-  ALLOCATE(tmp_vec(npwx*npol, band_group%nlocx))
-  ALLOCATE(dpcpart(npwx*npol, nbndval0x-n_trunc_bands))
-  !$acc enter data create(z_rhs_vec_part4,dv_vv_mat,tmp_vec,dpcpart)
+  !!! SPV
+  ALLOCATE(dv_vv_mat_I(nbndval0x-n_trunc_bands, band_group%nlocx))
+  ALLOCATE(dv_vv_mat_J(nbndval0x-n_trunc_bands, band_group%nlocx))
+  ALLOCATE(tmp_vec_I(npwx*npol, band_group%nlocx))
+  ALLOCATE(tmp_vec_J(npwx*npol, band_group%nlocx))
+  ALLOCATE(dpcpart_I(npwx*npol, nbndval0x-n_trunc_bands))
+  ALLOCATE(dpcpart_J(npwx*npol, nbndval0x-n_trunc_bands))
+  !!!
+  !$acc enter data create(z_rhs_vec_part4,dv_vv_mat_I,dv_vv_mat_J,tmp_vec_I,tmp_vec_J,dpcpart_I,dpcpart_J)
   !
   !$acc kernels present(z_rhs_vec_part4)
   z_rhs_vec_part4(:,:,:) = (0._DP,0._DP)
   !$acc end kernels
   !
-  !$acc kernels present(dpcpart)
-  dpcpart(:,:) = (0._DP,0._DP)
+  !$acc kernels present(dpcpart_I,dpcpart_J)
+  dpcpart_I(:,:) = (0._DP,0._DP)
+  dpcpart_J(:,:) = (0._DP,0._DP)
   !$acc end kernels
   !
-  !$acc kernels present(dv_vv_mat)
-  dv_vv_mat(:,:) = (0._DP,0._DP)
+  !$acc kernels present(dv_vv_mat_I,dv_vv_mat_J)
+  dv_vv_mat_I(:,:) = (0._DP,0._DP)
+  dv_vv_mat_J(:,:) = (0._DP,0._DP)
   !$acc end kernels
   !
   CALL start_bar_type(barra,'zvec4',kpt_pool%nloc)
@@ -1459,17 +1491,23 @@ SUBROUTINE rhs_zvector_part4_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      !
      ! Compute the first part
      !
-     CALL hybrid_kernel_term4(current_spin,dvg_exc_tmp_I,z_rhs_vec_part4(:,:,iks),l_spin_flip) !!! TODO
+     CALL hybrid_kernel_term4(current_spin,dvg_exc_tmp_J,z_rhs_vec_part4(:,:,iks),l_spin_flip) 
      !
+     !!! SPV the factor 2 from the derivative wrt real and complex orbitals
+     z_rhs_vec_part4 = 2._DP*z_rhs_vec_part4
+     !!!
      ! Compute the second part: dv_vv_mat
      !
-     !$acc kernels present(tmp_vec)
-     tmp_vec(:,:) = (0._DP,0._DP)
+     !$acc kernels present(tmp_vec_I,tmp_vec_J)
+     tmp_vec_I(:,:) = (0._DP,0._DP)
+     tmp_vec_J(:,:) = (0._DP,0._DP)
      !$acc end kernels
      !
-     CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),tmp_vec,l_spin_flip) !!! Ci andrebbe a_I??
+     !!! SPV two calls because of the derivative wrt real and complex orbitals
+     CALL bse_kernel_gamma(current_spin,dvg_exc_tmp_I,tmp_vec_I,l_spin_flip) 
+     CALL bse_kernel_gamma(current_spin,dvg_exc_tmp_J,tmp_vec_J,l_spin_flip) 
      !
-     !$acc parallel vector_length(1024) present(evc,tmp_vec,dv_vv_mat)
+     !$acc parallel vector_length(1024) present(evc,tmp_vec_I,tmp_vec_J,dv_vv_mat_I,dv_vv_mat_J)
      !$acc loop collapse(2)
      DO jbnd = 1, nbndval - n_trunc_bands
         DO lbnd = 1, nbnd_do
@@ -1479,32 +1517,60 @@ SUBROUTINE rhs_zvector_part4_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
            reduce = 0._DP
            !$acc loop reduction(+:reduce)
            DO ig = 1, npw
-              reduce = reduce + REAL(evc(ig,jbndp),KIND=DP) * REAL(tmp_vec(ig,lbnd),KIND=DP) &
-              &               + AIMAG(evc(ig,jbndp)) * AIMAG(tmp_vec(ig,lbnd))
+              reduce = reduce + REAL(evc(ig,jbndp),KIND=DP) * REAL(tmp_vec_I(ig,lbnd),KIND=DP) &
+              &               + AIMAG(evc(ig,jbndp)) * AIMAG(tmp_vec_I(ig,lbnd))
            ENDDO
            !
            IF(gstart == 2) THEN
-              reduce = reduce - 0.5_DP * REAL(evc(1,jbndp),KIND=DP) * REAL(tmp_vec(1,lbnd),KIND=DP)
+              reduce = reduce - 0.5_DP * REAL(evc(1,jbndp),KIND=DP) * REAL(tmp_vec_I(1,lbnd),KIND=DP)
            ENDIF
            !
-           dv_vv_mat(jbnd,lbnd) = 2._DP * reduce
+           dv_vv_mat_I(jbnd,lbnd) = 2._DP * reduce
            !
         ENDDO
      ENDDO
      !$acc end parallel
      !
-     !$acc host_data use_device(dv_vv_mat)
-     CALL mp_sum(dv_vv_mat,intra_bgrp_comm)
+     !$acc loop collapse(2)
+     DO jbnd = 1, nbndval - n_trunc_bands
+        DO lbnd = 1, nbnd_do
+           !
+           jbndp = jbnd + n_trunc_bands
+           !
+           reduce = 0._DP
+           !$acc loop reduction(+:reduce)
+           DO ig = 1, npw
+              reduce = reduce + REAL(evc(ig,jbndp),KIND=DP) * REAL(tmp_vec_J(ig,lbnd),KIND=DP) &
+              &               + AIMAG(evc(ig,jbndp)) * AIMAG(tmp_vec_J(ig,lbnd))
+           ENDDO
+           !
+           IF(gstart == 2) THEN
+              reduce = reduce - 0.5_DP * REAL(evc(1,jbndp),KIND=DP) * REAL(tmp_vec_J(1,lbnd),KIND=DP)
+           ENDIF
+           !
+           dv_vv_mat_J(jbnd,lbnd) = 2._DP * reduce
+           !
+        ENDDO
+     ENDDO
+     !$acc end parallel
+     !
+     !$acc host_data use_device(dv_vv_mat_I,dv_vv_mat_J)
+     CALL mp_sum(dv_vv_mat_I,intra_bgrp_comm)
+     CALL mp_sum(dv_vv_mat_J,intra_bgrp_comm)
      !$acc end host_data
      !
      !$acc host_data use_device(dvg_exc_tmp_J,dv_vv_mat,dpcpart)
      CALL DGEMM('N','T',2*npwx*npol,nbndval-n_trunc_bands,nbnd_do,-1._DP,dvg_exc_tmp_J(1,1,iks),&
-     & 2*npwx*npol,dv_vv_mat,nbndval0x-n_trunc_bands,0._DP,dpcpart,2*npwx*npol)
+     & 2*npwx*npol,dv_vv_mat_I,nbndval0x-n_trunc_bands,0._DP,dpcpart_I,2*npwx*npol)
+     !
+     CALL DGEMM('N','T',2*npwx*npol,nbndval-n_trunc_bands,nbnd_do,-1._DP,dvg_exc_tmp_I(1,1,iks),&
+     & 2*npwx*npol,dv_vv_mat_J,nbndval0x-n_trunc_bands,0._DP,dpcpart_J,2*npwx*npol)
      !$acc end host_data
      !
-     !$acc update host(dpcpart)
-     CALL mp_sum(dpcpart,inter_bgrp_comm)
-     !$acc update device(dpcpart)
+     !$acc update host(dpcpart_I,dpcpart_J)
+     CALL mp_sum(dpcpart_I,inter_bgrp_comm)
+     CALL mp_sum(dpcpart_J,inter_bgrp_comm)
+     !$acc update device(dpcpart_I,dpcpart_J)
      !
      ! compute nbnd_do for the current spin channel
      !
@@ -1514,7 +1580,7 @@ SUBROUTINE rhs_zvector_part4_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
         IF(ibnd > n_trunc_bands .AND. ibnd <= nbndval) nbnd_do = nbnd_do+1
      ENDDO
      !
-     !$acc parallel loop collapse(2) present(z_rhs_vec_part4,dpcpart)
+     !$acc parallel loop collapse(2) present(z_rhs_vec_part4,dpcpart_I,dpcpart_J)
      DO lbnd = 1,nbnd_do
         DO ig = 1,npw
            !
@@ -1522,7 +1588,8 @@ SUBROUTINE rhs_zvector_part4_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
            !
            ibnd = band_group_myoffset+lbnd
            !
-           z_rhs_vec_part4(ig,lbnd,iks) = z_rhs_vec_part4(ig,lbnd,iks)+dpcpart(ig,ibnd)
+           z_rhs_vec_part4(ig,lbnd,iks) = z_rhs_vec_part4(ig,lbnd,iks)+dpcpart_I(ig,ibnd)&
+                                                                     &+dpcpart_J(ig,ibnd)
            !
         ENDDO
      ENDDO
@@ -1558,10 +1625,13 @@ SUBROUTINE rhs_zvector_part4_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   WRITE(stdout,"(5x,'Norm of z_rhs_vec p4 = ',ES15.8)") SUM(REAL(dotp,KIND=DP))
   !
   DEALLOCATE(dotp)
-  !$acc exit data delete(z_rhs_vec_part4,dv_vv_mat,tmp_vec,dpcpart)
+  !$acc exit data delete(z_rhs_vec_part4,dv_vv_mat_I,dv_vv_mat_J,tmp_vec_I,tmp_vec_J,dpcpart_I,dpcpart_J)
   DEALLOCATE(z_rhs_vec_part4)
-  DEALLOCATE(dv_vv_mat)
-  DEALLOCATE(tmp_vec)
-  DEALLOCATE(dpcpart)
+  DEALLOCATE(dv_vv_mat_I)
+  DEALLOCATE(dv_vv_mat_J)
+  DEALLOCATE(tmp_vec_I)
+  DEALLOCATE(tmp_vec_J)
+  DEALLOCATE(dpcpart_I)
+  DEALLOCATE(dpcpart_J)
   !
 END SUBROUTINE

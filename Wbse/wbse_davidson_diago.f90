@@ -722,7 +722,7 @@ SUBROUTINE wbse_davidson_diago ( )
         IF(eenac_stateI == eenac_stateJ) CALL errore('chidiago','eeNAC must be computed between different states',1)
         IF(ABS(omega_JI) < eps8) CALL errore('chidiago','omega_JI too small for eeNAC', 1)
         !
-        ALLOCATE( dvg_exc_tmp_J( npwx, band_group%nlocx, kpt_pool%nloc), STAT=ierr )
+        ALLOCATE( dvg_exc_tmp_J( npwx*npol, band_group%nlocx, kpt_pool%nloc), STAT=ierr )
         IF( ierr /= 0 ) CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
         !$acc enter data create(dvg_exc_tmp_J)
         !
@@ -893,7 +893,7 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
               !
               !$acc parallel loop collapse(2) reduction(+:anorm) present(amat) copy(anorm)
               DO lbnd = 1,nbnd_do
-                 DO ig = 1,npw*npol
+                 DO ig = 1,npwx*npol
                     anorm = anorm+factor*REAL(amat(ig,lbnd,iks,k_local),KIND=DP)**2 &
                     & +factor*AIMAG(amat(ig,lbnd,iks,k_local))**2
                  ENDDO
@@ -1021,7 +1021,7 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
                  !
                  !$acc parallel loop collapse(2) reduction(+:tmp_c) present(vec,amat) copy(tmp_c)
                  DO lbnd = 1,nbnd_do
-                    DO ig = 1,npw*npol
+                    DO ig = 1,npwx*npol
                        tmp_c = tmp_c+CONJG(vec(ig,lbnd,iks))*amat(ig,lbnd,iks,ip)
                     ENDDO
                  ENDDO
@@ -1152,8 +1152,8 @@ SUBROUTINE wbse_vc_initialize(amat,mglobalstart,mglobalend,sf)
   USE io_global,            ONLY : stdout
   USE wavefunctions,        ONLY : evc
   USE buffers,              ONLY : get_buffer
-  USE pwcom,                ONLY : npwx,nbnd,et,nspin,nkstot
-  USE noncollin_module,     ONLY : npol
+  USE pwcom,                ONLY : npwx,nbnd,et
+  USE noncollin_module,     ONLY : npol,nspin_lsda
   USE mp_global,            ONLY : inter_image_comm,my_image_id,inter_pool_comm,my_pool_id,&
                                  & my_bgrp_id
   USE mp,                   ONLY : mp_sum,mp_bcast,mp_max
@@ -1188,7 +1188,7 @@ SUBROUTINE wbse_vc_initialize(amat,mglobalstart,mglobalend,sf)
   !
   ! get global copy of occupation
   !
-  ALLOCATE(occ(nkstot))
+  ALLOCATE(occ(nspin_lsda))
   !
   occ(:) = 0._DP
   DO is = 1, kpt_pool%nloc
@@ -1203,13 +1203,13 @@ SUBROUTINE wbse_vc_initialize(amat,mglobalstart,mglobalend,sf)
   nbnd_c_window = MIN(CEILING(SQRT(REAL(4*nvec,KIND=DP))), nbnd-MAXVAL(occ))
   npair = nbnd_v_window*nbnd_c_window
   !
-  ALLOCATE(e_diff(nkstot*npair))
-  ALLOCATE(e_diff_order(nkstot*npair))
+  ALLOCATE(e_diff(nspin_lsda*npair))
+  ALLOCATE(e_diff_order(nspin_lsda*npair))
   !
   IF(my_pool_id == 0) THEN
      !
      ib = 0
-     DO iks = 1,nkstot
+     DO iks = 1,nspin_lsda
         !
         IF(sf) THEN
            iks_do = flks(iks)
@@ -1229,7 +1229,7 @@ SUBROUTINE wbse_vc_initialize(amat,mglobalstart,mglobalend,sf)
         !
      ENDDO
      !
-     CALL heapsort(nkstot*npair,e_diff,e_diff_order)
+     CALL heapsort(nspin_lsda*npair,e_diff,e_diff_order)
      !
   ENDIF
   !

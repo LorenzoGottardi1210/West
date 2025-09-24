@@ -36,8 +36,8 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
                              & trev_liouville_rel,wbse_ipol,l_dipole_realspace,wbse_epsinfty,&
                              & spin_excitation,l_preconditioning,l_pre_shift,l_spin_flip,&
                              & l_spin_flip_kernel,l_spin_flip_alda0,l_print_spin_flip_kernel,&
-                             & spin_flip_cut,l_forces,forces_state,forces_zeq_cg_tr,l_genac,&
-                             & l_eenac,genac_state,eenac_stateI,eenac_stateJ,&
+                             & spin_flip_cut,noncolin_cut,l_forces,forces_state,forces_zeq_cg_tr,&
+                             & l_genac,l_eenac,genac_state,eenac_stateI,eenac_stateJ,&
                              & forces_zeq_n_cg_maxiter,ddvxc_fd_coeff,forces_inexact_krylov,&
                              & forces_inexact_krylov_tr,main_input_file,logfile
   USE kinds,            ONLY : DP
@@ -391,6 +391,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
         IERR = return_dict%getitem(l_spin_flip_alda0, 'l_spin_flip_alda0')
         IERR = return_dict%getitem(l_print_spin_flip_kernel, 'l_print_spin_flip_kernel')
         IERR = return_dict%getitem(spin_flip_cut, 'spin_flip_cut')
+        IERR = return_dict%getitem(noncolin_cut, 'noncolin_cut')
         IERR = return_dict%getitem(l_forces, 'l_forces')
         IERR = return_dict%getitem(l_genac, 'l_genac')
         IERR = return_dict%getitem(l_eenac, 'l_eenac')
@@ -531,7 +532,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      IF(wfreq_eta <= 0._DP) CALL errore('fetch_input','Err: wfreq_eta<0.',1)
      IF(n_secant_maxiter < 0) CALL errore('fetch_input','Err: n_secant_maxiter<0',1)
      IF(trev_secant <= 0._DP) CALL errore('fetch_input','Err: trev_secant<0.',1)
-     IF(l_enable_off_diagonal .AND. .NOT. gamma_only) CALL errore('fetch_input','Err: off-diagonal implemented for gamma only',1)
+     IF(l_enable_off_diagonal .AND. .NOT. gamma_only) CALL errore('fetch_input','Err: off-diagonal requires gamma_only',1)
      IF(n_pdep_eigen_to_use == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_pdep_eigen_to_use',1)
      IF(n_lanczos == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_lanczos',1)
      IF(n_imfreq == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_imfreq',1)
@@ -630,7 +631,9 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      IF(n_trunc_bands == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_trunc_bands',1)
      !
      SELECT CASE(TRIM(solver))
-     CASE('BSE','bse','TDDFT','tddft')
+     CASE('BSE','bse')
+        IF(.NOT. gamma_only) CALL errore('fetch_input','Err: BSE requires gamma_only',1)
+     CASE('TDDFT','tddft')
      CASE DEFAULT
         CALL errore('fetch_input','Err: solver must be BSE or TDDFT',1)
      END SELECT
@@ -642,7 +645,9 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      END SELECT
      !
      SELECT CASE(localization)
-     CASE('N','n','W','w')
+     CASE('N','n')
+     CASE('W','w')
+        IF(.NOT. gamma_only) CALL errore('fetch_input','Err: Wannier localization requires gamma_only',1)
      CASE('B','b')
         SELECT CASE(TRIM(bse_method))
         CASE('PDEP','pdep')
@@ -682,6 +687,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      CALL mp_bcast(l_spin_flip_alda0,root,world_comm)
      CALL mp_bcast(l_print_spin_flip_kernel,root,world_comm)
      CALL mp_bcast(spin_flip_cut,root,world_comm)
+     CALL mp_bcast(noncolin_cut,root,world_comm)
      CALL mp_bcast(l_forces,root,world_comm)
      CALL mp_bcast(l_genac,root,world_comm)
      CALL mp_bcast(l_eenac,root,world_comm)
@@ -731,6 +737,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
         IF(forces_zeq_n_cg_maxiter == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch forces_zeq_n_cg_maxiter',1)
         IF(forces_inexact_krylov == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch forces_inexact_krylov',1)
      CASE('L','l')
+        IF(.NOT. gamma_only) CALL errore('fetch_input','Err: Lanczos requires gamma_only',1)
         IF(l_spin_flip) CALL errore('fetch_input','Err: spin flip must use Davidson',1)
         IF(n_lanczos < 1) CALL errore('fetch_input','Err: n_lanczos<1',1)
         IF(n_lanczos == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_lanczos',1)

@@ -146,7 +146,7 @@ MODULE wbse_tools
                      !
                      !$acc loop collapse(2) reduction(+:reduce)
                      DO lbnd = 1,nbndval
-                        DO il3 = 1,npw*npol
+                        DO il3 = 1,npwx*npol
                            reduce = reduce+2._DP*REAL(ag(il3,lbnd,iks,il1),KIND=DP)*REAL(bg(il3,lbnd,iks,il2),KIND=DP) &
                            & +2._DP*AIMAG(ag(il3,lbnd,iks,il1))*AIMAG(bg(il3,lbnd,iks,il2))
                         ENDDO
@@ -310,7 +310,7 @@ MODULE wbse_tools
                      !
                      !$acc loop collapse(2) reduction(+:reduce)
                      DO lbnd = 1,nbndval
-                        DO il3 = 1,npw*npol
+                        DO il3 = 1,npwx*npol
                            reduce = reduce+CONJG(ag(il3,lbnd,iks,il1))*bg(il3,lbnd,iks,il2)
                         ENDDO
                      ENDDO
@@ -478,7 +478,7 @@ MODULE wbse_tools
                      !
                      !$acc loop collapse(2)
                      DO lbnd = 1,nbndval
-                        DO il3 = 1,npw*npol
+                        DO il3 = 1,npwx*npol
                            hg(il3,lbnd,iks,il2) = dconst*ag(il3,lbnd,iks,il1)+hg(il3,lbnd,iks,il2)
                         ENDDO
                      ENDDO
@@ -524,7 +524,7 @@ MODULE wbse_tools
                !
                !$acc loop collapse(2)
                DO lbnd = 1,nbndval
-                  DO il3 = 1,npw*npol
+                  DO il3 = 1,npwx*npol
                      ag(il3,lbnd,iks,il2) = dconst*hg(il3,lbnd,iks,il2)
                   ENDDO
                ENDDO
@@ -578,7 +578,7 @@ MODULE wbse_tools
                      !
                      !$acc loop collapse(2)
                      DO lbnd = 1,nbndval
-                        DO il3 = 1,npw*npol
+                        DO il3 = 1,npwx*npol
                            hg(il3,lbnd,iks,il2) = dconst*bg(il3,lbnd,iks,il1)+hg(il3,lbnd,iks,il2)
                         ENDDO
                      ENDDO
@@ -617,7 +617,7 @@ MODULE wbse_tools
                !
                !$acc loop collapse(2)
                DO lbnd = 1,nbndval
-                  DO il3 = 1,npw*npol
+                  DO il3 = 1,npwx*npol
                      ag(il3,lbnd,iks,il2) = ag(il3,lbnd,iks,il2)+hg(il3,lbnd,iks,il2)
                   ENDDO
                ENDDO
@@ -757,7 +757,7 @@ MODULE wbse_tools
                      !
                      !$acc loop collapse(2)
                      DO lbnd = 1,nbndval
-                        DO il3 = 1,npw*npol
+                        DO il3 = 1,npwx*npol
                            hg(il3,lbnd,iks,il2) = zconst*ag(il3,lbnd,iks,il1)+hg(il3,lbnd,iks,il2)
                         ENDDO
                      ENDDO
@@ -803,7 +803,7 @@ MODULE wbse_tools
                !
                !$acc loop collapse(2)
                DO lbnd = 1,nbndval
-                  DO il3 = 1,npw*npol
+                  DO il3 = 1,npwx*npol
                      ag(il3,lbnd,iks,il2) = zconst*hg(il3,lbnd,iks,il2)
                   ENDDO
                ENDDO
@@ -857,7 +857,7 @@ MODULE wbse_tools
                      !
                      !$acc loop collapse(2)
                      DO lbnd = 1,nbndval
-                        DO il3 = 1,npw*npol
+                        DO il3 = 1,npwx*npol
                            hg(il3,lbnd,iks,il2) = zconst*bg(il3,lbnd,iks,il1)+hg(il3,lbnd,iks,il2)
                         ENDDO
                      ENDDO
@@ -896,7 +896,7 @@ MODULE wbse_tools
                !
                !$acc loop collapse(2)
                DO lbnd = 1,nbndval
-                  DO il3 = 1,npw*npol
+                  DO il3 = 1,npwx*npol
                      ag(il3,lbnd,iks,il2) = ag(il3,lbnd,iks,il2)+hg(il3,lbnd,iks,il2)
                   ENDDO
                ENDDO
@@ -1027,7 +1027,7 @@ MODULE wbse_tools
                      !
                      !$acc loop collapse(2)
                      DO lbnd = 1,nbndval
-                        DO il3 = 1,npw*npol
+                        DO il3 = 1,npwx*npol
                            hg(il3,lbnd,iks,il2) = dconst*ag(il3,lbnd,iks,il1)+hg(il3,lbnd,iks,il2)
                         ENDDO
                      ENDDO
@@ -1076,7 +1076,7 @@ MODULE wbse_tools
                !
                !$acc loop collapse(2)
                DO lbnd = 1,nbndval
-                  DO il3 = 1,npw*npol
+                  DO il3 = 1,npwx*npol
                      ag(il3,lbnd,iks,il2) = hg(il3,lbnd,iks,il2)
                   ENDDO
                ENDDO
@@ -1110,7 +1110,7 @@ MODULE wbse_tools
                !
                !$acc loop collapse(2)
                DO lbnd = 1,nbndval
-                  DO il3 = 1,npw*npol
+                  DO il3 = 1,npwx*npol
                      ag(il3,lbnd,iks,il2) = 0._DP
                   ENDDO
                ENDDO
@@ -1241,7 +1241,7 @@ MODULE wbse_tools
                      !
                      !$acc loop collapse(2)
                      DO lbnd = 1,nbndval
-                        DO il3 = 1,npw*npol
+                        DO il3 = 1,npwx*npol
                            hg(il3,lbnd,iks,il2) = zconst*ag(il3,lbnd,iks,il1)+hg(il3,lbnd,iks,il2)
                         ENDDO
                      ENDDO
@@ -1290,7 +1290,7 @@ MODULE wbse_tools
                !
                !$acc loop collapse(2)
                DO lbnd = 1,nbndval
-                  DO il3 = 1,npw*npol
+                  DO il3 = 1,npwx*npol
                      ag(il3,lbnd,iks,il2) = hg(il3,lbnd,iks,il2)
                   ENDDO
                ENDDO
@@ -1324,7 +1324,7 @@ MODULE wbse_tools
                !
                !$acc loop collapse(2)
                DO lbnd = 1,nbndval
-                  DO il3 = 1,npw*npol
+                  DO il3 = 1,npwx*npol
                      ag(il3,lbnd,iks,il2) = (0._DP,0._DP)
                   ENDDO
                ENDDO
@@ -1352,7 +1352,7 @@ MODULE wbse_tools
       USE pwcom,                ONLY : npwx
       USE westcom,              ONLY : nbnd_occ,n_trunc_bands
       USE wvfct,                ONLY : g2kin,et
-      USE noncollin_module,     ONLY : npol, noncolin
+      USE noncollin_module,     ONLY : npol,noncolin
       !
       IMPLICIT NONE
       !
@@ -1459,32 +1459,9 @@ MODULE wbse_tools
                      tmp = tmp_sgn*tmp_abs
                      !
                      ag(ig,lbnd,iks,il1) = ag(ig,lbnd,iks,il1)/tmp
+                     IF(noncolin) ag(npwx+ig,lbnd,iks,il1) = ag(npwx+ig,lbnd,iks,il1)/tmp
                      !
                   ENDDO
-                  IF (noncolin) THEN
-                     DO ig = 1,npwx
-                        !
-                        ! ibnd = band_group%l2g(lbnd)
-                        !
-                        ibnd = band_group_myoffset+lbnd
-                        !
-                        IF(turn_shift) THEN
-                           tmp = g2kin_save(ig,iks)-et(ibnd+n_trunc_bands,iks_do)
-                        ELSE
-                           tmp = g2kin_save(ig,iks)
-                        ENDIF
-                        !
-                        ! Same as the following line but without thread divergence
-                        ! IF(ABS(tmp) < minimum) tmp = SIGN(minimum,tmp)
-                        !
-                        tmp_abs = MAX(ABS(tmp),minimum)
-                        tmp_sgn = SIGN(1._DP,tmp)
-                        tmp = tmp_sgn*tmp_abs
-                        !
-                        ag(npwx+ig,lbnd,iks,il1) = ag(npwx+ig,lbnd,iks,il1)/tmp
-                        !
-                     ENDDO
-                  ENDIF
                ENDDO
                !
             ENDDO

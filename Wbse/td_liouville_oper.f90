@@ -21,7 +21,6 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
   USE fft_base,             ONLY : dffts
   USE gvect,                ONLY : gstart
   USE uspp,                 ONLY : vkb,nkb
-  USE lsda_mod,             ONLY : nspin
   USE pwcom,                ONLY : npw,npwx,current_k,current_spin,isk,lsda,xk,ngk,igk_k,nbnd
   USE mp,                   ONLY : mp_bcast
   USE mp_global,            ONLY : inter_image_comm,my_image_id
@@ -57,11 +56,11 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
   ! Workspace
   !
   LOGICAL :: lrpa,do_k1e,do_k1d
-  INTEGER :: ibnd,jbnd,iks,iks_do,ir,ig,nbndval,flnbndval,nbnd_do,lbnd
+  INTEGER :: ibnd,jbnd,iks,iks_do,ir,ig,nbndval,flnbndval,nbnd_do,lbnd,ipol
   INTEGER :: dffts_nnr,band_group_myoffset
   INTEGER :: req
   REAL(DP) :: factor
-  COMPLEX(DP) :: tmp1, tmp2
+  COMPLEX(DP) :: tmp1,tmp2
 #if !defined(__CUDA)
   REAL(DP), ALLOCATABLE :: factors(:)
   COMPLEX(DP), ALLOCATABLE :: dvrs(:,:)
@@ -81,11 +80,7 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
 #if !defined(__CUDA)
   ALLOCATE(factors(band_group%nlocx))
   ALLOCATE(hevc1(npwx*npol,band_group%nlocx))
-  IF(noncolin) THEN
-     ALLOCATE(dvrs(dffts%nnr, nspin_mag))
-  ELSE 
-     ALLOCATE(dvrs(dffts%nnr, nspin))
-  ENDIF
+  ALLOCATE(dvrs(dffts%nnr,nspin_mag))
 #endif
   !
   ! Calculation of the charge density response
@@ -234,7 +229,8 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
            ! noncolin case
            ! be very careful with sign convention here; be consistent with sign convention of charge density matrix
            !
-           IF (noncolin) THEN
+           IF(noncolin) THEN
+              !
               DO lbnd = 1,nbnd_do
                  !
                  ibnd = band_group%l2g(lbnd)+n_trunc_bands
@@ -242,29 +238,33 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
                  CALL single_invfft_k(dffts,npw,npwx,evc(1:npwx,ibnd),psic_nc(:,1),'Wave',igk_k(:,current_k))
                  CALL single_invfft_k(dffts,npw,npwx,evc(npwx+1:npwx*2,ibnd),psic_nc(:,2),'Wave',igk_k(:,current_k))
                  !
-                 !$acc parallel loop present(psic_nc,dvrs)
-                 IF (domag) THEN
-                  DO ir = 1,dffts_nnr
-                     tmp1 = (dvrs(ir,1) + dvrs(ir,4)) * psic_nc(ir,1) + (dvrs(ir,2) - (0._DP,1._DP) * dvrs(ir,3)) * psic_nc(ir,2)
-                     tmp2 = (dvrs(ir,2) + (0._DP,1._DP) * dvrs(ir,3)) * psic_nc(ir,1) + (dvrs(ir,1) - dvrs(ir,4)) * psic_nc(ir,2)
-                     psic_nc(ir,1) = tmp1
-                     psic_nc(ir,2) = tmp2
-                  ENDDO
+                 IF(domag) THEN
+                    !$acc parallel loop present(psic_nc,dvrs)
+                    DO ir = 1,dffts_nnr
+                       tmp1 = (dvrs(ir,1) + dvrs(ir,4)) * psic_nc(ir,1) &
+                       &    + (dvrs(ir,2) - (0._DP,1._DP) * dvrs(ir,3)) * psic_nc(ir,2)
+                       tmp2 = (dvrs(ir,2) + (0._DP,1._DP) * dvrs(ir,3)) * psic_nc(ir,1) &
+                       &    + (dvrs(ir,1) - dvrs(ir,4)) * psic_nc(ir,2)
+                       psic_nc(ir,1) = tmp1
+                       psic_nc(ir,2) = tmp2
+                    ENDDO
+                    !$acc end parallel
                  ELSE
-                  DO ir = 1,dffts_nnr
-                     tmp1 = dvrs(ir,1) * psic_nc(ir,1) 
-                     tmp2 = dvrs(ir,1) * psic_nc(ir,2)
-                     psic_nc(ir,1) = tmp1
-                     psic_nc(ir,2) = tmp2
-                  ENDDO
+                    !$acc parallel loop collapse(2) present(psic_nc,dvrs)
+                    DO ipol = 1,npol
+                       DO ir = 1,dffts_nnr
+                          psic_nc(ir,ipol) = psic_nc(ir,ipol)*dvrs(ir,1)
+                       ENDDO
+                    ENDDO
+                    !$acc end parallel
                  ENDIF
-                 !$acc end parallel
                  !
                  CALL single_fwfft_k(dffts,npw,npwx,psic_nc(:,1),evc1_new(1:npwx,lbnd,iks),'Wave',igk_k(:,current_k))
                  CALL single_fwfft_k(dffts,npw,npwx,psic_nc(:,2),evc1_new(npwx+1:npwx*2,lbnd,iks),'Wave',igk_k(:,current_k))
                  !
               ENDDO
-           ELSE             
+              !
+           ELSE
               !
               ! only single bands
               !
@@ -285,7 +285,8 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
               ENDDO
               !
            ENDIF
-        ENDIF           
+           !
+        ENDIF
         !
      ENDIF
      !

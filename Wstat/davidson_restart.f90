@@ -39,6 +39,7 @@ MODULE davidson_restart
                                      & my_pool_id,inter_bgrp_comm,my_bgrp_id,me_bgrp
       USE io_global,            ONLY : stdout
       USE pwcom,                ONLY : npwx
+      USE noncollin_module,     ONLY : npol
       USE westcom,              ONLY : n_pdep_basis,ev,conv,dvg,dng,dvg_exc,dng_exc,nbndval0x,&
                                      & n_trunc_bands,wstat_restart_dir,wbse_restart_dir
       USE pdep_io,              ONLY : pdep_merge_and_write_G
@@ -80,7 +81,7 @@ MODULE davidson_restart
          which = 'wbse_restart'
          dirname = wbse_restart_dir
          !
-         ALLOCATE(tmp_exc(npwx,nbndval0x-n_trunc_bands,kpt_pool%nglob))
+         ALLOCATE(tmp_exc(npwx*npol,nbndval0x-n_trunc_bands,kpt_pool%nglob))
          !
       ELSE
          !
@@ -121,11 +122,7 @@ MODULE davidson_restart
       !
       ALLOCATE(tmp_distr(n_pdep_basis,pert%nlocx))
       !
-      IF(mpime == root) THEN
-         !
-         OPEN(NEWUNIT=iun,FILE=TRIM(dirname)//'/hr_vr.dat',FORM='unformatted')
-         !
-      ENDIF
+      IF(mpime == root) OPEN(NEWUNIT=iun,FILE=TRIM(dirname)//'/hr_vr.dat',FORM='unformatted')
       !
       DO im = 0,nimage-1
          !
@@ -207,9 +204,7 @@ MODULE davidson_restart
          !
       ENDDO
       !
-      IF(l_bse) THEN
-         DEALLOCATE(tmp_exc)
-      ENDIF
+      IF(l_bse) DEALLOCATE(tmp_exc)
       !
       time_spent(2) = get_clock(TRIM(which))
       CALL stop_clock(TRIM(which))
@@ -231,6 +226,7 @@ MODULE davidson_restart
                                      & my_pool_id,inter_bgrp_comm,my_bgrp_id,me_bgrp
       USE io_global,            ONLY : stdout
       USE pwcom,                ONLY : npwx
+      USE noncollin_module,     ONLY : npol
       USE westcom,              ONLY : n_pdep_basis,ev,conv,dvg,dng,dvg_exc,dng_exc,nbndval0x,&
                                      & n_trunc_bands,wstat_restart_dir,wbse_restart_dir
       USE pdep_io,              ONLY : pdep_merge_and_write_G
@@ -273,7 +269,7 @@ MODULE davidson_restart
          which = 'wbse_restart'
          dirname = wbse_restart_dir
          !
-         ALLOCATE(tmp_exc(npwx,nbndval0x-n_trunc_bands,kpt_pool%nglob))
+         ALLOCATE(tmp_exc(npwx*npol,nbndval0x-n_trunc_bands,kpt_pool%nglob))
          !
       ELSE
          !
@@ -302,9 +298,7 @@ MODULE davidson_restart
          CALL json%add('conv',conv(:))
          CALL json%add('ev',ev(:))
          CALL json%add('ew',ew(:))
-         IF(PRESENT(lastdone_iq)) THEN
-            CALL json%add('lastdone_iq',lastdone_iq)
-         ENDIF
+         IF(PRESENT(lastdone_iq)) CALL json%add('lastdone_iq',lastdone_iq)
          !
          OPEN(NEWUNIT=iun,FILE=TRIM(dirname)//'/summary.json')
          CALL json%print(iun)
@@ -317,11 +311,7 @@ MODULE davidson_restart
       !
       ALLOCATE(tmp_distr(n_pdep_basis,pert%nlocx))
       !
-      IF(mpime == root) THEN
-         !
-         OPEN(NEWUNIT=iun,FILE=TRIM(dirname)//'/hr_vr.dat',FORM='unformatted')
-         !
-      ENDIF
+      IF(mpime == root) OPEN(NEWUNIT=iun,FILE=TRIM(dirname)//'/hr_vr.dat',FORM='unformatted')
       !
       DO im = 0,nimage-1
          !
@@ -653,9 +643,7 @@ MODULE davidson_restart
       !
       CALL mp_bcast(ev,root,world_comm)
       CALL mp_bcast(ew,root,world_comm)
-      IF(PRESENT(iq)) THEN
-         CALL mp_bcast(iq,root,world_comm)
-      ENDIF
+      IF(PRESENT(iq)) CALL mp_bcast(iq,root,world_comm)
       !
     END SUBROUTINE
     !
@@ -784,6 +772,7 @@ MODULE davidson_restart
       !------------------------------------------------------------------------
       !
       USE pwcom,                ONLY : npwx
+      USE noncollin_module,     ONLY : npol
       USE westcom,              ONLY : dvg,dng,dvg_exc,dng_exc,nbndval0x,n_trunc_bands,&
                                      & wstat_restart_dir,wbse_restart_dir
       USE pdep_io,              ONLY : pdep_read_G_and_distribute
@@ -812,7 +801,7 @@ MODULE davidson_restart
          dvg_exc(:,:,:,:) = (0._DP,0._DP)
          dng_exc(:,:,:,:) = (0._DP,0._DP)
          !
-         ALLOCATE(tmp_exc(npwx,nbndval0x-n_trunc_bands,kpt_pool%nglob))
+         ALLOCATE(tmp_exc(npwx*npol,nbndval0x-n_trunc_bands,kpt_pool%nglob))
          !
       ELSE
          !
@@ -874,9 +863,7 @@ MODULE davidson_restart
          !
       ENDDO
       !
-      IF(l_bse) THEN
-         DEALLOCATE(tmp_exc)
-      ENDIF
+      IF(l_bse) DEALLOCATE(tmp_exc)
       !
     END SUBROUTINE
     !

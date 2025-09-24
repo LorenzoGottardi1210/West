@@ -16,16 +16,17 @@ SUBROUTINE do_exc_comp()
   USE kinds,                 ONLY : DP
   USE io_push,               ONLY : io_push_title
   USE bar,                   ONLY : bar_type,start_bar_type,update_bar_type,stop_bar_type
-  USE pwcom,                 ONLY : npw,npwx,nks,current_k,ngk
+  USE pwcom,                 ONLY : npw,npwx,nks,current_k,ngk,nspin
   USE control_flags,         ONLY : gamma_only
   USE gvect,                 ONLY : gstart
   USE mp,                    ONLY : mp_sum,mp_bcast
   USE mp_global,             ONLY : inter_image_comm,my_image_id,intra_bgrp_comm
   USE buffers,               ONLY : get_buffer
   USE noncollin_module,      ONLY : npol
-  USE westcom,               ONLY : logfile,iuwfc,lrwfc,nbndval0x,nbnd_occ,dvg_exc,ev,westpp_range,&
-                                  & westpp_n_liouville_to_use,westpp_l_spin_flip,westpp_l_compute_tdm,&
-                                  & westpp_l_dipole_realspace,l_dipole_realspace,d0psi,alphapv_dfpt
+  USE westcom,               ONLY : logfile,iuwfc,lrwfc,nbndval0x,nbnd_occ,dvg_exc,ev,d0psi,&
+                                  & alphapv_dfpt,westpp_range,westpp_n_liouville_to_use,&
+                                  & westpp_l_spin_flip,westpp_l_compute_tdm,l_dipole_realspace,&
+                                  & westpp_l_dipole_realspace
   USE mp_world,              ONLY : mpime,root
   USE plep_db,               ONLY : plep_db_read
   USE distribution_center,   ONLY : pert,kpt_pool,band_group
@@ -94,7 +95,7 @@ SUBROUTINE do_exc_comp()
   !
   IF((.NOT. westpp_l_spin_flip) .AND. westpp_l_compute_tdm) THEN
      !
-     ALLOCATE(d0psi(npwx,nbndx_occ,nks,3))
+     ALLOCATE(d0psi(npwx*npol,nbndx_occ,nks,3))
      !$acc enter data create(d0psi)
      !
      l_dipole_realspace = westpp_l_dipole_realspace
@@ -192,12 +193,10 @@ SUBROUTINE do_exc_comp()
   !
   IF(gamma_only) THEN
      !$acc update host(proj_mat_r)
-     !
      CALL mp_sum(proj_mat_r,intra_bgrp_comm)
      CALL mp_sum(proj_mat_r,inter_image_comm)
   ELSE
      !$acc update host(proj_mat_c)
-     !
      CALL mp_sum(proj_mat_c,intra_bgrp_comm)
      CALL mp_sum(proj_mat_c,inter_image_comm)
   ENDIF
@@ -283,7 +282,7 @@ SUBROUTINE do_exc_comp()
                  !
                  !$acc parallel loop collapse(2) reduction(+:reduce_c) present(dvg_exc,d0psi) copy(reduce_c)
                  DO iocc = 1,flnbndval
-                    DO ig = 1,npw
+                    DO ig = 1,npwx*npol
                        reduce_c = reduce_c + CONJG(dvg_exc(ig,iocc,iks,lexc))*d0psi(ig,iocc,iks_do,ipol)
                     ENDDO
                  ENDDO
@@ -302,13 +301,11 @@ SUBROUTINE do_exc_comp()
      IF(gamma_only) THEN
         CALL mp_sum(trans_dip_r,intra_bgrp_comm)
         CALL mp_sum(trans_dip_r,inter_image_comm)
-        !
-        IF(nks == 1) trans_dip_r(:,:) = SQRT(2._DP) * trans_dip_r
+        IF(nspin == 1) trans_dip_r(:,:) = SQRT(2._DP) * trans_dip_r
      ELSE
         CALL mp_sum(trans_dip_c,intra_bgrp_comm)
         CALL mp_sum(trans_dip_c,inter_image_comm)
-        !
-        IF(nks == 1) trans_dip_c(:,:) = SQRT(2._DP) * trans_dip_c
+        IF(nspin == 1) trans_dip_c(:,:) = SQRT(2._DP) * trans_dip_c
      ENDIF
      !
   ENDIF

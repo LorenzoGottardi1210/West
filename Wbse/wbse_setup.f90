@@ -64,8 +64,6 @@ SUBROUTINE wbse_setup()
      l_bse = .FALSE.
   END SELECT
   !
-  IF(.NOT. gamma_only .AND. l_bse) CALL errore('wbse_setup','Err: BSE requires gamma_only',1)
-  !
   ! ground state hybrid DFT + TDDFT -> TD-hybrid-DFT
   !
   IF((.NOT. l_bse) .AND. xclib_dft_is('hybrid')) THEN

@@ -131,9 +131,9 @@ SUBROUTINE wbse_memory_report()
      mem_tot = mem_tot + mem_partial
   ENDIF
   !
-  mem_partial = (1.0_DP/Mb)*complex_size*npwx*nbndloc
+  mem_partial = (1.0_DP/Mb)*complex_size*npwx*npol*nbndloc
   WRITE(stdout,'(5x,"[MEM] Liouville workspace     ",f10.2," Mb", 5x,"(",i7,",",i5,")")') &
-     mem_partial, npwx, nbndloc
+     mem_partial, npwx*npol, nbndloc
   IF( mpime == root ) CALL json%add( 'memory.liouville', mem_partial )
   mem_tot = mem_tot + mem_partial
   !

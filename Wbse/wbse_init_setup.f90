@@ -19,7 +19,6 @@ SUBROUTINE wbse_init_setup()
   USE kinds,                ONLY : DP
   USE mp_global,            ONLY : npool,nbgrp
   USE xc_lib,               ONLY : xclib_dft_is
-  USE control_flags,        ONLY : gamma_only
   USE pwcom,                ONLY : nkstot,nks
   USE distribution_center,  ONLY : kpt_pool
   USE class_idistribute,    ONLY : idistribute,IDIST_BLK
@@ -38,8 +37,6 @@ SUBROUTINE wbse_init_setup()
   CASE('TDDFT','tddft')
      l_bse = .FALSE.
   END SELECT
-  !
-  IF(.NOT. gamma_only .AND. l_bse) CALL errore('wbse_setup','Err: BSE requires gamma_only',1)
   !
   ! ground state hybrid DFT + TDDFT -> TD-hybrid-DFT
   !
@@ -70,9 +67,6 @@ SUBROUTINE wbse_init_setup()
   CASE('B','b','W','w')
      l_local_repr = .TRUE.
   END SELECT
-  !
-  IF(.NOT. gamma_only .AND. l_local_repr) &
-  & CALL errore('wbse_setup','Err: localization requires gamma_only',1)
   !
   l_use_ecutrho = .FALSE.
   !

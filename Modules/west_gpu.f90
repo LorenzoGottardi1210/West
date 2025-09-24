@@ -89,14 +89,19 @@ MODULE west_gpu
    COMPLEX(DP), ALLOCATABLE :: caux2(:,:)
    COMPLEX(DP), ALLOCATABLE :: caux3(:,:)
    COMPLEX(DP), ALLOCATABLE :: caux4(:,:,:)
-   COMPLEX(DP), ALLOCATABLE :: dvrs(:,:)
-   COMPLEX(DP), ALLOCATABLE :: hevc1(:,:)
-   COMPLEX(DP), ALLOCATABLE :: psic2(:)
-   COMPLEX(DP), ALLOCATABLE :: dvaux(:,:)
-   COMPLEX(DP), ALLOCATABLE :: gdrho(:,:,:)
-   COMPLEX(DP), ALLOCATABLE :: dvhart(:)
    COMPLEX(DP), ALLOCATABLE :: gaux(:)
    ATTRIBUTES(PINNED) :: gaux
+   COMPLEX(DP), ALLOCATABLE :: gdrho(:,:,:)
+   COMPLEX(DP), ALLOCATABLE :: hevc1(:,:)
+   COMPLEX(DP), ALLOCATABLE :: dvrs(:,:)
+   COMPLEX(DP), ALLOCATABLE :: psic2(:)
+   COMPLEX(DP), ALLOCATABLE :: psic_nc2(:,:)
+   COMPLEX(DP), ALLOCATABLE :: drhoout(:,:)
+   COMPLEX(DP), ALLOCATABLE :: gdmag(:,:,:)
+   COMPLEX(DP), ALLOCATABLE :: dvxcsave(:,:)
+   COMPLEX(DP), ALLOCATABLE :: vgg(:,:)
+   COMPLEX(DP), ALLOCATABLE :: dvaux(:,:)
+   COMPLEX(DP), ALLOCATABLE :: dvhart(:,:)
    !
    ! Workspace
    !
@@ -732,9 +737,8 @@ MODULE west_gpu
    !-----------------------------------------------------------------------
    !
    USE control_flags,         ONLY : gamma_only
-   USE lsda_mod,              ONLY : nspin
    USE wvfct,                 ONLY : npwx
-   USE noncollin_module,      ONLY : npol,nspin_gga
+   USE noncollin_module,      ONLY : noncolin,domag,npol,nspin_gga,nspin_mag
    USE fft_base,              ONLY : dffts,dfftp
    USE westcom,               ONLY : nbndval0x,n_trunc_bands,l_bse,l_hybrid_tddft,l_local_repr,&
                                    & et_qp,u_matrix
@@ -769,7 +773,7 @@ MODULE west_gpu
    !$acc enter data create(gdrho)
    ALLOCATE(hevc1(npwx*npol,nbndlocx))
    !$acc enter data create(hevc1)
-   ALLOCATE(dvrs(dffts%nnr,nspin))
+   ALLOCATE(dvrs(dffts%nnr,nspin_mag))
    !$acc enter data create(dvrs)
    IF(gamma_only) THEN
       ALLOCATE(tmp_r(dffts%nnr))
@@ -781,9 +785,23 @@ MODULE west_gpu
       ALLOCATE(psic2(dffts%nnr))
       !$acc enter data create(psic2)
    ENDIF
-   ALLOCATE(dvaux(dfftp%nnr,nspin))
+   ALLOCATE(drhoout(dfftp%nnr,nspin_gga))
+   !$acc enter data create(drhoout)
+   IF(noncolin) THEN
+      ALLOCATE(psic_nc2(dffts%nnr,npol))
+      !$acc enter data create(psic_nc2)
+      IF(domag) THEN
+         ALLOCATE(gdmag(3,dfftp%nnr,nspin_mag))
+         !$acc enter data create(gdmag)
+         ALLOCATE(dvxcsave(dfftp%nnr,nspin_mag))
+         !$acc enter data create(dvxcsave)
+         ALLOCATE(vgg(dfftp%nnr,nspin_gga))
+         !$acc enter data create(vgg)
+      ENDIF
+   ENDIF
+   ALLOCATE(dvaux(dfftp%nnr,nspin_mag))
    !$acc enter data create(dvaux)
-   ALLOCATE(dvhart(dfftp%nnr))
+   ALLOCATE(dvhart(dfftp%nnr,nspin_mag))
    !$acc enter data create(dvhart)
    !
    !$acc enter data copyin(et_qp,u_matrix)
@@ -853,6 +871,26 @@ MODULE west_gpu
    IF(ALLOCATED(psic2)) THEN
       !$acc exit data delete(psic2)
       DEALLOCATE(psic2)
+   ENDIF
+   IF(ALLOCATED(psic_nc2)) THEN
+      !$acc exit data delete(psic_nc2)
+      DEALLOCATE(psic_nc2)
+   ENDIF
+   IF(ALLOCATED(drhoout)) THEN
+      !$acc exit data delete(drhoout)
+      DEALLOCATE(drhoout)
+   ENDIF
+   IF(ALLOCATED(gdmag)) THEN
+      !$acc exit data delete(gdmag)
+      DEALLOCATE(gdmag)
+   ENDIF
+   IF(ALLOCATED(dvxcsave)) THEN
+      !$acc exit data delete(dvxcsave)
+      DEALLOCATE(dvxcsave)
+   ENDIF
+   IF(ALLOCATED(vgg)) THEN
+      !$acc exit data delete(vgg)
+      DEALLOCATE(vgg)
    ENDIF
    IF(ALLOCATED(dvaux)) THEN
       !$acc exit data delete(dvaux)

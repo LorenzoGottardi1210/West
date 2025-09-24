@@ -1310,7 +1310,20 @@ wbse_control
    * - **Default**
      - 1e-3
    * - **Description**
-     - Spin-flip cutoff to prevent divergence by setting values to zero on a grid point if the density on this point is smaller than spin_flip_cut. Used only in spin-flip TDDFT calculations.
+     - Spin-flip cutoff to prevent divergence by setting values to zero on a grid point if the magnetization on this point is smaller than spin_flip_cut. Used only in spin-flip TDDFT calculations.
+
+.. data:: noncolin_cut
+
+.. list-table::
+   :widths: 10 90
+   :stub-columns: 0
+
+   * - **Type**
+     - float
+   * - **Default**
+     - 1e-3
+   * - **Description**
+     - Noncollinear cutoff to prevent divergence by setting values to zero on a grid point if the magnetization on this point is smaller than noncolin_cut. Used only in noncollinear TDDFT calculations.
 
 .. data:: l_forces
 

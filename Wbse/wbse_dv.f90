@@ -27,10 +27,9 @@ MODULE wbse_dv
     USE uspp,                  ONLY : nlcc_any
     USE qpoint,                ONLY : xq
     USE scf,                   ONLY : rho
-    USE gc_lr,                 ONLY : grho,dvxc_rr,dvxc_sr,dvxc_ss,dvxc_s
+    USE gc_lr,                 ONLY : grho,dvxc_rr,dvxc_sr,dvxc_ss,dvxc_s,gmag,vsgga,segni
     USE eqv,                   ONLY : dmuxc
     USE xc_lib,                ONLY : xclib_dft_is
-    USE lsda_mod,              ONLY : nspin
     USE noncollin_module,      ONLY : nspin_mag
     !
     IMPLICIT NONE
@@ -67,7 +66,7 @@ MODULE wbse_dv
        !
        IF(xclib_dft_is('gradient')) CALL setup_dgc()
        !
-       !$acc enter data copyin(grho,dvxc_rr,dvxc_sr,dvxc_ss,dvxc_s)
+       !$acc enter data copyin(grho,dvxc_rr,dvxc_sr,dvxc_ss,dvxc_s,gmag,vsgga,segni)
        !
     ENDIF
     !
@@ -84,20 +83,20 @@ MODULE wbse_dv
     !  This routine computes the change of the self consistent potential
     !  (Hartree and XC) due to the perturbation.
     !
-    !  Adapted from QE/LR_Modules/dv_of_drho.f90
+    !  See QE/LR_Modules/dv_of_drho.f90
+    !
     USE kinds,                 ONLY : DP
     USE constants,             ONLY : e2,fpi,eps8
     USE fft_base,              ONLY : dfftp
     USE fft_interfaces,        ONLY : fwfft,invfft
-    USE gvect,                 ONLY : ngm,g,gstart
-    USE cell_base,             ONLY : tpiba2,omega
-    USE lsda_mod,              ONLY : nspin
-    USE noncollin_module,      ONLY : nspin_lsda, nspin_mag
+    USE gvect,                 ONLY : ngm,g
+    USE cell_base,             ONLY : tpiba2
+    USE noncollin_module,      ONLY : nspin_lsda,nspin_mag
     USE xc_lib,                ONLY : xclib_dft_is
     USE funct,                 ONLY : dft_is_nonlocc
     USE scf,                   ONLY : rho,rho_core
     USE uspp,                  ONLY : nlcc_any
-    USE martyna_tuckerman,     ONLY : wg_corr_h,do_comp_mt
+    USE martyna_tuckerman,     ONLY : do_comp_mt
     USE qpoint,                ONLY : xq
     USE eqv,                   ONLY : dmuxc
 #if defined(__CUDA)
@@ -108,7 +107,7 @@ MODULE wbse_dv
     !
     ! I/O
     !
-    COMPLEX(DP), INTENT(INOUT) :: dvscf(dfftp%nnr, nspin_mag)
+    COMPLEX(DP), INTENT(INOUT) :: dvscf(dfftp%nnr,nspin_mag)
     ! input:  response charge density
     ! output: response Hartree-and-XC potential
     !
@@ -119,48 +118,37 @@ MODULE wbse_dv
     ! input: if true, add core charge density
     !
     COMPLEX(DP), INTENT(IN), OPTIONAL :: drhoc(dfftp%nnr)
-    ! input: response core charge density
-    ! (needed only for PHonon when add_nlcc=.true.)
+    ! input: response core charge density (needed only when add_nlcc=.true.)
     !
     ! Workspace
     !
     INTEGER :: is, is1, ig, ir, dfftp_nnr
-    ! counter on r vectors
-    ! counter on spin polarizations
-    ! counter on g vectors
     !
-    REAL(DP) :: qg2, fac, eh_corr
+    REAL(DP) :: qg2, fac
     ! qg2: the modulus of (q+G)^2
     ! fac: the structure factor
-    ! eh_corr: the correction to response Hartree energy due
-    ! to Martyna-Tuckerman correction (calculated, but not used).
     !
 #if !defined(__CUDA)
-    COMPLEX(DP), ALLOCATABLE :: dvaux(:,:), dvhart(:,:), dvaux_mt(:)
+    COMPLEX(DP), ALLOCATABLE :: dvaux(:,:), dvhart(:,:)
 #endif
     ! dvaux: response XC potential
     ! dvhart: response Hartree potential
-    ! dvaux_mt: auxiliary array for Martyna-Tuckerman correction
     !
     CALL start_clock('dv_drho')
     !
     dfftp_nnr = dfftp%nnr
     !
+    IF(do_comp_mt) CALL errore('wbse_dv_of_drho', 'do_comp_mt not supported', 1)
 #if defined(__CUDA)
     IF(add_nlcc) CALL errore('wbse_dv_of_drho', 'add_nlcc not supported on GPUs', 1)
-    IF(do_comp_mt) CALL errore('wbse_dv_of_drho', 'do_comp_mt not supported on GPUs', 1)
 #endif
     !
     IF(add_nlcc .AND. .NOT. PRESENT(drhoc)) &
     & CALL errore('wbse_dv_of_drho', 'drhoc is not present in the input of the routine', 1)
     !
-    IF(lrpa) THEN
+    IF(.NOT. lrpa) THEN
 #if !defined(__CUDA)
-       ALLOCATE(dvaux(1,1))
-#endif
-    ELSE
-#if !defined(__CUDA)
-       ALLOCATE(dvaux(dfftp%nnr, nspin_mag))
+       ALLOCATE(dvaux(dfftp%nnr,nspin_mag))
 #endif
        !
        ! 1) The exchange-correlation contribution is computed in real space
@@ -168,7 +156,7 @@ MODULE wbse_dv
        fac = 1._DP / REAL(nspin_lsda,KIND=DP)
        !
        IF(nlcc_any .AND. add_nlcc) THEN
-          DO is = 1, nspin_lsda
+          DO is = 1,nspin_lsda
              rho%of_r(:,is) = rho%of_r(:,is) + fac * rho_core(:)
              dvscf(:,is) = dvscf(:,is) + fac * drhoc(:)
           ENDDO
@@ -180,10 +168,10 @@ MODULE wbse_dv
        !
        !$acc parallel present(dvaux,dmuxc,dvscf)
        !$acc loop seq
-       DO is = 1, nspin_mag
+       DO is1 = 1,nspin_mag
           !$acc loop collapse(2)
-          DO is1 = 1, nspin_mag
-             DO ir = 1, dfftp_nnr
+          DO is = 1,nspin_mag
+             DO ir = 1,dfftp_nnr
                 dvaux(ir,is) = dvaux(ir,is) + dmuxc(ir,is,is1) * dvscf(ir,is1)
              ENDDO
           ENDDO
@@ -199,7 +187,7 @@ MODULE wbse_dv
        IF(dft_is_nonlocc()) CALL dnonloccorr(rho%of_r, dvscf, xq, dvaux)
        !
        IF(nlcc_any .AND. add_nlcc) THEN
-          DO is = 1, nspin_lsda
+          DO is = 1,nspin_lsda
              rho%of_r(:,is) = rho%of_r(:,is) - fac * rho_core(:)
              dvscf(:,is) = dvscf(:,is) - fac * drhoc(:)
           ENDDO
@@ -211,151 +199,76 @@ MODULE wbse_dv
     !
     IF(nspin_mag == 2) THEN
        !$acc parallel loop present(dvscf)
-       DO ir = 1, dfftp_nnr
+       DO ir = 1,dfftp_nnr
           dvscf(ir,1) = dvscf(ir,1) + dvscf(ir,2)
        ENDDO
        !$acc end parallel
     ENDIF
+    !
+    ! FFT to G space
     !
     !$acc host_data use_device(dvscf)
     CALL fwfft('Rho', dvscf(:,1), dfftp)
     !$acc end host_data
     !
 #if !defined(__CUDA)
-    IF(do_comp_mt) THEN
-       !
-       ! Response Hartree potential with the Martyna-Tuckerman correction
-       !
-       ALLOCATE(dvhart(dfftp%nnr,nspin_mag))
-       dvhart(:,:) = (0._DP,0._DP)
-       !
-       DO is = 1, nspin_lsda
-           DO ig = gstart, ngm
-              qg2 = (g(1,ig)+xq(1))**2 + (g(2,ig)+xq(2))**2 + (g(3,ig)+xq(3))**2
-              dvhart(dfftp%nl(ig),is) = e2 * fpi * dvscf(dfftp%nl(ig),1) / (tpiba2 * qg2)
-           ENDDO
-       ENDDO
-       !
-       ALLOCATE(dvaux_mt(ngm))
-       !
-       CALL wg_corr_h(omega, ngm, dvscf(dfftp%nl(:),1), dvaux_mt, eh_corr)
-       !
-       DO is = 1, nspin_lsda
-           DO ig = 1, ngm
-              dvhart(dfftp%nl(ig),is) = dvhart(dfftp%nl(ig),is) + dvaux_mt(ig)
-           ENDDO
-           IF (dfftp%lgamma) THEN
-              DO ig = 1, ngm
-                 dvhart(dfftp%nlm(ig),is) = CONJG(dvhart(dfftp%nl(ig),is))
-              ENDDO
-           ENDIF
-           !
-           ! Transformed back to real space
-           !           
-           CALL invfft ('Rho', dvhart (:,is), dfftp)
-       ENDDO       
-       !
-       IF(lrpa) THEN
-          DO is = 1, nspin_mag
-             DO ir = 1, dfftp_nnr
-                dvscf(ir,is) = dvhart(ir,is)
-             ENDDO
-          ENDDO
-       ELSE 
-          DO is = 1, nspin_mag
-             DO ir = 1, dfftp_nnr
-                dvscf(ir,is) = dvhart(ir,is) + dvaux(ir,is)
-             ENDDO
-          ENDDO
-       ENDIF 
-       !
-       DEALLOCATE(dvaux_mt)
-       DEALLOCATE(dvhart)
-       !
-    ELSE
+    ALLOCATE(dvhart(dfftp%nnr,nspin_mag))
 #endif
-        !
-        ! Response Hartree potential without the Martyna-Tuckerman correction
-        !
-        IF(dfftp%lgamma) THEN
-           !
-           ALLOCATE(dvhart(dfftp%nnr,nspin_mag))
-           dvhart(:,:) = (0._DP,0._DP)
-           !
-           !$acc parallel loop collapse(2) present(dvhart,dfftp,dfftp%nlm,dfftp%nl)
-           DO is = 1, nspin_lsda
-               DO ig = 1, ngm
-                  qg2 = (g(1,ig)+xq(1))**2 + (g(2,ig)+xq(2))**2 + (g(3,ig)+xq(3))**2
-                  IF (qg2 > 1.d-8) THEN
-                     dvhart(dfftp%nl(ig),is) = e2 * fpi * dvscf(dfftp%nl(ig),1) / (tpiba2 * qg2)
-                     dvhart(dfftp%nlm(ig),is) = CONJG(dvhart(dfftp%nl(ig),is))
-                  ENDIF
-               ENDDO
-               !
-               ! Transformed back to real space
-               !
-               !$acc host_data use_device(dvhart)
-               CALL invfft('Rho', dvhart(:,is), dfftp)
-               !$acc end host_data
-           ENDDO
-           !
-           IF(lrpa) THEN
-              DO is = 1, nspin_mag
-                 DO ir = 1, dfftp_nnr
-                    dvscf(ir,is) = dvhart(ir,is)
-                 ENDDO
-              ENDDO
-           ELSE 
-              DO is = 1, nspin_mag
-                 DO ir = 1, dfftp_nnr
-                    dvscf(ir,is) = dvhart(ir,is) + dvaux(ir,is)
-                 ENDDO
-              ENDDO
-           ENDIF 
-           !
-           DEALLOCATE(dvhart)          
-           !$acc end parallel
-        ELSE
-           !
-           ! General k-points implementation
-           !
-            ALLOCATE(dvhart(dfftp%nnr,nspin_mag))
-            dvhart(:,:) = (0._DP,0._DP)
-            !$acc parallel loop collapse(2) present(g,xq,dvhart,dfftp,dfftp%nl,dvscf)
-            DO is = 1, nspin_lsda
-                DO ig = 1, ngm
-                   !
-                   qg2 = (g(1,ig)+xq(1))**2 + (g(2,ig)+xq(2))**2 + (g(3,ig)+xq(3))**2
-                   IF (qg2 > eps8) THEN
-                      dvhart(dfftp%nl(ig),is) = e2 * fpi * dvscf(dfftp%nl(ig),1) / (tpiba2 * qg2)
-                   ENDIF
-                   !
-                ENDDO
-                !
-                ! Transformed back to real space
-                !
-                CALL invfft('Rho', dvhart(:,is), dfftp)
-            ENDDO
-            !$acc end parallel
-            !
-            IF(lrpa) THEN
-               DO is = 1, nspin_mag
-                  DO ir = 1, dfftp_nnr
-                     dvscf(ir,is) = dvhart(ir,is)
-                  ENDDO
-               ENDDO
-            ELSE 
-                DO is = 1, nspin_mag
-                   DO ir = 1, dfftp_nnr
-                      dvscf(ir,is) = dvhart(ir,is) + dvaux(ir,is)
-                   ENDDO
-                ENDDO
-            ENDIF 
-            DEALLOCATE(dvhart)           
-        ENDIF
+    !$acc kernels present(dvhart)
+    dvhart(:,:) = (0._DP,0._DP)
+    !$acc end kernels
     !
+    ! Response Hartree potential (without the Martyna-Tuckerman correction)
+    !
+    DO is = 1,nspin_lsda
+       !
+       IF(dfftp%lgamma) THEN
+          !
+          !$acc parallel loop present(g,xq,dvhart,dfftp,dfftp%nl,dfftp%nlm,dvscf)
+          DO ig = 1,ngm
+             qg2 = (g(1,ig)+xq(1))**2 + (g(2,ig)+xq(2))**2 + (g(3,ig)+xq(3))**2
+             IF(qg2 > eps8) THEN
+                dvhart(dfftp%nl(ig),is) = e2 * fpi * dvscf(dfftp%nl(ig),1) / (tpiba2 * qg2)
+                dvhart(dfftp%nlm(ig),is) = CONJG(dvhart(dfftp%nl(ig),is))
+             ENDIF
+          ENDDO
+          !$acc end parallel
+          !
+       ELSE
+          !
+          !$acc parallel loop present(g,xq,dvhart,dfftp,dfftp%nl,dvscf)
+          DO ig = 1,ngm
+             qg2 = (g(1,ig)+xq(1))**2 + (g(2,ig)+xq(2))**2 + (g(3,ig)+xq(3))**2
+             IF(qg2 > eps8) THEN
+                dvhart(dfftp%nl(ig),is) = e2 * fpi * dvscf(dfftp%nl(ig),1) / (tpiba2 * qg2)
+             ENDIF
+          ENDDO
+          !$acc end parallel
+          !
+       ENDIF
+       !
+       ! FFT to R space
+       !
+       !$acc host_data use_device(dvhart)
+       CALL invfft('Rho', dvhart(:,is), dfftp)
+       !$acc end host_data
+       !
+    ENDDO
+    !
+    IF(lrpa) THEN
+       !$acc kernels present(dvscf,dvhart)
+       dvscf(:,:) = dvhart
+       !$acc end kernels
+    ELSE
+       !$acc kernels present(dvscf,dvhart,dvaux)
+       dvscf(:,:) = dvhart + dvaux
+       !$acc end kernels
     ENDIF
-    DEALLOCATE(dvaux)
+    !
+#if !defined(__CUDA)
+    IF(ALLOCATED(dvaux)) DEALLOCATE(dvaux)
+    IF(ALLOCATED(dvhart)) DEALLOCATE(dvhart)
+#endif
     !
     CALL stop_clock('dv_drho')
     !
@@ -415,13 +328,13 @@ MODULE wbse_dv
     !
     ! ... spin-polarized case
     !
-    CALL xc( dfftp%nnr, 2, 2, rho%of_r, ex, ec, vx, vc, gpu_args_=.TRUE. )
+    CALL xc(dfftp%nnr, 2, 2, rho%of_r, ex, ec, vx, vc, gpu_args_=.TRUE.)
     !
     dfftp_nnr = dfftp%nnr
     !
     !$acc parallel loop collapse(2) present(vxc,vx,vc)
-    DO is = 1, nspin
-       DO ir = 1, dfftp_nnr
+    DO is = 1,nspin
+       DO ir = 1,dfftp_nnr
           vxc(ir,is) = e2*(vx(ir,is)+vc(ir,is))
        ENDDO
     ENDDO
@@ -440,21 +353,21 @@ MODULE wbse_dv
        vtxc = 0._DP
        !
        !$acc enter data copyin(rho_core,rhog_core)
-       CALL gradcorr( rho%of_r, rho%of_g, rho_core, rhog_core, etxc, vtxc, vxc )
+       CALL gradcorr(rho%of_r, rho%of_g, rho_core, rhog_core, etxc, vtxc, vxc)
        !$acc exit data delete(rho_core,rhog_core)
     ENDIF
     !
     ! IF nspin == 2, rho%of_r(:,1) and rho%of_r(:,2) stores up+down and up-down respectively
     !
     !$acc parallel loop present(sf_kernel,vxc,rho)
-    DO ir = 1, dfftp_nnr
+    DO ir = 1,dfftp_nnr
        sf_kernel(ir) = (vxc(ir,1) - vxc(ir,2)) / rho%of_r(ir,2)
     ENDDO
     !$acc end parallel
     !
     IF(.NOT. l_spin_flip_alda0 .AND. xclib_dft_is('gradient')) THEN
        !$acc parallel loop present(sf_kernel)
-       DO ir = 1, dfftp_nnr
+       DO ir = 1,dfftp_nnr
           IF(ABS(rho%of_r(ir,2)) < spin_flip_cut) sf_kernel(ir) = 0._DP
        ENDDO
        !$acc end parallel
@@ -493,7 +406,7 @@ MODULE wbse_dv
     !
     ! I/O
     !
-    COMPLEX(DP), INTENT(INOUT) :: dvscf(dfftp%nnr, nspin)
+    COMPLEX(DP), INTENT(INOUT) :: dvscf(dfftp%nnr,nspin)
     ! input:  response charge density
     ! output: response XC potential
     !
@@ -509,8 +422,8 @@ MODULE wbse_dv
     dfftp_nnr = dfftp%nnr
     !
     !$acc parallel loop collapse(2) present(dvscf,sf_kernel)
-    DO is = 1, nspin
-       DO ir = 1, dfftp_nnr
+    DO is = 1,nspin
+       DO ir = 1,dfftp_nnr
           dvscf(ir,is) = sf_kernel(ir) * dvscf(ir,is)
        ENDDO
     ENDDO
@@ -526,16 +439,17 @@ MODULE wbse_dv
     !
     !  Add gradient correction to response exchange-correlation potential
     !
-    !  Adapted from QE/LR_modules/dgradcorr.f90
+    !  See QE/LR_modules/dgradcorr.f90
     !
     USE kinds,                 ONLY : DP
+    USE constants,             ONLY : eps6
     USE fft_base,              ONLY : dfftp
     USE gvect,                 ONLY : g
-    USE noncollin_module,      ONLY : nspin_gga, noncolin, domag, nspin_mag
-    USE lsda_mod,              ONLY : nspin
+    USE noncollin_module,      ONLY : noncolin,domag,nspin_mag,nspin_gga
+    USE westcom,               ONLY : noncolin_cut
     USE gc_lr,                 ONLY : grho,dvxc_rr,dvxc_sr,dvxc_ss,dvxc_s,gmag,vsgga,segni
 #if defined(__CUDA)
-    USE west_gpu,              ONLY : gdrho,h=>caux4,dh=>tmp_c
+    USE west_gpu,              ONLY : gdrho,h=>caux4,dh=>tmp_c,drhoout,gdmag,dvxcsave,vgg
 #endif
     !
     IMPLICIT NONE
@@ -556,217 +470,254 @@ MODULE wbse_dv
     COMPLEX(DP) :: s1, fact, term
     COMPLEX(DP) :: a(2,2,2), b(2,2,2,2), c(2,2,2), ps(2,2), ps1(3,2,2), ps2(3,2,2,2)
 #if !defined(__CUDA)
-    COMPLEX(DP), ALLOCATABLE :: gdrho(:,:,:), h(:,:,:), dh(:)
+    COMPLEX(DP), ALLOCATABLE :: gdrho(:,:,:), h(:,:,:), dh(:), drhoout(:,:)
     COMPLEX(DP), ALLOCATABLE :: gdmag (:,:,:), dvxcsave(:,:), vgg(:,:)
-    COMPLEX(DP), ALLOCATABLE :: drhoout(:,:)
 #endif
-    INTEGER :: ir, ipol, jpol, is, js, ks, ls, k
+    INTEGER :: ir, ipol, jpol, is, js, ks, ls
     !
     dfftp_nnr = dfftp%nnr
     !
 #if !defined(__CUDA)
-    IF (noncolin.and.domag) THEN
-        ALLOCATE (gdmag(3, dfftp%nnr, nspin_mag))
-        ALLOCATE (dvxcsave(dfftp%nnr, nspin_mag))
-        ALLOCATE (vgg(dfftp%nnr, nspin_gga))
-        dvxcsave=dvxc
-        dvxc=(0.0_dp,0.0_dp)
-    ENDIF
-    ALLOCATE(drhoout( dfftp%nnr, nspin_gga))
     ALLOCATE(gdrho(3,dfftp%nnr,nspin_gga))
     ALLOCATE(h(3,dfftp%nnr,nspin_gga))
     ALLOCATE(dh(dfftp%nnr))
+    ALLOCATE(drhoout(dfftp%nnr,nspin_gga))
+    IF(noncolin .AND. domag) THEN
+       ALLOCATE(gdmag(3,dfftp%nnr,nspin_mag))
+       ALLOCATE(dvxcsave(dfftp%nnr,nspin_mag))
+       ALLOCATE(vgg(dfftp%nnr,nspin_gga))
+    ENDIF
 #endif
     !
     !$acc kernels present(h)
     h(:,:,:) = (0._DP,0._DP)
     !$acc end kernels
     !
-    IF (noncolin.and.domag) THEN
-        DO is = 1, nspin_mag
+    IF(noncolin .AND. domag) THEN
+       !
+       !$acc kernels present(dvxcsave,dvxc)
+       dvxcsave(:,:) = dvxc
+       !$acc end kernels
+       !
+       !$acc kernels present(dvxc)
+       dvxc(:,:) = (0._DP,0._DP)
+       !$acc end kernels
+       !
+       DO is = 1,nspin_mag
 #if defined(__CUDA)
-           CALL fft_qgradient_gpu(dfftp,drho(1,is),xq,g,gdmag(1,1,is))
+          CALL fft_qgradient_gpu(dfftp,drho(:,is),xq,g,gdmag(:,:,is))
 #else
-           CALL fft_qgradient(dfftp,drho(1,is),xq,g,gdmag(1,1,is))
+          CALL fft_qgradient(dfftp,drho(:,is),xq,g,gdmag(:,:,is))
 #endif
-        ENDDO
-        DO is=1,nspin_gga
-            IF (is==1) seg0=0.5_dp
-            IF (is==2) seg0=-0.5_dp
-            drhoout(:,is) = 0.5_dp*drho(:,1)
-            DO ipol=1,3
-               gdrho(ipol,:,is) = 0.5_dp*gdmag(ipol,:,1)
-            ENDDO
-            DO k=1,dfftp%nnr
-               seg=seg0*segni(k)
-               amag=sqrt(rho(k,2)**2+rho(k,3)**2+rho(k,4)**2)
-               IF (amag>1.d-12) THEN
-                  DO jpol=2,4
-                     drhoout(k,is) = drhoout(k,is)+seg*rho(k,jpol)* &
-                                                     drho(k,jpol)/amag
-                  END DO
-                  DO ipol=1,3
-                     fact=(0.0_dp,0.0_dp)
-                     DO jpol=2,4
-                        fact=fact+rho(k,jpol)*drho(k,jpol)
-                     END DO
-                     DO jpol=2,4
-                        gdrho(ipol,k,is) = gdrho(ipol,k,is)+ seg*( &
-                            drho(k,jpol)*gmag(ipol,k,jpol)+ &
-                            rho(k,jpol)*gdmag(ipol,k,jpol))/amag &
-                            -seg*(rho(k,jpol)*gmag(ipol,k,jpol)*fact)/amag**3
-                     END DO
-                  END DO
-               END IF
-            END DO
-         END DO
+       ENDDO
+       !
+       DO is = 1,nspin_gga
+          !
+          IF(is == 1) seg0 = 0.5_DP
+          IF(is == 2) seg0 = -0.5_DP
+          !
+          !$acc kernels present(drhoout,drho)
+          drhoout(:,is) = 0.5_DP * drho(:,1)
+          !$acc end kernels
+          !
+          !$acc kernels present(gdrho,gdmag)
+          gdrho(:,:,is) = 0.5_DP * gdmag(:,:,1)
+          !$acc end kernels
+          !
+          !$acc parallel loop present(segni,rho,drhoout,drho,gmag,gdmag)
+          DO ir = 1,dfftp_nnr
+             !
+             seg = seg0 * segni(ir)
+             amag = SQRT(rho(ir,2)**2 + rho(ir,3)**2 + rho(ir,4)**2)
+             !
+             IF(amag > noncolin_cut) THEN
+                !
+                !$acc loop seq
+                DO jpol = 2,4
+                   drhoout(ir,is) = drhoout(ir,is) + seg*rho(ir,jpol)*drho(ir,jpol)/amag
+                ENDDO
+                !
+                !$acc loop seq
+                DO ipol = 1,3
+                   fact = (0._DP,0._DP)
+                   DO jpol = 2,4
+                      fact = fact + rho(ir,jpol)*drho(ir,jpol)
+                   ENDDO
+                   !$acc loop seq
+                   DO jpol = 2,4
+                      gdrho(ipol,ir,is) = gdrho(ipol,ir,is) &
+                      & + seg*(drho(ir,jpol)*gmag(ipol,ir,jpol) + rho(ir,jpol)*gdmag(ipol,ir,jpol))/amag &
+                      & - seg*(rho(ir,jpol)*gmag(ipol,ir,jpol)*fact)/amag**3
+                   ENDDO
+                ENDDO
+                !
+             ENDIF
+             !
+          ENDDO
+          !$acc end parallel
+          !
+       ENDDO
+       !
     ELSE
-        DO is = 1,nspin_gga
+       !
+       DO is = 1,nspin_gga
 #if defined(__CUDA)
-           CALL fft_qgradient_gpu(dfftp,drho(1,is),xq,g,gdrho(1,1,is))
-           drhoout(:,is)=drho(:,is)
+          CALL fft_qgradient_gpu(dfftp,drho(:,is),xq,g,gdrho(:,:,is))
 #else
-           CALL fft_qgradient(dfftp,drho(1,is),xq,g,gdrho(1,1,is))
-           drhoout(:,is)=drho(:,is)
+          CALL fft_qgradient(dfftp,drho(:,is),xq,g,gdrho(:,:,is))
 #endif
-        ENDDO
-        !
+       ENDDO
+       !
+       !$acc kernels present(drhoout,drho)
+       drhoout(:,1:nspin_gga) = drho(:,1:nspin_gga)
+       !$acc end kernels
+       !
     ENDIF
-
-    DO ir = 1,dfftp_nnr
-        grho2 = grho(1,ir,1)**2 + grho(2,ir,1)**2 + grho(3,ir,1)**2
-        IF(nspin_mag == 1) THEN
-           !
-           !  LDA case
-           !
-           !$acc parallel present(grho,rho,gdrho,dvxc,dvxc_rr,drho,dvxc_sr,h,dvxc_ss,dvxc_s)
-           !$acc loop
-           IF(ABS(rho(ir,1)) > epsr .AND. grho2 > epsg) THEN
-              !
-              s1 = grho(1,ir,1)*gdrho(1,ir,1) + grho(2,ir,1)*gdrho(2,ir,1) + grho(3,ir,1)*gdrho(3,ir,1)
-              !
-              ! linear variation of the first term
-              !
-              dvxc(ir,1) = dvxc(ir,1) + dvxc_rr(ir,1,1) * drho(ir,1) + dvxc_sr(ir,1,1) * s1
-              !
-              !$acc loop seq
-              DO ipol = 1,3
-                 h(ipol,ir,1) = (dvxc_sr(ir,1,1) * drho(ir,1) + dvxc_ss(ir,1,1) * s1) * grho(ipol,ir,1) &
-                 & + dvxc_s(ir,1,1) * gdrho(ipol,ir,1)
-              ENDDO
-           ELSE
-              DO ipol = 1,3
-                 h(ipol,ir,1) = (0.d0, 0.d0)
-              ENDDO
-           ENDIF
-           !$acc end parallel
-           !
-        ELSE 
-           !
-           ! LSDA case
-           !
-           !$acc parallel present(grho,drho,gdrho,dvxc_sr,dvxc_ss,dvxc,dvxc_rr,h,dvxc_s)
-           !$acc loop private(ps,ps1,a,c,ps2,b)
-           !
-           !$acc loop seq
-           DO is = 1,2
-              !$acc loop seq
-              DO js = 1,2
-                 ps(js,is) = (0._DP,0._DP)
-              ENDDO
-           ENDDO
-           !
-           !$acc loop seq
-           DO is = 1,nspin_gga
-              !$acc loop seq
-              DO js = 1,nspin_gga
-                 !
-                 !$acc loop seq
-                 DO ipol = 1,3
-                    ps1(ipol,is,js) = drhoout(ir,is) * grho(ipol,ir,js)
-                    ps(is,js) = ps(is,js) + grho(ipol,ir,is) * gdrho(ipol,ir,js)
-                 ENDDO
-                 !
-                 !$acc loop seq
-                 DO ks = 1,nspin_gga
-                    !
-                    IF(is == js .AND. js == ks) THEN
-                       !
-                       a(is,js,ks) = dvxc_sr(ir,is,is)
-                       c(is,js,ks) = dvxc_sr(ir,is,is)
-                       !
-                    ELSE
-                       !
-                       IF(is == 1) THEN
-                          a(is,js,ks) = dvxc_sr(ir,1,2)
-                       ELSE
-                          a(is,js,ks) = dvxc_sr(ir,2,1)
-                       ENDIF
-                       !
-                       IF(js == 1) THEN
-                          c(is,js,ks) = dvxc_sr(ir,1,2)
-                       ELSE
-                          c(is,js,ks) = dvxc_sr(ir,2,1)
-                       ENDIF                       
-                    ENDIF
-                    !
-                    !$acc loop seq
-                    DO ipol = 1,3
-                       ps2(ipol,is,js,ks) = ps(is,js) * grho(ipol,ir,ks)
-                    ENDDO
-                    !
-                    !$acc loop seq
-                    DO ls = 1,nspin_gga
-                       !
-                       IF(is == js .AND. js == ks .AND. ks == ls) THEN
-                          b(is,js,ks,ls) = dvxc_ss(ir,is,is)
-                       ELSE
-                          IF(is == 1) THEN
-                             b(is,js,ks,ls) = dvxc_ss(ir,1,2)
-                          ELSE
-                             b(is,js,ks,ls) = dvxc_ss(ir,2,1)
-                          ENDIF
-                       ENDIF
-                    ENDDO
-                 ENDDO
-              ENDDO
-           ENDDO
-           !
-           !$acc loop seq
-           DO is = 1,nspin_gga
-              !$acc loop seq
-              DO js = 1,nspin_gga
-                 !
-                 dvxc(ir,is) = dvxc(ir,is) + dvxc_rr(ir,is,js) * drhoout(ir,js)
-                 !
-                 !$acc loop seq
-                 DO ipol = 1,3
-                    h(ipol,ir,is) = h(ipol,ir,is) + dvxc_s(ir,is,js) * gdrho(ipol,ir,js)
-                 ENDDO
-                 !
-                 !$acc loop seq
-                 DO ks = 1,nspin_gga
-                    !
-                    dvxc(ir,is) = dvxc(ir,is) + a(is,js,ks) * ps(js,ks)
-                    !
-                    !$acc loop seq
-                    DO ipol = 1,3
-                       h(ipol,ir,is) = h(ipol,ir,is) + c(is,js,ks) * ps1(ipol,js,ks)
-                    ENDDO
-                    !
-                    !$acc loop seq
-                    DO ls = 1,nspin_gga
-                       !$acc loop seq
-                       DO ipol = 1,3
-                          h(ipol,ir,is) = h(ipol,ir,is) + b(is,js,ks,ls) * ps2(ipol,js,ks,ls)
-                       ENDDO
-                    ENDDO
-                 ENDDO
-              ENDDO
-           ENDDO
-           !$acc end parallel
-        ENDIF
-    ENDDO
+    !
+    IF(nspin_mag == 1) THEN
+       !
+       ! LDA case
+       !
+       !$acc parallel present(grho,rho,gdrho,dvxc,dvxc_rr,drho,dvxc_sr,h,dvxc_ss,dvxc_s)
+       !$acc loop
+       DO ir = 1,dfftp_nnr
+          !
+          grho2 = grho(1,ir,1)**2 + grho(2,ir,1)**2 + grho(3,ir,1)**2
+          !
+          IF(ABS(rho(ir,1)) > epsr .AND. grho2 > epsg) THEN
+             !
+             s1 = grho(1,ir,1)*gdrho(1,ir,1) + grho(2,ir,1)*gdrho(2,ir,1) + grho(3,ir,1)*gdrho(3,ir,1)
+             !
+             ! linear variation of the first term
+             !
+             dvxc(ir,1) = dvxc(ir,1) + dvxc_rr(ir,1,1) * drho(ir,1) + dvxc_sr(ir,1,1) * s1
+             !
+             !$acc loop seq
+             DO ipol = 1,3
+                h(ipol,ir,1) = (dvxc_sr(ir,1,1) * drho(ir,1) + dvxc_ss(ir,1,1) * s1) * grho(ipol,ir,1) &
+                & + dvxc_s(ir,1,1) * gdrho(ipol,ir,1)
+             ENDDO
+             !
+          ENDIF
+          !
+       ENDDO
+       !$acc end parallel
+       !
+    ELSE
+       !
+       ! LSDA case
+       !
+       !$acc parallel present(grho,drhoout,gdrho,dvxc_sr,dvxc_ss,dvxc,dvxc_rr,h,dvxc_s)
+       !$acc loop private(ps,ps1,a,c,ps2,b)
+       DO ir = 1,dfftp_nnr
+          !
+          !$acc loop seq
+          DO is = 1,2
+             !$acc loop seq
+             DO js = 1,2
+                ps(js,is) = (0._DP,0._DP)
+             ENDDO
+          ENDDO
+          !
+          !$acc loop seq
+          DO is = 1,nspin_gga
+             !$acc loop seq
+             DO js = 1,nspin_gga
+                !
+                !$acc loop seq
+                DO ipol = 1,3
+                   ps1(ipol,is,js) = drhoout(ir,is) * grho(ipol,ir,js)
+                   ps(is,js) = ps(is,js) + grho(ipol,ir,is) * gdrho(ipol,ir,js)
+                ENDDO
+                !
+                !$acc loop seq
+                DO ks = 1,nspin_gga
+                   !
+                   IF(is == js .AND. js == ks) THEN
+                      !
+                      a(is,js,ks) = dvxc_sr(ir,is,is)
+                      c(is,js,ks) = dvxc_sr(ir,is,is)
+                      !
+                   ELSE
+                      !
+                      IF(is == 1) THEN
+                         a(is,js,ks) = dvxc_sr(ir,1,2)
+                      ELSE
+                         a(is,js,ks) = dvxc_sr(ir,2,1)
+                      ENDIF
+                      !
+                      IF(js == 1) THEN
+                         c(is,js,ks) = dvxc_sr(ir,1,2)
+                      ELSE
+                         c(is,js,ks) = dvxc_sr(ir,2,1)
+                      ENDIF
+                      !
+                   ENDIF
+                   !
+                   !$acc loop seq
+                   DO ipol = 1,3
+                      ps2(ipol,is,js,ks) = ps(is,js) * grho(ipol,ir,ks)
+                   ENDDO
+                   !
+                   !$acc loop seq
+                   DO ls = 1,nspin_gga
+                      !
+                      IF(is == js .AND. js == ks .AND. ks == ls) THEN
+                         b(is,js,ks,ls) = dvxc_ss(ir,is,is)
+                      ELSE
+                         IF(is == 1) THEN
+                            b(is,js,ks,ls) = dvxc_ss(ir,1,2)
+                         ELSE
+                            b(is,js,ks,ls) = dvxc_ss(ir,2,1)
+                         ENDIF
+                      ENDIF
+                      !
+                   ENDDO
+                   !
+                ENDDO
+                !
+             ENDDO
+          ENDDO
+          !
+          !$acc loop seq
+          DO is = 1,nspin_gga
+             !$acc loop seq
+             DO js = 1,nspin_gga
+                !
+                dvxc(ir,is) = dvxc(ir,is) + dvxc_rr(ir,is,js) * drhoout(ir,js)
+                !
+                !$acc loop seq
+                DO ipol = 1,3
+                   h(ipol,ir,is) = h(ipol,ir,is) + dvxc_s(ir,is,js) * gdrho(ipol,ir,js)
+                ENDDO
+                !
+                !$acc loop seq
+                DO ks = 1,nspin_gga
+                   !
+                   dvxc(ir,is) = dvxc(ir,is) + a(is,js,ks) * ps(js,ks)
+                   !
+                   !$acc loop seq
+                   DO ipol = 1,3
+                      h(ipol,ir,is) = h(ipol,ir,is) + c(is,js,ks) * ps1(ipol,js,ks)
+                   ENDDO
+                   !
+                   !$acc loop seq
+                   DO ls = 1,nspin_gga
+                      !$acc loop seq
+                      DO ipol = 1,3
+                         h(ipol,ir,is) = h(ipol,ir,is) + b(is,js,ks,ls) * ps2(ipol,js,ks,ls)
+                      ENDDO
+                   ENDDO
+                   !
+                ENDDO
+                !
+             ENDDO
+          ENDDO
+          !
+       ENDDO
+       !$acc end parallel
+       !
+    ENDIF
     !
     ! linear variation of the second term
     !
@@ -778,44 +729,56 @@ MODULE wbse_dv
        CALL fft_qgraddot(dfftp,h(:,:,is),xq,g,dh)
 #endif
        !
-       !$acc parallel loop present(dvxc,dh)
-       DO ir = 1,dfftp_nnr
-          dvxc(ir,is) = dvxc(ir,is) - dh(ir)
-       ENDDO
-       !$acc end parallel
+       !$acc kernels present(dvxc,dh)
+       dvxc(:,is) = dvxc(:,is) - dh
+       !$acc end kernels
        !
     ENDDO
     !
-    IF (noncolin.AND.domag) THEN
-        DO is=1,nspin_gga
-            vgg(:,is)=dvxc(:,is)
-        ENDDO
-        dvxc=dvxcsave
-        DO k=1,dfftp%nnr
-            dvxc(k,1)=dvxc(k,1)+0.5d0*(vgg(k,1)+vgg(k,2))
-            amag=sqrt(rho(k,2)**2+rho(k,3)**2+rho(k,4)**2)
-            IF (amag.GT.1.d-12) THEN
-                DO is=2,4
-                    term=(0.0_dp,0.0_dp)
-                    DO jpol=2,4
-                        term=term+rho(k,jpol)*drho(k,jpol)
-                    ENDDO
-                    term=term*rho(k,is)/amag**2
-                    dvxc(k,is)=dvxc(k,is)+0.5d0*segni(k)*((vgg(k,1)-vgg(k,2)) &
-                                  *rho(k,is)+vsgga(k)*(drho(k,is)-term))/amag
+    IF(noncolin .AND. domag) THEN
+       !
+       !$acc kernels present(vgg,dvxc)
+       vgg(:,1:nspin_gga) = dvxc(:,1:nspin_gga)
+       !$acc end kernels
+       !
+       !$acc kernels present(dvxcsave,dvxc)
+       dvxc(:,:) = dvxcsave
+       !$acc end kernels
+       !
+       !$acc parallel loop present(dvxc,vgg,rho,drho,segni,vsgga)
+       DO ir = 1,dfftp_nnr
+          !
+          dvxc(ir,1) = dvxc(ir,1) + 0.5_DP*(vgg(ir,1)+vgg(ir,2))
+          amag = SQRT(rho(ir,2)**2 + rho(ir,3)**2 + rho(ir,4)**2)
+          !
+          IF(amag > noncolin_cut) THEN
+             !$acc loop seq
+             DO is = 2,4
+                term = (0._DP,0._DP)
+                !$acc loop seq
+                DO jpol = 2,4
+                   term = term + rho(ir,jpol)*drho(ir,jpol)
                 ENDDO
-            ENDIF
-        ENDDO
+                term = term*rho(ir,is)/amag**2
+                dvxc(ir,is) = dvxc(ir,is) &
+                & + 0.5_DP * segni(ir) * ((vgg(ir,1)-vgg(ir,2))*rho(ir,is)+vsgga(ir)*(drho(ir,is)-term)) / amag
+             ENDDO
+          ENDIF
+          !
+       ENDDO
+       !$acc end parallel
+       !
     ENDIF
+    !
 #if !defined(__CUDA)
     DEALLOCATE(gdrho)
     DEALLOCATE(h)
     DEALLOCATE(dh)
     DEALLOCATE(drhoout)
-    IF (noncolin.and.domag) then
-        DEALLOCATE (gdmag)
-        DEALLOCATE (dvxcsave)
-        DEALLOCATE (vgg)
+    IF(noncolin .AND. domag) THEN
+       DEALLOCATE(gdmag)
+       DEALLOCATE(dvxcsave)
+       DEALLOCATE(vgg)
     ENDIF
 #endif
     !

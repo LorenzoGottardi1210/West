@@ -22,7 +22,6 @@ SUBROUTINE wbse_dot(x,y,m,dotp)
   USE gvect,                ONLY : gstart
   USE westcom,              ONLY : nbnd_occ,n_trunc_bands
   USE distribution_center,  ONLY : kpt_pool,band_group
-  USE noncollin_module,     ONLY : noncolin,npol
   !
   IMPLICIT NONE
   !
@@ -98,22 +97,6 @@ SUBROUTINE wbse_dot(x,y,m,dotp)
         !
         dotp(iks_g) = tmp_c*nspin/2._DP
         !
-        IF (noncolin) THEN
-           !$acc parallel loop collapse(2) reduction(+:tmp_c) present(wg,x,y) copy(tmp_c)
-           DO lbnd = 1, m
-              DO ig = 1, npw
-                 !
-                 ibnd = band_group_myoffset+lbnd+n_trunc_bands
-                 !
-                 tmp_c = tmp_c + wg(ibnd,iks)*CONJG(x(ig+npw,lbnd,iks))*y(ig+npw,lbnd,iks)
-                 !
-              ENDDO
-           ENDDO   
-           !$acc end parallel
-           !
-           dotp(iks_g) = tmp_c
-           !
-        ENDIF      
      ENDIF
      !
   ENDDO

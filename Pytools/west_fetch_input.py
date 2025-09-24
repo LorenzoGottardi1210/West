@@ -124,6 +124,7 @@ default["wbse_control"]["l_spin_flip_kernel"] = False
 default["wbse_control"]["l_spin_flip_alda0"] = False
 default["wbse_control"]["l_print_spin_flip_kernel"] = False
 default["wbse_control"]["spin_flip_cut"] = 1.0e-3
+default["wbse_control"]["noncolin_cut"] = 1.0e-3
 default["wbse_control"]["l_forces"] = False
 default["wbse_control"]["l_genac"] = False
 default["wbse_control"]["l_eenac"] = False

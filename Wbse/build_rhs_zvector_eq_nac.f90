@@ -116,7 +116,7 @@ SUBROUTINE build_rhs_zvector_eq_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dr
      !$acc parallel loop collapse(2) present(z_rhs_vec)
      DO lbnd = 1,nbnd_do
         DO ig = 1,npw
-           z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks) * -1._DP / omega_JI
+           z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks) * 1._DP / omega_JI
         ENDDO
      ENDDO
      !$acc end parallel

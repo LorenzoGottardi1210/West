@@ -1236,7 +1236,7 @@ SUBROUTINE wbse_forces_drhoz_nac(n, zvector, forces)
              !$acc end parallel
            ENDIF
            !
-           !!! SPV no need for the c.c.
+           !!! SPV no need for the c.c. in the GE-NAC
            ! forces_drhoz(3*ia-3+ipol) = forces_drhoz(3*ia-3+ipol) + 2._DP*this_wk*reduce
            forces_drhoz(3*ia-3+ipol) = forces_drhoz(3*ia-3+ipol) + this_wk*reduce
            !
@@ -1258,7 +1258,7 @@ SUBROUTINE wbse_forces_drhoz_nac(n, zvector, forces)
   !
   CALL wbse_calc_dens(zvector, drhoz, .FALSE.)
   !
-  !!! SPV no need for the c.c.
+  !!! SPV no need for the c.c. in the GE-NAC
   ! drhoz(:,:) = 2._DP*drhoz
   rdrhoz(:,:) = REAL(drhoz,KIND=DP)
   !

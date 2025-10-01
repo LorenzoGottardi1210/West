@@ -650,7 +650,7 @@ SUBROUTINE wbse_calc_dvgdvg_mat_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat)
            reduce = 0._DP
            !$acc loop reduction(+:reduce)
            DO ig = 1,npw
-              !!! SPV
+              !!! SPV evc1_all contains dvg_exc_tmp_I
               reduce = reduce &
               & + REAL(evc1_all(ig,ibnd,iks),KIND=DP)*REAL(dvg_exc_tmp_J(ig,lbnd,iks),KIND=DP) &
               & + AIMAG(evc1_all(ig,ibnd,iks))*AIMAG(dvg_exc_tmp_J(ig,lbnd,iks))

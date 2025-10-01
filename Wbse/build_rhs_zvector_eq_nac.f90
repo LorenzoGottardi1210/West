@@ -110,18 +110,18 @@ SUBROUTINE build_rhs_zvector_eq_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dr
   ENDDO
   !
   !!! SPV 
-  !!! TODO controllare se ci va il segno meno qui o se viene gia messo dopo
-  ! multyply by -\omega_JI^-1
-  DO iks = 1,kpt_pool%nloc
-     !$acc parallel loop collapse(2) present(z_rhs_vec)
-     DO lbnd = 1,nbnd_do
-        DO ig = 1,npw
-           z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks) * 1._DP / omega_JI
-        ENDDO
-     ENDDO
-     !$acc end parallel
-  ENDDO
-  ! z_rhs_vec = z_rhs_vec * -1._DP / omega_JI
+  ! multyply by -\omega_JI^-1 (the minus sign is already given after)
+  ! DO iks = 1,kpt_pool%nloc
+  !    !$acc parallel loop collapse(2) present(z_rhs_vec)
+  !    DO lbnd = 1,nbnd_do
+  !       DO ig = 1,npw
+  !          z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks) / omega_JI
+  !       ENDDO
+  !    ENDDO
+  !    !$acc end parallel
+  ! ENDDO
+  !$acc parallel loop present(z_rhs_vec)
+  z_rhs_vec = z_rhs_vec / omega_JI
   !!!
   CALL stop_clock('build_zvec')
   !
@@ -299,7 +299,7 @@ SUBROUTINE rhs_zvector_part1_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drho
      IF(l_hybrid_tddft) THEN
         !
         !!! SPV
-        ! hybrid_kernel called once for a_I and once for a_J
+        ! hybrid_kernel_term3 called once for a_I and once for a_J (derivative wrt real and complex orbitals)
         ! it uses global variable evc1_all, first time it contains a_I, second time it contains a_J
         CALL hybrid_kernel_term3(current_spin,dvg_exc_tmp_J,z_rhs_vec_part1(:,:,iks),l_spin_flip) 
         !
@@ -326,7 +326,7 @@ SUBROUTINE rhs_zvector_part1_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drho
            iks_do = iks
         ENDIF
         !
-        !!! SPV the factor 2 is from the derivative wrt to real and complex orbitals 
+        !!! SPV the factor -2._DP accounts for the derivative wrt to real and complex orbitals 
         !$acc host_data use_device(evc,dvgdvg_mat,tmp_vec)
         CALL DGEMM('N','N',2*npwx*npol,nbnd_do,nbndval-n_trunc_bands,-2._DP,evc(1,1+n_trunc_bands),&
         & 2*npwx*npol,dvgdvg_mat(1,1,iks_do),nbndval0x-n_trunc_bands,0._DP,tmp_vec(1,1,iks),2*npwx*npol)
@@ -352,6 +352,7 @@ SUBROUTINE rhs_zvector_part1_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drho
      !$acc parallel loop collapse(2) present(z_rhs_vec,z_rhs_vec_part1)
      DO lbnd = 1,nbnd_do
         DO ig = 1,npw
+           !!! SPV test on symmetrization
            z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks)-z_rhs_vec_part1(ig,lbnd,iks)
         ENDDO
      ENDDO
@@ -653,6 +654,7 @@ SUBROUTINE rhs_zvector_part2_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) !!! 
         !$acc parallel loop collapse(2) present(z_rhs_vec,z_rhs_vec_part2)
         DO lbnd = 1,nbnd_do
            DO ig = 1,npw
+              !!! SPV test on symmetrization
               z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks)-z_rhs_vec_part2(ig,lbnd,iks)
            ENDDO
         ENDDO
@@ -899,6 +901,7 @@ SUBROUTINE rhs_zvector_part2_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) !!! 
            !$acc parallel loop collapse(2) present(z_rhs_vec,z_rhs_vec_part2)
            DO lbnd = 1,nbnd_do
               DO ig = 1,npw
+                 !!! SPV test on symmetrization
                  z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks)-z_rhs_vec_part2(ig,lbnd,iks)
               ENDDO
            ENDDO
@@ -1077,6 +1080,7 @@ SUBROUTINE rhs_zvector_part3_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      !!! SPV the factor 2 is from the derivative wrt to real and complex orbitals
      DO lbnd = 1,nbnd_do
         DO ig = 1,npw
+           !!! SPV test on symmetrization
            z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks)-2._DP*z_rhs_vec_part3(ig,lbnd,iks)
         ENDDO
      ENDDO
@@ -1606,6 +1610,7 @@ SUBROUTINE rhs_zvector_part4_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      !$acc parallel loop collapse(2) present(z_rhs_vec,z_rhs_vec_part4)
      DO lbnd = 1,nbnd_do
         DO ig = 1,npw
+           !!! SPV test on symmetrization
            z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks)-z_rhs_vec_part4(ig,lbnd,iks)
         ENDDO
      ENDDO

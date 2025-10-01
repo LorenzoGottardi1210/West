@@ -606,7 +606,8 @@ SUBROUTINE wbse_davidson_diago ( )
        ELSE
          omega_JI = ev(eeNAC_state) - ev(forces_state)
        ENDIF
-       WRITE(stdout,'(A,F12.6)') "omega_JI = ", omega_JI
+       WRITE(stdout,'(A,ES24.16)') "omega_JI = ", omega_JI
+       ! WRITE(stdout,'(A,F12.12)') "omega_JI = ", omega_JI
        CALL wbse_calc_eenac( dvg_exc_tmp, dvg_exc_tmp_J, omega_JI )
        !
        !$acc exit data delete(dvg_exc_tmp_J)

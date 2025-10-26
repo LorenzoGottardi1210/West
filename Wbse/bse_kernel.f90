@@ -27,9 +27,10 @@ SUBROUTINE bse_kernel(current_spin,evc1,bse_k1d,sf)
   USE wbse_io,               ONLY : read_bse_pots_g
   USE wbse_bgrp,             ONLY : gather_bands
   USE west_mp,               ONLY : west_mp_wait
-  USE wavefunctions,         ONLY : psic
+  USE wavefunctions,         ONLY : psic,psic_nc
+  USE noncollin_module,       ONLY : noncolin,npol
 #if defined(__CUDA)
-  USE west_gpu,              ONLY : raux1,raux2,caux1,caux2,caux3,gaux,psic2,tmp_c
+  USE west_gpu,              ONLY : raux1,raux2,caux1,caux2,caux3,gaux,psic2,tmp_c,psic_nc2,tmp_nc
   USE cublas
 #endif
   !
@@ -38,8 +39,8 @@ SUBROUTINE bse_kernel(current_spin,evc1,bse_k1d,sf)
   ! I/O
   !
   INTEGER, INTENT(IN) :: current_spin
-  COMPLEX(DP), INTENT(IN) :: evc1(npwx,nbndval0x-n_trunc_bands)
-  COMPLEX(DP), INTENT(INOUT) :: bse_k1d(npwx,band_group%nlocx)
+  COMPLEX(DP), INTENT(IN) :: evc1(npwx*npol,nbndval0x-n_trunc_bands)
+  COMPLEX(DP), INTENT(INOUT) :: bse_k1d(npwx*npol,band_group%nlocx)
   LOGICAL, INTENT(IN) :: sf
   !
   ! Workspace
@@ -53,6 +54,7 @@ SUBROUTINE bse_kernel(current_spin,evc1,bse_k1d,sf)
   REAL(DP), ALLOCATABLE :: raux1(:),raux2(:)
   COMPLEX(DP), ALLOCATABLE :: caux1(:,:),caux2(:,:),caux3(:,:),gaux(:)
   COMPLEX(DP), ALLOCATABLE :: psic2(:),tmp_c(:)
+  COMPLEX(DP), ALLOCATABLE :: psic_nc2(:),tmp_nc(:,:)
 #endif
   COMPLEX(DP), PARAMETER :: zero = (0._DP,0._DP)
   COMPLEX(DP), PARAMETER :: one = (1._DP,0._DP)
@@ -70,11 +72,16 @@ SUBROUTINE bse_kernel(current_spin,evc1,bse_k1d,sf)
      ALLOCATE(raux1(dffts%nnr))
      ALLOCATE(raux2(dffts%nnr))
   ELSE
-     ALLOCATE(psic2(dffts%nnr))
-     ALLOCATE(tmp_c(dffts%nnr))
+     IF(noncolin) THEN
+        ALLOCATE(psic_nc2(dffts%nnr))
+        ALLOCATE(tmp_nc(dffts%nnr,npol))
+     ELSE
+        ALLOCATE(psic2(dffts%nnr))
+        ALLOCATE(tmp_c(dffts%nnr))
+     ENDIF
   ENDIF
-  ALLOCATE(caux1(npwx,nbnd_do))
-  ALLOCATE(caux2(npwx,band_group%nlocx))
+  ALLOCATE(caux1(npwx*npol,nbnd_do))
+  ALLOCATE(caux2(npwx*npol,band_group%nlocx))
   IF(l_local_repr) ALLOCATE(caux3(npwx,nbnd_do))
   ALLOCATE(gaux(npwx))
 #endif
@@ -203,48 +210,98 @@ SUBROUTINE bse_kernel(current_spin,evc1,bse_k1d,sf)
         !
      ELSE
         !
-        DO lbnd = 1, band_group%nloc
+        IF(noncolin) THEN
            !
-           my_ibnd = band_group%l2g(lbnd)
-           !
-           !$acc kernels present(tmp_c)
-           tmp_c(:) = 0._DP
-           !$acc end kernels
-           !
-           ! LOOP OVER BANDS AT QPOINT
-           !
-           DO ipair = 1, do_idx
+           DO lbnd = 1, band_group%nloc
               !
-              ibnd = idx_matrix(ipair,1,ikq_do)-n_trunc_bands
-              jbnd = idx_matrix(ipair,2,ikq_do)-n_trunc_bands
+              my_ibnd = band_group%l2g(lbnd)
               !
-              IF(ibnd == my_ibnd) THEN
-                 !
-                 ! read_bse_pots_g uses global spin index
-                 !
-                 CALL read_bse_pots_g(gaux,ibnd,jbnd,ikq_g)
-                 !
-                 !$acc update device(gaux)
-                 !
-                 CALL single_invfft_k(dffts,npw,npwx,caux1(:,jbnd),psic,'Wave',igk_k(:,current_k))
-                 CALL single_invfft_k(dffts,npw,npwx,gaux,psic2,'Wave',igk_k(:,current_k))
-                 !
-                 !$acc parallel loop present(tmp_c,psic,psic2)
-                 DO ir = 1, dffts_nnr
-                    tmp_c(ir) = tmp_c(ir)+psic(ir)*psic2(ir)
-                 ENDDO
-                 !$acc end parallel
-                 !
-              ENDIF
+              !$acc kernels present(tmp_c)
+              tmp_nc(:,:) = 0._DP
+              !$acc end kernels
               !
-           ENDDO
-           !
-           ! Back to reciprocal space
-           !
-           CALL single_fwfft_k(dffts,npw,npwx,tmp_c,caux2(:,lbnd),'Wave',igk_k(:,current_k))
-           !
-        ENDDO
-        !
+              ! LOOP OVER BANDS AT QPOINT
+              !
+               DO ipair = 1, do_idx
+                  !
+                  ibnd = idx_matrix(ipair,1,ikq_do)-n_trunc_bands
+                  jbnd = idx_matrix(ipair,2,ikq_do)-n_trunc_bands
+                  !
+                  IF(ibnd == my_ibnd) THEN
+                     !
+                     ! read_bse_pots_g uses global spin index
+                     !
+                     CALL read_bse_pots_g(gaux,ibnd,jbnd,ikq_g)
+                     !
+                     !$acc update device(gaux)
+                     !
+                     CALL single_invfft_k(dffts,npw,npwx,caux1(1:npwx,jbnd),psic_nc(:,1),'Wave',igk_k(:,current_k))
+                     CALL single_invfft_k(dffts,npw,npwx,caux1(npwx+1:npwx*2,jbnd),psic_nc(:,2),'Wave',igk_k(:,current_k))
+                     CALL single_invfft_k(dffts,npw,npwx,gaux,psic_nc2,'Wave',igk_k(:,current_k))
+                     !
+                     !$acc parallel loop present(tmp_c,psic,psic2)
+                     DO ir = 1, dffts_nnr
+                        tmp_nc(ir,1) = tmp_nc(ir,1)+psic_nc(ir,1)*psic_nc2(ir)
+                        tmp_nc(ir,2) = tmp_nc(ir,2)+psic_nc(ir,2)*psic_nc2(ir)
+                     ENDDO
+                     !$acc end parallel
+                     !
+                  ENDIF
+                  !
+               ENDDO
+               !
+               ! Back to reciprocal space
+               !
+               CALL single_fwfft_k(dffts,npw,npwx,tmp_nc(:,1),caux2(1:npwx,lbnd),'Wave',igk_k(:,current_k))
+               CALL single_fwfft_k(dffts,npw,npwx,tmp_nc(:,2),caux2(npwx+1:npwx*2,lbnd),'Wave',igk_k(:,current_k))
+               !
+            ENDDO
+         ELSE
+            !
+            DO lbnd = 1, band_group%nloc
+               !
+               my_ibnd = band_group%l2g(lbnd)
+               !
+               !$acc kernels present(tmp_c)
+               tmp_c(:) = 0._DP
+               !$acc end kernels
+               !
+               ! LOOP OVER BANDS AT QPOINT
+               !
+               DO ipair = 1, do_idx
+                  !
+                  ibnd = idx_matrix(ipair,1,ikq_do)-n_trunc_bands
+                  jbnd = idx_matrix(ipair,2,ikq_do)-n_trunc_bands
+                  !
+                  IF(ibnd == my_ibnd) THEN
+                     !
+                     ! read_bse_pots_g uses global spin index
+                     !
+                     CALL read_bse_pots_g(gaux,ibnd,jbnd,ikq_g)
+                     !
+                     !$acc update device(gaux)
+                     !
+                     CALL single_invfft_k(dffts,npw,npwx,caux1(:,jbnd),psic,'Wave',igk_k(:,current_k))
+                     CALL single_invfft_k(dffts,npw,npwx,gaux,psic2,'Wave',igk_k(:,current_k))
+                     !
+                     !$acc parallel loop present(tmp_c,psic,psic2)
+                     DO ir = 1, dffts_nnr
+                        tmp_c(ir) = tmp_c(ir)+psic(ir)*psic2(ir)
+                     ENDDO
+                     !$acc end parallel
+                     !
+                  ENDIF
+                  !
+               ENDDO
+               !
+               ! Back to reciprocal space
+               !
+               CALL single_fwfft_k(dffts,npw,npwx,tmp_c,caux2(:,lbnd),'Wave',igk_k(:,current_k))
+               !
+            ENDDO
+            !
+            ENDIF
+            !
      ENDIF
      !
      IF(l_hybrid_tddft) THEN
@@ -281,7 +338,7 @@ SUBROUTINE bse_kernel(current_spin,evc1,bse_k1d,sf)
         !
         ! ibnd = band_group%l2g(lbnd)
         !
-        DO ig = 1, npw
+        DO ig = 1, npw*npol
            bse_k1d(ig,lbnd) = bse_k1d(ig,lbnd)-caux1(ig,band_group_myoffset+lbnd)
         ENDDO
      ENDDO
@@ -294,8 +351,13 @@ SUBROUTINE bse_kernel(current_spin,evc1,bse_k1d,sf)
      DEALLOCATE(raux1)
      DEALLOCATE(raux2)
   ELSE
-     DEALLOCATE(psic2)
-     DEALLOCATE(tmp_c)
+       IF(noncolin) THEN
+         DEALLOCATE(psic_nc2)
+         DEALLOCATE(tmp_nc)
+       ELSE
+         DEALLOCATE(psic2)
+         DEALLOCATE(tmp_c)
+       ENDIF
   ENDIF
   DEALLOCATE(caux1)
   DEALLOCATE(caux2)

@@ -157,7 +157,7 @@ SUBROUTINE calc_tau_single_q(nbndval)
   USE westcom,              ONLY : ev,dvg,wbse_init_calculation,wbse_init_save_dir,l_bse,l_pdep,&
                                  & chi_kernel,l_local_repr,overlap_thr,n_trunc_bands
   USE fft_base,             ONLY : dffts
-  USE noncollin_module,     ONLY : npol
+  USE noncollin_module,     ONLY : noncolin,npol
   USE pwcom,                ONLY : current_spin,current_k,igk_k,npw,npwx,lsda
   USE pdep_io,              ONLY : pdep_merge_and_write_G
   USE class_idistribute,    ONLY : idistribute
@@ -175,7 +175,7 @@ SUBROUTINE calc_tau_single_q(nbndval)
   USE bar,                  ONLY : bar_type,start_bar_type,update_bar_type,stop_bar_type
   USE wbse_dv,              ONLY : wbse_dv_setup,wbse_dv_of_drho
   USE distribution_center,  ONLY : pert
-  USE wavefunctions,        ONLY : evc,psic
+  USE wavefunctions,        ONLY : evc,psic,psic_nc
   !
   IMPLICIT NONE
   !
@@ -202,6 +202,7 @@ SUBROUTINE calc_tau_single_q(nbndval)
   COMPLEX(DP), ALLOCATABLE :: aux_r(:),aux1_r(:,:),aux1_g(:)
   REAL(DP), ALLOCATABLE :: frspin(:,:)
   COMPLEX(DP), ALLOCATABLE :: psic2(:)
+  COMPLEX(DP), ALLOCATABLE :: psic_nc2(:,:)
   !
   CHARACTER(LEN=:), ALLOCATABLE :: lockfile
   CHARACTER(LEN=:), ALLOCATABLE :: fname
@@ -292,8 +293,13 @@ SUBROUTINE calc_tau_single_q(nbndval)
      !$acc enter data create(dotp)
   ENDIF
   IF(.NOT. gamma_only) THEN
-     ALLOCATE(psic2(dffts%nnr))
-     !$acc enter data create(psic2)
+     IF(noncolin) THEN
+        ALLOCATE(psic_nc2(dffts%nnr,npol))
+        !$acc enter data create(psic_nc2)
+     ELSE
+        ALLOCATE(psic2(dffts%nnr))
+        !$acc enter data create(psic2)
+     ENDIF
   ENDIF
   !
   IF(l_pdep) THEN
@@ -341,20 +347,37 @@ SUBROUTINE calc_tau_single_q(nbndval)
            !
         ELSE
            !
-           CALL single_invfft_k(dffts,npw,npwx,evc(:,ibnd_g),psic,'Wave',igk_k(:,current_k))
-           CALL single_invfft_k(dffts,npw,npwx,evc(:,jbnd_g),psic2,'Wave',igk_k(:,current_k))
-           !
-           !$acc parallel loop present(aux_r,psic,psic2)
-           DO ir = 1,dffts_nnr
-              aux_r(ir) = psic(ir)*CONJG(psic2(ir))/omega
-           ENDDO
-           !$acc end parallel
-           !
-           ! aux_r -> aux1_g
-           !
-           CALL single_fwfft_k(dffts,npw,npwx,aux_r,aux1_g,'Wave',igk_k(:,current_k))
-           !
-        ENDIF
+           IF(noncolin) THEN
+              ! Non-collinear case
+              CALL single_invfft_k(dffts,npw,npwx,evc(1:npwx,ibnd_g),psic_nc(:,1),'Wave',igk_k(:,current_k))
+              CALL single_invfft_k(dffts,npw,npwx,evc(npwx+1:npwx*2,ibnd_g),psic_nc(:,2),'Wave',igk_k(:,current_k))
+              CALL single_invfft_k(dffts,npw,npwx,evc(1:npwx,jbnd_g),psic_nc2(:,1),'Wave',igk_k(:,current_k))
+              CALL single_invfft_k(dffts,npw,npwx,evc(npwx+1:npwx*2,jbnd_g),psic_nc2(:,2),'Wave',igk_k(:,current_k))
+              !
+              DO ir = 1,dffts_nnr
+                 aux_r(ir) = (psic_nc(ir,1)*CONJG(psic_nc2(ir,1)) + psic_nc(ir,2)*CONJG(psic_nc2(ir,2)))/omega
+              ENDDO
+              !
+              ! aux_r -> aux1_g
+              !
+              CALL single_fwfft_k(dffts,npw,npwx,aux_r,aux1_g,'Wave',igk_k(:,current_k))
+              !
+           ELSE
+              CALL single_invfft_k(dffts,npw,npwx,evc(:,ibnd_g),psic,'Wave',igk_k(:,current_k))
+              CALL single_invfft_k(dffts,npw,npwx,evc(:,jbnd_g),psic2,'Wave',igk_k(:,current_k))
+              !
+              !$acc parallel loop present(aux_r,psic,psic2)
+              DO ir = 1,dffts_nnr
+                 aux_r(ir) = psic(ir)*CONJG(psic2(ir))/omega
+              ENDDO
+              !$acc end parallel
+              !
+              ! aux_r -> aux1_g
+              !
+              CALL single_fwfft_k(dffts,npw,npwx,aux_r,aux1_g,'Wave',igk_k(:,current_k))
+              !
+           ENDIF
+         ENDIF
         !
         ! vc in fock like term
         !
@@ -567,8 +590,13 @@ SUBROUTINE calc_tau_single_q(nbndval)
      DEALLOCATE(dotp)
   ENDIF
   IF(.NOT. gamma_only) THEN
-     !$acc exit data delete(psic2)
-     DEALLOCATE(psic2)
+       IF(noncolin) THEN
+         !$acc exit data delete(psic_nc2)
+         DEALLOCATE(psic_nc2)
+       ELSE
+         !$acc exit data delete(psic2)
+         DEALLOCATE(psic2)
+       ENDIF
   ENDIF
   !
   DEALLOCATE(idx_matrix)

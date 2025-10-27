@@ -109,6 +109,7 @@ MODULE west_gpu
    REAL(DP), ALLOCATABLE :: tmp_r3(:,:,:)
    REAL(DP), ALLOCATABLE :: ps_r(:,:)
    COMPLEX(DP), ALLOCATABLE :: tmp_c(:)
+   COMPLEX(DP), ALLOCATABLE :: tmp_c2(:,:)
    COMPLEX(DP), ALLOCATABLE :: tmp_c3(:,:,:)
    COMPLEX(DP), ALLOCATABLE :: ps_c(:,:)
    TYPE(cusolverDnHandle) :: cusolv_h
@@ -756,9 +757,9 @@ MODULE west_gpu
       !$acc enter data create(raux1)
       ALLOCATE(raux2(dffts%nnr))
       !$acc enter data create(raux2)
-      ALLOCATE(caux1(npwx,nbndval0x-n_trunc_bands))
+      ALLOCATE(caux1(npwx*npol,nbndval0x-n_trunc_bands))
       !$acc enter data create(caux1)
-      ALLOCATE(caux2(npwx,nbndlocx))
+      ALLOCATE(caux2(npwx*npol,nbndlocx))
       !$acc enter data create(caux2)
       IF(l_local_repr) THEN
          ALLOCATE(caux3(npwx,nbndval0x-n_trunc_bands))
@@ -781,6 +782,10 @@ MODULE west_gpu
    ENDIF
    ALLOCATE(tmp_c(dffts%nnr))
    !$acc enter data create(tmp_c)
+   IF(noncolin) THEN
+      ALLOCATE(tmp_c2(dffts%nnr,npol))
+      !$acc enter data create(tmp_c2)
+   ENDIF
    IF(.NOT. gamma_only) THEN
       ALLOCATE(psic2(dffts%nnr))
       !$acc enter data create(psic2)
@@ -867,6 +872,10 @@ MODULE west_gpu
    IF(ALLOCATED(tmp_c)) THEN
       !$acc exit data delete(tmp_c)
       DEALLOCATE(tmp_c)
+   ENDIF
+   IF(ALLOCATED(tmp_c2)) THEN
+      !$acc exit data delete(tmp_c2)
+      DEALLOCATE(tmp_c2)
    ENDIF
    IF(ALLOCATED(psic2)) THEN
       !$acc exit data delete(psic2)

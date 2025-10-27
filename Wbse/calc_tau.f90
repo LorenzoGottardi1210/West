@@ -348,21 +348,29 @@ SUBROUTINE calc_tau_single_q(nbndval)
         ELSE
            !
            IF(noncolin) THEN
-              ! Non-collinear case
-              CALL single_invfft_k(dffts,npw,npwx,evc(1:npwx,ibnd_g),psic_nc(:,1),'Wave',igk_k(:,current_k))
-              CALL single_invfft_k(dffts,npw,npwx,evc(npwx+1:npwx*2,ibnd_g),psic_nc(:,2),'Wave',igk_k(:,current_k))
-              CALL single_invfft_k(dffts,npw,npwx,evc(1:npwx,jbnd_g),psic_nc2(:,1),'Wave',igk_k(:,current_k))
-              CALL single_invfft_k(dffts,npw,npwx,evc(npwx+1:npwx*2,jbnd_g),psic_nc2(:,2),'Wave',igk_k(:,current_k))
               !
+              CALL single_invfft_k(dffts,npw,npwx,evc(1:npwx,ibnd_g),psic_nc(:,1),'Wave',&
+              & igk_k(:,current_k))
+              CALL single_invfft_k(dffts,npw,npwx,evc(npwx+1:npwx*2,ibnd_g),psic_nc(:,2),'Wave',&
+              & igk_k(:,current_k))
+              CALL single_invfft_k(dffts,npw,npwx,evc(1:npwx,jbnd_g),psic_nc2(:,1),'Wave',&
+              & igk_k(:,current_k))
+              CALL single_invfft_k(dffts,npw,npwx,evc(npwx+1:npwx*2,jbnd_g),psic_nc2(:,2),'Wave',&
+              & igk_k(:,current_k))
+              !
+              !$acc parallel loop present(aux_r,psic_nc,psic_nc2)
               DO ir = 1,dffts_nnr
-                 aux_r(ir) = (psic_nc(ir,1)*CONJG(psic_nc2(ir,1)) + psic_nc(ir,2)*CONJG(psic_nc2(ir,2)))/omega
+                 aux_r(ir) = (psic_nc(ir,1)*CONJG(psic_nc2(ir,1)) &
+                           & +psic_nc(ir,2)*CONJG(psic_nc2(ir,2)))/omega
               ENDDO
+              !$acc end parallel
               !
               ! aux_r -> aux1_g
               !
               CALL single_fwfft_k(dffts,npw,npwx,aux_r,aux1_g,'Wave',igk_k(:,current_k))
               !
            ELSE
+              !
               CALL single_invfft_k(dffts,npw,npwx,evc(:,ibnd_g),psic,'Wave',igk_k(:,current_k))
               CALL single_invfft_k(dffts,npw,npwx,evc(:,jbnd_g),psic2,'Wave',igk_k(:,current_k))
               !
@@ -377,7 +385,8 @@ SUBROUTINE calc_tau_single_q(nbndval)
               CALL single_fwfft_k(dffts,npw,npwx,aux_r,aux1_g,'Wave',igk_k(:,current_k))
               !
            ENDIF
-         ENDIF
+           !
+        ENDIF
         !
         ! vc in fock like term
         !

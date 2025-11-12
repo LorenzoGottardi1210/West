@@ -42,8 +42,8 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !
   INTEGER :: iks, n, ia, ipol
   INTEGER, ALLOCATABLE :: reqs(:)
-  REAL(DP), ALLOCATABLE :: forces(:), dvgdvg_mat(:,:,:)
-  REAL(DP) :: sumforces
+  REAL(DP), ALLOCATABLE :: nac_vec(:), dvgdvg_mat(:,:,:)
+  REAL(DP) :: sumnac_vec
   COMPLEX(DP), ALLOCATABLE :: z_rhs_vec(:,:,:), zvector(:,:,:), drhox1(:,:), drhox2(:,:)
   TYPE(json_file) :: json
   INTEGER :: iunit
@@ -55,8 +55,8 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   n = 3 * nat
   !
   ALLOCATE(reqs(kpt_pool%nloc))
-  ALLOCATE(forces(n))
-  forces(:) = 0._DP
+  ALLOCATE(nac_vec(n))
+  nac_vec(:) = 0._DP
   ALLOCATE(dvgdvg_mat(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc))
   !$acc enter data create(dvgdvg_mat)
   ALLOCATE(drhox1(dffts%nnr, nspin))
@@ -69,7 +69,7 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !
   CALL wbse_calc_drhox1_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
   !
-  CALL wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, forces, omega_JI)
+  CALL wbse_nacvec_drhox1_eenac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, nac_vec, omega_JI)
   !
   ! < dvg | dvg >
   !
@@ -86,7 +86,7 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !
   CALL wbse_calc_drhox2_eenac(dvgdvg_mat, drhox2)
   !
-  CALL wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces, omega_JI)
+  CALL wbse_nacvec_drhox2_eenac(n, dvgdvg_mat, drhox2, nac_vec, omega_JI)
   !
   ! Z vector
   !
@@ -99,7 +99,7 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
 #endif
   !
   !!! SPV
-  CALL build_rhs_zvector_eq_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drhox1, drhox2, z_rhs_vec, omega_JI)
+  CALL build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drhox1, drhox2, z_rhs_vec, omega_JI)
   !
   CALL solve_zvector_eq_cg(z_rhs_vec, zvector)
   !!!
@@ -108,19 +108,17 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   CALL deallocate_bse_gpu()
 #endif
   !
-  CALL wbse_forces_drhoz_eenac(n, zvector, forces)
+  CALL wbse_nacvec_drhoz_eenac(n, zvector, nac_vec)
   !
   !$acc exit data delete(z_rhs_vec,zvector)
   DEALLOCATE(z_rhs_vec)
   DEALLOCATE(zvector)
   !
-  CALL io_push_title('Forces total')
+  CALL io_push_title('eeNAC total')
   !
   DO ia = 1,nat
      !
-     ! forces = - gradients
-     !
-     WRITE(stdout, 9035) ia, ityp(ia), (-forces(3*ia-3+ipol), ipol = 1,3)
+     WRITE(stdout, 9035) ia, ityp(ia), (nac_vec(3*ia-3+ipol), ipol = 1,3)
      !
   ENDDO
   !
@@ -128,7 +126,7 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
      !
      CALL json%initialize()
      CALL json%load(filename=TRIM(logfile))
-     CALL json%add('output.forces.forces_total', -forces(1:n))
+     CALL json%add('output.nac_vec.eenac_total', nac_vec(1:n))
      !
      OPEN(NEWUNIT=iunit,FILE=TRIM(logfile))
      CALL json%print(iunit)
@@ -138,29 +136,27 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
      !
   ENDIF
   !
-  ! enforce total forces to be 0 in each direction
+  ! enforce total nac_vec to be 0 in each direction
   !
   DO ipol = 1,3
      !
-     sumforces = 0._DP
+     sumnac_vec = 0._DP
      !
      DO ia = 1,nat
-        sumforces = sumforces + forces(3*ia-3+ipol)
+        sumnac_vec = sumnac_vec + nac_vec(3*ia-3+ipol)
      ENDDO
      !
      DO ia = 1,nat
-        forces(3*ia-3+ipol) = forces(3*ia-3+ipol) - sumforces/REAL(nat,KIND=DP)
+        nac_vec(3*ia-3+ipol) = nac_vec(3*ia-3+ipol) - sumnac_vec/REAL(nat,KIND=DP)
      ENDDO
      !
   ENDDO
   !
-  CALL io_push_title('Forces corrected')
+  CALL io_push_title('eeNAC corrected')
   !
   DO ia = 1,nat
      !
-     ! forces = - gradients
-     !
-     WRITE(stdout, 9035) ia, ityp(ia), (-forces(3*ia-3+ipol), ipol=1,3)
+     WRITE(stdout, 9035) ia, ityp(ia), (nac_vec(3*ia-3+ipol), ipol=1,3)
      !
   ENDDO
   !
@@ -170,7 +166,7 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
      !
      CALL json%initialize()
      CALL json%load(filename=TRIM(logfile))
-     CALL json%add('output.forces.forces_corrected', -forces(1:n))
+     CALL json%add('output.nac_vec.eenac_corrected', nac_vec(1:n))
      !
      OPEN(NEWUNIT=iunit,FILE=TRIM(logfile))
      CALL json%print(iunit)
@@ -181,7 +177,7 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   ENDIF
   !
   DEALLOCATE(reqs)
-  DEALLOCATE(forces)
+  DEALLOCATE(nac_vec)
   !$acc exit data delete(dvgdvg_mat)
   DEALLOCATE(dvgdvg_mat)
   DEALLOCATE(drhox1)
@@ -189,7 +185,7 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !
   CALL stop_clock('calc_eeNAC')
   !
-9035 FORMAT(5X,'atom ',I4,' type ',I2,'   force = ',3F14.8)
+9035 FORMAT(5X,'atom ',I4,' type ',I2,'   eeNAC = ',3F14.8)
   !
 END SUBROUTINE
 !
@@ -367,7 +363,7 @@ SUBROUTINE wbse_calc_drhox1_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, forces, omega_JI)
+SUBROUTINE wbse_nacvec_drhox1_eenac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, nac_vec, omega_JI)
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -404,20 +400,20 @@ SUBROUTINE wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, for
   COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
   REAL(DP), INTENT(IN)  :: omega_JI
   !!!
-  REAL(DP), INTENT(INOUT) :: forces(n)
+  REAL(DP), INTENT(INOUT) :: nac_vec(n)
   !
   ! Workspace
   !
   COMPLEX(DP), ALLOCATABLE :: dvpsi(:,:,:)
   INTEGER :: iks, iks_do, nbndval, nbnd_do, ia, ipol, lbnd, ibnd, ig
   REAL(DP) :: reduce, factor, this_wk
-  REAL(DP), ALLOCATABLE :: forces_drhox1(:), forcelc(:,:), rdrhox1(:,:)
+  REAL(DP), ALLOCATABLE :: nacvec_drhox1(:), nacveclc(:,:), rdrhox1(:,:)
   TYPE(json_file) :: json
   INTEGER :: iunit
   TYPE(bar_type) :: barra
   INTEGER, PARAMETER :: flks(2) = [2,1]
   !
-  CALL io_push_title('Compute forces of drhox1')
+  CALL io_push_title('Compute nac_vec of drhox1')
   !
   IF(nspin == 2) THEN
      factor = 1._DP
@@ -429,13 +425,13 @@ SUBROUTINE wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, for
   CALL allocate_forces_gpu()
 #endif
   !
-  ALLOCATE(forces_drhox1(n))
-  ALLOCATE(forcelc(3, nat))
+  ALLOCATE(nacvec_drhox1(n))
+  ALLOCATE(nacveclc(3, nat))
   ALLOCATE(dvpsi(npwx, band_group%nlocx, 3))
   !$acc enter data create(dvpsi)
   ALLOCATE(rdrhox1(dffts%nnr, nspin))
   !
-  forces_drhox1(:) = 0._DP
+  nacvec_drhox1(:) = 0._DP
   !
   CALL start_bar_type(barra,'f_drhox1',kpt_pool%nloc*nat)
   !
@@ -483,7 +479,7 @@ SUBROUTINE wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, for
         !
         CALL wbse_get_dvpsi_gamma_nonlocal_eenac(ia, dvg_exc_tmp_I(:,:,iks), dvpsi)
         !
-        ! 2) forces_drhox1_i = < dvg | dvpsi_i >
+        ! 2) nacvec_drhox1_i = < dvg | dvpsi_i >
         !
         DO ipol = 1,3
            !
@@ -508,7 +504,7 @@ SUBROUTINE wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, for
               !$acc end parallel
            ENDIF
            !
-           forces_drhox1(3*ia-3+ipol) = forces_drhox1(3*ia-3+ipol) + this_wk*reduce
+           nacvec_drhox1(3*ia-3+ipol) = nacvec_drhox1(3*ia-3+ipol) + this_wk*reduce
            !
         ENDDO
         !
@@ -518,9 +514,9 @@ SUBROUTINE wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, for
      !
   ENDDO
   !
-  CALL mp_sum(forces_drhox1,intra_bgrp_comm)
-  CALL mp_sum(forces_drhox1,inter_bgrp_comm)
-  CALL mp_sum(forces_drhox1,inter_pool_comm)
+  CALL mp_sum(nacvec_drhox1,intra_bgrp_comm)
+  CALL mp_sum(nacvec_drhox1,inter_bgrp_comm)
+  CALL mp_sum(nacvec_drhox1,inter_pool_comm)
   !
   CALL stop_bar_type(barra,'f_drhox1')
   !
@@ -533,26 +529,24 @@ SUBROUTINE wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, for
   ENDIF
   !
   CALL force_lc(nat, tau, ityp, ntyp, alat, omega, ngm, ngl, igtongl, g, rdrhox1(:,1), gstart, &
-  & gamma_only, vloc, forcelc)
+  & gamma_only, vloc, nacveclc)
   !
-  forcelc(:,:) = -factor*forcelc
+  nacveclc(:,:) = -factor*nacveclc
   !
   !!! SPV I have to multiply by omega_JI^-1
   DO ia = 1,nat
      DO ipol = 1,3
-        forces_drhox1(3*ia-3+ipol) = ( forces_drhox1(3*ia-3+ipol) + forcelc(ipol,ia) ) / omega_JI
+        nacvec_drhox1(3*ia-3+ipol) = ( nacvec_drhox1(3*ia-3+ipol) + nacveclc(ipol,ia) ) / -omega_JI
      ENDDO
   ENDDO
   !
-  forces(:) = forces+forces_drhox1
+  nac_vec(:) = nac_vec+nacvec_drhox1
   !
-  CALL io_push_title('Forces drhox1')
+  CALL io_push_title('eeNAC drhox1')
   !
   DO ia = 1,nat
      !
-     ! forces = - gradients
-     !
-     WRITE(stdout, 9035) ia, ityp(ia), (-forces_drhox1(3*ia-3+ipol), ipol = 1,3)
+     WRITE(stdout, 9035) ia, ityp(ia), (nacvec_drhox1(3*ia-3+ipol), ipol = 1,3)
      !
   ENDDO
   !
@@ -562,7 +556,7 @@ SUBROUTINE wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, for
      !
      CALL json%initialize()
      CALL json%load(filename=TRIM(logfile))
-     CALL json%add('output.forces.forces_drhox1', -forces_drhox1(1:n))
+     CALL json%add('output.nac_vec.eenac_drhox1', nacvec_drhox1(1:n))
      !
      OPEN(NEWUNIT=iunit,FILE=TRIM(logfile))
      CALL json%print(iunit)
@@ -576,13 +570,13 @@ SUBROUTINE wbse_forces_drhox1_eenac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, for
   CALL deallocate_forces_gpu()
 #endif
   !
-  DEALLOCATE(forces_drhox1)
-  DEALLOCATE(forcelc)
+  DEALLOCATE(nacvec_drhox1)
+  DEALLOCATE(nacveclc)
   !$acc exit data delete(dvpsi)
   DEALLOCATE(dvpsi)
   DEALLOCATE(rdrhox1)
   !
-9035 FORMAT(5X,'atom ',I4,' type ',I2,'   force = ',3F14.8)
+9035 FORMAT(5X,'atom ',I4,' type ',I2,'   eeNAC = ',3F14.8)
   !
 END SUBROUTINE
 !
@@ -848,7 +842,7 @@ SUBROUTINE wbse_calc_drhox2_eenac(dvgdvg_mat, drhox2)
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces, omega_JI)
+SUBROUTINE wbse_nacvec_drhox2_eenac(n, dvgdvg_mat, drhox2, nac_vec, omega_JI)
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -885,7 +879,7 @@ SUBROUTINE wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces, omega_JI)
   INTEGER, INTENT(IN) :: n
   REAL(DP), INTENT(IN) :: dvgdvg_mat(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc)
   COMPLEX(DP), INTENT(IN) :: drhox2(dffts%nnr, nspin)
-  REAL(DP), INTENT(INOUT) :: forces(n)
+  REAL(DP), INTENT(INOUT) :: nac_vec(n)
   REAL(DP), INTENT(IN)  :: omega_JI !!! SPV
   !
   ! Workspace
@@ -894,13 +888,13 @@ SUBROUTINE wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces, omega_JI)
   INTEGER :: iks, iks_do, nbndval, nbnd_do, ia, ipol, lbnd, ibnd, ig
   INTEGER :: band_group_myoffset
   REAL(DP) :: reduce, factor, this_wk
-  REAL(DP), ALLOCATABLE :: forces_drhox2(:), rdrhox2(:,:), forcelc(:,:)
+  REAL(DP), ALLOCATABLE :: nacvec_drhox2(:), rdrhox2(:,:), nacveclc(:,:)
   TYPE(json_file) :: json
   INTEGER :: iunit
   TYPE(bar_type) :: barra
   INTEGER, PARAMETER :: flks(2) = [2,1]
   !
-  CALL io_push_title('Compute forces of drhox2')
+  CALL io_push_title('Compute nac_vec of drhox2')
   !
   band_group_myoffset = band_group%myoffset
   !
@@ -914,15 +908,15 @@ SUBROUTINE wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces, omega_JI)
   CALL allocate_forces_gpu()
 #endif
   !
-  ALLOCATE(forces_drhox2(n))
-  ALLOCATE(forcelc(3, nat))
+  ALLOCATE(nacvec_drhox2(n))
+  ALLOCATE(nacveclc(3, nat))
   ALLOCATE(rdrhox2(dffts%nnr, nspin))
   ALLOCATE(dvpsi(npwx, band_group%nlocx, 3))
   ALLOCATE(aux1(npwx, band_group%nlocx))
   ALLOCATE(aux2(npwx, band_group%nlocx))
   !$acc enter data create(dvpsi,aux1,aux2)
   !
-  forces_drhox2(:) = 0._DP
+  nacvec_drhox2(:) = 0._DP
   !
   CALL start_bar_type(barra,'f_drhox2',kpt_pool%nloc*nat)
   !
@@ -990,7 +984,7 @@ SUBROUTINE wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces, omega_JI)
         !
         CALL wbse_get_dvpsi_gamma_nonlocal_eenac(ia, aux1, dvpsi)
         !
-        ! 2) forces_drhox2 = < evc_iv2 | dvpsi_ia_iv >
+        ! 2) nacvec_drhox2 = < evc_iv2 | dvpsi_ia_iv >
         !
         !$acc host_data use_device(evc,dvgdvg_mat,aux2)
         CALL DGEMM('N', 'N', 2*npw, band_group%nloc, nbndval-n_trunc_bands, 1._DP, &
@@ -1021,7 +1015,7 @@ SUBROUTINE wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces, omega_JI)
               !$acc end parallel
            ENDIF
            !
-           forces_drhox2(3*ia-3+ipol) = forces_drhox2(3*ia-3+ipol) - this_wk*reduce
+           nacvec_drhox2(3*ia-3+ipol) = nacvec_drhox2(3*ia-3+ipol) - this_wk*reduce
            !
         ENDDO
         !
@@ -1031,9 +1025,9 @@ SUBROUTINE wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces, omega_JI)
      !
   ENDDO
   !
-  CALL mp_sum(forces_drhox2,intra_bgrp_comm)
-  CALL mp_sum(forces_drhox2,inter_bgrp_comm)
-  CALL mp_sum(forces_drhox2,inter_pool_comm)
+  CALL mp_sum(nacvec_drhox2,intra_bgrp_comm)
+  CALL mp_sum(nacvec_drhox2,inter_bgrp_comm)
+  CALL mp_sum(nacvec_drhox2,inter_pool_comm)
   !
   CALL stop_bar_type(barra,'f_drhox2')
   !
@@ -1046,26 +1040,24 @@ SUBROUTINE wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces, omega_JI)
   ENDIF
   !
   CALL force_lc(nat, tau, ityp, ntyp, alat, omega, ngm, ngl, igtongl, g, rdrhox2(:,1), gstart, &
-  & gamma_only, vloc, forcelc)
+  & gamma_only, vloc, nacveclc)
   !
-  forcelc(:,:) = -factor*forcelc
+  nacveclc(:,:) = -factor*nacveclc
   !
   !!! SPV I have to multiply by omega_JI^-1
   DO ia = 1,nat
      DO ipol = 1,3
-        forces_drhox2(3*ia-3+ipol) = ( forces_drhox2(3*ia-3+ipol)+forcelc(ipol,ia) ) / omega_JI
+        nacvec_drhox2(3*ia-3+ipol) = ( nacvec_drhox2(3*ia-3+ipol)+nacveclc(ipol,ia) ) / -omega_JI
      ENDDO
   ENDDO
   !
-  forces(:) = forces+forces_drhox2
+  nac_vec(:) = nac_vec+nacvec_drhox2
   !
-  CALL io_push_title('Forces drhox2')
+  CALL io_push_title('eeNAC drhox2')
   !
   DO ia = 1,nat
      !
-     ! forces = - gradients
-     !
-     WRITE(stdout, 9035) ia, ityp(ia), (-forces_drhox2(3*ia-3+ipol), ipol = 1,3)
+     WRITE(stdout, 9035) ia, ityp(ia), (nacvec_drhox2(3*ia-3+ipol), ipol = 1,3)
      !
   ENDDO
   !
@@ -1075,7 +1067,7 @@ SUBROUTINE wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces, omega_JI)
      !
      CALL json%initialize()
      CALL json%load(filename=TRIM(logfile))
-     CALL json%add('output.forces.forces_drhox2', -forces_drhox2(1:n))
+     CALL json%add('output.nac_vec.eenac_drhox2', nacvec_drhox2(1:n))
      !
      OPEN(NEWUNIT=iunit,FILE=TRIM(logfile))
      CALL json%print(iunit)
@@ -1089,20 +1081,20 @@ SUBROUTINE wbse_forces_drhox2_eenac(n, dvgdvg_mat, drhox2, forces, omega_JI)
   CALL deallocate_forces_gpu()
 #endif
   !
-  DEALLOCATE(forces_drhox2)
-  DEALLOCATE(forcelc)
+  DEALLOCATE(nacvec_drhox2)
+  DEALLOCATE(nacveclc)
   DEALLOCATE(rdrhox2)
   !$acc exit data delete(dvpsi,aux1,aux2)
   DEALLOCATE(dvpsi)
   DEALLOCATE(aux1)
   DEALLOCATE(aux2)
   !
-9035 FORMAT(5X,'atom ',I4,' type ',I2,'   force = ',3F14.8)
+9035 FORMAT(5X,'atom ',I4,' type ',I2,'   eeNAC = ',3F14.8)
   !
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE wbse_forces_drhoz_eenac(n, zvector, forces)
+SUBROUTINE wbse_nacvec_drhoz_eenac(n, zvector, nac_vec)
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -1138,7 +1130,7 @@ SUBROUTINE wbse_forces_drhoz_eenac(n, zvector, forces)
   !
   INTEGER, INTENT(IN) :: n
   COMPLEX(DP), INTENT(IN) :: zvector(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  REAL(DP), INTENT(INOUT) :: forces(n)
+  REAL(DP), INTENT(INOUT) :: nac_vec(n)
   !
   ! Workspace
   !
@@ -1146,12 +1138,12 @@ SUBROUTINE wbse_forces_drhoz_eenac(n, zvector, forces)
   INTEGER :: iks, iks_do, nbndval, nbnd_do, ia, ipol, lbnd, ibnd, ig
   INTEGER :: band_group_myoffset
   REAL(DP) :: reduce, factor, this_wk
-  REAL(DP), ALLOCATABLE :: forces_drhoz(:), forcelc(:,:), rdrhoz(:,:)
+  REAL(DP), ALLOCATABLE :: nacvec_drhoz(:), nacveclc(:,:), rdrhoz(:,:)
   TYPE(json_file) :: json
   INTEGER :: iunit
   TYPE(bar_type) :: barra
   !
-  CALL io_push_title('Compute forces of Z vector')
+  CALL io_push_title('Compute nac_vec of Z vector')
   !
   band_group_myoffset = band_group%myoffset
   !
@@ -1165,15 +1157,15 @@ SUBROUTINE wbse_forces_drhoz_eenac(n, zvector, forces)
   CALL allocate_forces_gpu()
 #endif
   !
-  ALLOCATE(forces_drhoz(n))
-  ALLOCATE(forcelc(3, nat))
+  ALLOCATE(nacvec_drhoz(n))
+  ALLOCATE(nacveclc(3, nat))
   ALLOCATE(rdrhoz(dffts%nnr, nspin))
   ALLOCATE(dvpsi(npwx, band_group%nlocx, 3))
   ALLOCATE(drhoz(dffts%nnr, nspin))
   ALLOCATE(aux1(npwx, band_group%nlocx))
   !$acc enter data create(dvpsi,drhoz,aux1)
   !
-  forces_drhoz(:) = 0._DP
+  nacvec_drhoz(:) = 0._DP
   !
   CALL start_bar_type(barra,'f_drhoxz',kpt_pool%nloc*nat)
   !
@@ -1243,7 +1235,7 @@ SUBROUTINE wbse_forces_drhoz_eenac(n, zvector, forces)
         !
         CALL wbse_get_dvpsi_gamma_nonlocal_eenac(ia, aux1, dvpsi)
         !
-        ! 2) forces_drhoz_i = < z_vector | dvpsi_i >
+        ! 2) nacvec_drhoz_i = < z_vector | dvpsi_i >
         !
         DO ipol = 1,3
            !
@@ -1270,8 +1262,8 @@ SUBROUTINE wbse_forces_drhoz_eenac(n, zvector, forces)
            ENDIF
            !
            !!! SPV no need for the c.c.
-           ! forces_drhoz(3*ia-3+ipol) = forces_drhoz(3*ia-3+ipol) + 2._DP*this_wk*reduce
-           forces_drhoz(3*ia-3+ipol) = forces_drhoz(3*ia-3+ipol) + this_wk*reduce
+           ! nacvec_drhoz(3*ia-3+ipol) = nacvec_drhoz(3*ia-3+ipol) + 2._DP*this_wk*reduce
+           nacvec_drhoz(3*ia-3+ipol) = nacvec_drhoz(3*ia-3+ipol) + this_wk*reduce
            !
         ENDDO
         !
@@ -1281,9 +1273,9 @@ SUBROUTINE wbse_forces_drhoz_eenac(n, zvector, forces)
      !
   ENDDO
   !
-  CALL mp_sum(forces_drhoz,intra_bgrp_comm)
-  CALL mp_sum(forces_drhoz,inter_bgrp_comm)
-  CALL mp_sum(forces_drhoz,inter_pool_comm)
+  CALL mp_sum(nacvec_drhoz,intra_bgrp_comm)
+  CALL mp_sum(nacvec_drhoz,inter_bgrp_comm)
+  CALL mp_sum(nacvec_drhoz,inter_pool_comm)
   !
   CALL stop_bar_type(barra,'f_drhoxz')
   !
@@ -1300,25 +1292,23 @@ SUBROUTINE wbse_forces_drhoz_eenac(n, zvector, forces)
   ENDIF
   !
   CALL force_lc(nat, tau, ityp, ntyp, alat, omega, ngm, ngl, igtongl, g, rdrhoz(:,1), gstart, &
-  & gamma_only, vloc, forcelc)
+  & gamma_only, vloc, nacveclc)
   !
-  forcelc(:,:) = -factor*forcelc
+  nacveclc(:,:) = -factor*nacveclc
   !
   DO ia = 1,nat
      DO ipol = 1,3
-        forces_drhoz(3*ia-3+ipol) = forces_drhoz(3*ia-3+ipol) + forcelc(ipol,ia)
+        nacvec_drhoz(3*ia-3+ipol) = nacvec_drhoz(3*ia-3+ipol) + nacveclc(ipol,ia)
      ENDDO
   ENDDO
   !
-  forces(:) = forces+forces_drhoz
+  nac_vec(:) = nac_vec+nacvec_drhoz
   !
-  CALL io_push_title('Forces drhoz')
+  CALL io_push_title('eeNAC drhoz')
   !
   DO ia = 1,nat
      !
-     ! forces = - gradients
-     !
-     WRITE(stdout, 9035) ia, ityp(ia), (-forces_drhoz(3*ia-3+ipol), ipol = 1,3)
+     WRITE(stdout, 9035) ia, ityp(ia), (nacvec_drhoz(3*ia-3+ipol), ipol = 1,3)
      !
   ENDDO
   !
@@ -1328,7 +1318,7 @@ SUBROUTINE wbse_forces_drhoz_eenac(n, zvector, forces)
      !
      CALL json%initialize()
      CALL json%load(filename=TRIM(logfile))
-     CALL json%add('output.forces.forces_drhoz', -forces_drhoz(1:n))
+     CALL json%add('output.nac_vec.eenac_drhoz', nacvec_drhoz(1:n))
      !
      OPEN(NEWUNIT=iunit,FILE=TRIM(logfile))
      CALL json%print(iunit)
@@ -1342,15 +1332,15 @@ SUBROUTINE wbse_forces_drhoz_eenac(n, zvector, forces)
   CALL deallocate_forces_gpu()
 #endif
   !
-  DEALLOCATE(forces_drhoz)
-  DEALLOCATE(forcelc)
+  DEALLOCATE(nacvec_drhoz)
+  DEALLOCATE(nacveclc)
   DEALLOCATE(rdrhoz)
   !$acc exit data delete(dvpsi,drhoz,aux1)
   DEALLOCATE(dvpsi)
   DEALLOCATE(drhoz)
   DEALLOCATE(aux1)
   !
-9035 FORMAT(5X,'atom ',I4,' type ',I2,'   force = ',3F14.8)
+9035 FORMAT(5X,'atom ',I4,' type ',I2,'   eeNAC = ',3F14.8)
   !
 END SUBROUTINE
 !

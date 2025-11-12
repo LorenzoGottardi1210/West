@@ -11,7 +11,7 @@
 ! Yu Jin, Victor Yu
 !
 !-----------------------------------------------------------------------
-SUBROUTINE build_rhs_zvector_eq_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drhox1, drhox2, z_rhs_vec, omega_JI)
+SUBROUTINE build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drhox1, drhox2, z_rhs_vec, omega_JI)
   !-----------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP
@@ -60,24 +60,24 @@ SUBROUTINE build_rhs_zvector_eq_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dr
   ! part2: d < a | K1e | a > / d | v >
   !
   !!! SPV two calls because of the derivative wrt to real and complex orbitals
-  IF(.NOT. l_bse_triplet) CALL rhs_zvector_part2_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
-  IF(.NOT. l_bse_triplet) CALL rhs_zvector_part2_nac( dvg_exc_tmp_J, dvg_exc_tmp_I, z_rhs_vec )
+  IF(.NOT. l_bse_triplet) CALL rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
+  IF(.NOT. l_bse_triplet) CALL rhs_zvector_part2_eenac( dvg_exc_tmp_J, dvg_exc_tmp_I, z_rhs_vec )
   !
   ! part3: d^2 vxc / d rho^2 contribution to d < a | K1e | a > / d | v >
   !
-  IF((.NOT. l_bse) .AND. (.NOT. l_bse_triplet)) CALL rhs_zvector_part3_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
+  IF((.NOT. l_bse) .AND. (.NOT. l_bse_triplet)) CALL rhs_zvector_part3_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   !
   ! part4: d < a | K1d | a > / d | v >
   !
   IF(l_hybrid_tddft) THEN
-     CALL rhs_zvector_part4_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
+     CALL rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   ELSEIF(l_bse) THEN
-     CALL errore('build_rhs_zvector_eq_nac', 'BSE forces not implemented', 1) !!! TODO
+     CALL errore('build_rhs_zvector_eq_eenac', 'BSE NACs not implemented', 1) !!! TODO
   ENDIF
   !
   ! part1: d < a | D | a > / d | v >
   !
-  CALL rhs_zvector_part1_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drhox1, drhox2, z_rhs_vec )
+  CALL rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drhox1, drhox2, z_rhs_vec )
   !
   DO iks = 1,kpt_pool%nloc
      !
@@ -121,14 +121,15 @@ SUBROUTINE build_rhs_zvector_eq_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dr
   !    !$acc end parallel
   ! ENDDO
   !$acc parallel loop present(z_rhs_vec)
-  z_rhs_vec = z_rhs_vec / omega_JI
+  ! multyply by \omega_JI^-1
+  z_rhs_vec = -z_rhs_vec / omega_JI
   !!!
   CALL stop_clock('build_zvec')
   !
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE rhs_zvector_part1_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drhox1, drhox2, z_rhs_vec )
+SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drhox1, drhox2, z_rhs_vec )
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -294,7 +295,7 @@ SUBROUTINE rhs_zvector_part1_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drho
      ! factor 2 from the derivative wrt real and complex orbitals
      z_rhs_vec_part1 = 2._DP*z_rhs_vec_part1
      !!!
-     IF(l_bse) CALL errore('build_rhs_zvector_eq_nac', 'BSE forces not implemented', 1) !!! TODO
+     IF(l_bse) CALL errore('build_rhs_zvector_eq_eenac', 'BSE NACs not implemented', 1) !!! TODO
      !
      IF(l_hybrid_tddft) THEN
         !
@@ -384,7 +385,7 @@ SUBROUTINE rhs_zvector_part1_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drho
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE rhs_zvector_part2_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) !!! TODO SF
+SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) !!! TODO SF
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -938,7 +939,7 @@ SUBROUTINE rhs_zvector_part2_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) !!! 
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE rhs_zvector_part3_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) 
+SUBROUTINE rhs_zvector_part3_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) 
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -992,9 +993,9 @@ SUBROUTINE rhs_zvector_part3_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   ALLOCATE(ddvxc(dffts%nnr,nspin))
   !
   IF(.NOT. l_spin_flip) THEN
-     CALL compute_ddvxc_5p_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc)
+     CALL compute_ddvxc_5p_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc)
   ELSE
-     CALL compute_ddvxc_sf_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc) !!! TODO
+     CALL compute_ddvxc_sf_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc) !!! TODO
   ENDIF
   !
   !$acc enter data copyin(ddvxc)
@@ -1107,7 +1108,7 @@ SUBROUTINE rhs_zvector_part3_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE compute_ddvxc_5p_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc )
+SUBROUTINE compute_ddvxc_5p_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc )
   !-----------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP
@@ -1179,7 +1180,7 @@ SUBROUTINE compute_ddvxc_5p_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc )
      !
   ELSEIF(nspin == 4) THEN
      !
-     CALL errore('compute_ddvxc_5p_nac', 'nspin == 4 not supported', 1)
+     CALL errore('compute_ddvxc_5p_eenac', 'nspin == 4 not supported', 1)
      !
   ENDIF
   !
@@ -1238,7 +1239,7 @@ SUBROUTINE compute_ddvxc_5p_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc )
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE compute_ddvxc_sf_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc ) !!! TO CHECK
+SUBROUTINE compute_ddvxc_sf_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc ) !!! TO CHECK
   !-----------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP
@@ -1279,7 +1280,7 @@ SUBROUTINE compute_ddvxc_sf_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc ) !!! TO CH
   CALL start_clock('ddvxc_sf')
 #endif
   !
-  IF(nlcc_any) CALL errore('compute_ddvxc_sf_nac', 'nlcc_any not supported', 1)
+  IF(nlcc_any) CALL errore('compute_ddvxc_sf_eenac', 'nlcc_any not supported', 1)
   !
   ALLOCATE(drho_sf_I(dffts%nnr,2))
   ALLOCATE(drho_sf_J(dffts%nnr,2))
@@ -1385,7 +1386,7 @@ SUBROUTINE compute_ddvxc_sf_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc ) !!! TO CH
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE rhs_zvector_part4_nac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) 
+SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) 
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout

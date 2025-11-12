@@ -32,7 +32,7 @@ SUBROUTINE wbse_davidson_diago ( )
                                  & trev_pdep_rel,l_is_wstat_converged,nbnd_occ,lrwfc,iuwfc,dvg_exc,&
                                  & dng_exc,nbndval0x,n_trunc_bands,l_preconditioning,l_pre_shift,&
                                  & l_spin_flip,l_forces,forces_state,&
-                                 & l_nac,eeNAC_state !!! SPV
+                                 & l_genac,l_eenac,genac_state,eenac_stateI,eenac_stateJ !!! SPV
   USE plep_db,              ONLY : plep_db_write,plep_db_read
   USE davidson_restart,     ONLY : davidson_restart_write,davidson_restart_clear,&
                                  & davidson_restart_read
@@ -76,7 +76,7 @@ SUBROUTINE wbse_davidson_diago ( )
   ATTRIBUTES(PINNED) :: dng_exc_tmp, dvg_exc_tmp, dvg_exc_tmp_J !!! SPV
 #endif
   !
-  INTEGER :: iks,il1,ig1,lbnd,ibnd,iks_do
+  INTEGER :: iks,il1,eenacI,eenacJ,ig1,lbnd,ibnd,iks_do
   INTEGER :: nbndval,nbnd_do,flnbndval
   INTEGER :: owner
   REAL(DP) :: time_spent(2)
@@ -559,7 +559,20 @@ SUBROUTINE wbse_davidson_diago ( )
   !
   DEALLOCATE( conv )
   DEALLOCATE( ew )
-  IF (.NOT.l_nac) DEALLOCATE( ev ) !!! SPV
+  !!! SPV
+  IF (l_eenac) THEN
+   IF (eenac_stateI==eenac_stateJ) THEN
+    omega_JI = 1._DP
+   ELSE
+    omega_JI = ev(eenac_stateJ) - ev(eenac_stateI)
+   ENDIF
+   WRITE(stdout,'(A,ES24.16)') "omega_JI = ", omega_JI
+   DEALLOCATE( ev )
+  ELSE
+   DEALLOCATE( ev )
+  ENDIF
+  !!!
+  !
   DEALLOCATE( hr_distr )
   DEALLOCATE( vr_distr )
   !
@@ -568,56 +581,80 @@ SUBROUTINE wbse_davidson_diago ( )
   CALL stop_clock( 'chidiago' )
   !
   !!! SPV
-  IF(l_forces .OR. l_nac) THEN
+  IF(l_forces .OR. l_genac .OR. l_eenac) THEN
      !
      IF(.NOT. l_is_wstat_converged) &
      & CALL errore('chidiago','davidson not converged, cannot compute forces',1)
-     !
-     ! send forces_state to root image
-     !
-     CALL pert%g2l(forces_state,il1,owner)
-     !
-     CALL west_mp_get(dvg_exc_tmp,dvg_exc(:,:,:,il1),my_image_id,0,owner,owner,inter_image_comm)
-     !
-     !$acc update device(dvg_exc_tmp)
-     !
-     IF (.NOT.l_nac) DEALLOCATE( dvg_exc ) 
-     !
-     ! root image computes forces
-     !
-     IF (l_forces) CALL wbse_calc_forces( dvg_exc_tmp )
-     !!! flow need to be unified with the geNAC calculation
-     ! IF (l_nac) CALL wbse_calc_genac( dvg_exc_tmp )
-     IF (l_nac) THEN 
-       !
-       ! send eeNAC_state to root image
-       !
-       ! il1 is just a dummy variable which contains the info from eeNAC_state
-       CALL pert%g2l(eeNAC_state,il1,owner)
-       !
-       CALL west_mp_get(dvg_exc_tmp_J,dvg_exc(:,:,:,il1),my_image_id,0,owner,owner,inter_image_comm)
-       !
-       !$acc update device(dvg_exc_tmp_J)
-       !
-       DEALLOCATE( dvg_exc )
-       !
-       IF (eeNAC_state==forces_state) THEN
-         omega_JI = 1._DP
-       ELSE
-         omega_JI = ev(eeNAC_state) - ev(forces_state)
-       ENDIF
-       WRITE(stdout,'(A,ES24.16)') "omega_JI = ", omega_JI
-       ! WRITE(stdout,'(A,F12.12)') "omega_JI = ", omega_JI
-       CALL wbse_calc_eenac( dvg_exc_tmp, dvg_exc_tmp_J, omega_JI )
-       !
-       !$acc exit data delete(dvg_exc_tmp_J)
-       DEALLOCATE( dvg_exc_tmp_J )
-       DEALLOCATE( ev )
-       !
+     
+     IF (l_forces) THEN
+        !
+        ! send forces_state to root image
+        !
+        CALL pert%g2l(forces_state,il1,owner)
+        !
+        CALL west_mp_get(dvg_exc_tmp,dvg_exc(:,:,:,il1),my_image_id,0,owner,owner,inter_image_comm)
+        !
+        !$acc update device(dvg_exc_tmp)
+        !
+        IF (.NOT.l_genac .AND. .NOT.l_eenac) DEALLOCATE( dvg_exc )
+        !
+        ! root image computes forces
+        !
+        CALL wbse_calc_forces( dvg_exc_tmp )
+        !
      ENDIF
      !
-     !$acc exit data delete(dvg_exc_tmp)
-     DEALLOCATE( dvg_exc_tmp )
+     IF (l_genac) THEN
+        !
+        ! send genac_state to root image
+        !
+        CALL pert%g2l(genac_state,il1,owner)
+        !
+        CALL west_mp_get(dvg_exc_tmp,dvg_exc(:,:,:,il1),my_image_id,0,owner,owner,inter_image_comm)
+        !
+        !$acc update device(dvg_exc_tmp)
+        !
+        IF (.NOT.l_eenac) DEALLOCATE( dvg_exc )
+        !
+        ! root image computes geNAC
+        !
+        CALL wbse_calc_genac( dvg_exc_tmp )
+        !
+     ENDIF
+     !
+     IF (l_eenac) THEN 
+        !
+        ! send eenac_stateI to root image
+        !
+        ! il1 is just a dummy variable which contains the info from eenac_stateI
+        CALL pert%g2l(eenac_stateI,il1,owner)
+        !
+        CALL west_mp_get(dvg_exc_tmp,dvg_exc(:,:,:,il1),my_image_id,0,owner,owner,inter_image_comm)
+        !
+        !$acc update device(dvg_exc_tmp)
+        !
+        !
+        ! send eenac_stateJ to root image
+        !
+        ! il1 is just a dummy variable which contains the info from eenac_stateJ
+        CALL pert%g2l(eenac_stateJ,il1,owner)
+        !
+        CALL west_mp_get(dvg_exc_tmp_J,dvg_exc(:,:,:,il1),my_image_id,0,owner,owner,inter_image_comm)
+        !
+        !$acc update device(dvg_exc_tmp_J)
+        !
+        DEALLOCATE( dvg_exc )
+        !
+        ! root image computes eeNAC
+        !
+        CALL wbse_calc_eenac( dvg_exc_tmp, dvg_exc_tmp_J, omega_JI )
+        !
+        !$acc exit data delete(dvg_exc_tmp_J)
+        DEALLOCATE( dvg_exc_tmp_J )
+        !$acc exit data delete(dvg_exc_tmp)
+        DEALLOCATE( dvg_exc_tmp )
+        !
+     ENDIF
      !
   ELSE
      !

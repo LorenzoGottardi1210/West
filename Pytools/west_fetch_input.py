@@ -124,8 +124,11 @@ default["wbse_control"]["l_print_spin_flip_kernel"] = False
 default["wbse_control"]["spin_flip_cut"] = 1.0e-3
 default["wbse_control"]["l_forces"] = False
 ### SPV
-default["wbse_control"]["l_nac"] = False
-default["wbse_control"]["eeNAC_state"] = 2
+default["wbse_control"]["l_genac"] = False
+default["wbse_control"]["l_eenac"] = False
+default["wbse_control"]["genac_state"] = 1
+default["wbse_control"]["eenac_stateI"] = 1
+default["wbse_control"]["eenac_stateJ"] = 2
 ###
 default["wbse_control"]["forces_state"] = 1
 default["wbse_control"]["forces_zeq_cg_tr"] = 1.0e-10

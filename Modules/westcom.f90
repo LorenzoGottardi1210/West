@@ -345,8 +345,11 @@ MODULE wbse_center
   INTEGER :: forces_inexact_krylov
   REAL(DP) :: forces_inexact_krylov_tr
   !!! SPV
-  LOGICAL :: l_nac
-  INTEGER :: eeNAC_state
+  LOGICAL :: l_genac
+  LOGICAL :: l_eenac
+  INTEGER :: genac_state
+  INTEGER :: eenac_stateI
+  INTEGER :: eenac_stateJ
   !!!
   !
   ! FOR global variables

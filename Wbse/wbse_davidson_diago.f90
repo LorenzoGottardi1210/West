@@ -561,13 +561,14 @@ SUBROUTINE wbse_davidson_diago ( )
   DEALLOCATE( ew )
   !!! SPV
   IF (l_eenac) THEN
-     IF (eenac_stateI==eenac_stateJ) THEN !!! TODO: call an error
-      omega_JI = 1._DP
+     IF (eenac_stateI==eenac_stateJ) THEN
+        CALL errore('chidiago','eeNAC must be computed between different states',1)
      ELSE
-      omega_JI = ev(eenac_stateJ) - ev(eenac_stateI)
+        omega_JI = ev(eenac_stateJ) - ev(eenac_stateI)
      ENDIF
      DEALLOCATE( ev )
   ELSE
+     omega_JI = 0._DP
      DEALLOCATE( ev )
   ENDIF
   !!!
@@ -600,6 +601,7 @@ SUBROUTINE wbse_davidson_diago ( )
         !
         ! root image computes forces
         !
+        computing_eenac = .FALSE.
         CALL wbse_calc_forces( dvg_exc_tmp )
         !
      ENDIF
@@ -618,7 +620,8 @@ SUBROUTINE wbse_davidson_diago ( )
         !
         ! root image computes geNAC
         !
-        CALL wbse_calc_genac( dvg_exc_tmp )
+        computing_eenac = .FALSE.
+        CALL wbse_calc_nac( dvg_exc_tmp, dvg_exc_tmp, omega_JI )
         !
      ENDIF
      !
@@ -644,8 +647,9 @@ SUBROUTINE wbse_davidson_diago ( )
         !
         ! root image computes eeNAC
         !
+        ! quando modifichi, mettilo false prima di chiamare genac 
         computing_eenac = .TRUE.
-        CALL wbse_calc_eenac( dvg_exc_tmp, dvg_exc_tmp_J, omega_JI )
+        CALL wbse_calc_nac( dvg_exc_tmp, dvg_exc_tmp_J, omega_JI )
         !
         !$acc exit data delete(dvg_exc_tmp_J)
         DEALLOCATE( dvg_exc_tmp_J )

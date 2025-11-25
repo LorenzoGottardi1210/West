@@ -364,6 +364,9 @@ MODULE wbse_center
   REAL(DP) :: sigma_c_head
   REAL(DP) :: sigma_x_head
   LOGICAL :: do_inexact_krylov
+  !!! SPV
+  LOGICAL :: computing_eenac
+  !!!
   !
   ! FOR global Lanzcos diago vars
   !
@@ -381,6 +384,9 @@ MODULE wbse_center
   COMPLEX(DP), ALLOCATABLE :: u_matrix(:,:,:)
   REAL(DP),    ALLOCATABLE :: ovl_matrix(:,:,:)
   COMPLEX(DP), ALLOCATABLE :: evc1_all(:,:,:)
+  !!! SPV
+  COMPLEX(DP), ALLOCATABLE :: evc1J_all(:,:,:)
+  !!!
   INTEGER,     ALLOCATABLE :: n_bse_idx(:)
   INTEGER,     ALLOCATABLE :: idx_matrix(:,:,:)
   INTEGER,     ALLOCATABLE :: tau_is_read(:,:,:)

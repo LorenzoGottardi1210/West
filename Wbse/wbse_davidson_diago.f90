@@ -32,7 +32,7 @@ SUBROUTINE wbse_davidson_diago ( )
                                  & trev_pdep_rel,l_is_wstat_converged,nbnd_occ,lrwfc,iuwfc,dvg_exc,&
                                  & dng_exc,nbndval0x,n_trunc_bands,l_preconditioning,l_pre_shift,&
                                  & l_spin_flip,l_forces,forces_state,&
-                                 & l_genac,l_eenac,genac_state,eenac_stateI,eenac_stateJ !!! SPV
+                                 & l_genac,l_eenac,genac_state,eenac_stateI,eenac_stateJ,computing_eenac !!! SPV
   USE plep_db,              ONLY : plep_db_write,plep_db_read
   USE davidson_restart,     ONLY : davidson_restart_write,davidson_restart_clear,&
                                  & davidson_restart_read
@@ -561,15 +561,14 @@ SUBROUTINE wbse_davidson_diago ( )
   DEALLOCATE( ew )
   !!! SPV
   IF (l_eenac) THEN
-   IF (eenac_stateI==eenac_stateJ) THEN
-    omega_JI = 1._DP
-   ELSE
-    omega_JI = ev(eenac_stateJ) - ev(eenac_stateI)
-   ENDIF
-   WRITE(stdout,'(A,ES24.16)') "omega_JI = ", omega_JI
-   DEALLOCATE( ev )
+     IF (eenac_stateI==eenac_stateJ) THEN !!! TODO: call an error
+      omega_JI = 1._DP
+     ELSE
+      omega_JI = ev(eenac_stateJ) - ev(eenac_stateI)
+     ENDIF
+     DEALLOCATE( ev )
   ELSE
-   DEALLOCATE( ev )
+     DEALLOCATE( ev )
   ENDIF
   !!!
   !
@@ -583,9 +582,10 @@ SUBROUTINE wbse_davidson_diago ( )
   !!! SPV
   IF(l_forces .OR. l_genac .OR. l_eenac) THEN
      !
-     IF(.NOT. l_is_wstat_converged) &
-     & CALL errore('chidiago','davidson not converged, cannot compute forces',1)
-     
+     IF(.NOT. l_is_wstat_converged) THEN
+      IF (l_forces) CALL errore('chidiago','davidson not converged, cannot compute forces',1)
+      IF (l_genac .OR. l_eenac) CALL errore('chidiago','davidson not converged, cannot compute NACs',1)
+     ENDIF
      IF (l_forces) THEN
         !
         ! send forces_state to root image
@@ -626,17 +626,14 @@ SUBROUTINE wbse_davidson_diago ( )
         !
         ! send eenac_stateI to root image
         !
-        ! il1 is just a dummy variable which contains the info from eenac_stateI
         CALL pert%g2l(eenac_stateI,il1,owner)
         !
         CALL west_mp_get(dvg_exc_tmp,dvg_exc(:,:,:,il1),my_image_id,0,owner,owner,inter_image_comm)
         !
         !$acc update device(dvg_exc_tmp)
         !
-        !
         ! send eenac_stateJ to root image
         !
-        ! il1 is just a dummy variable which contains the info from eenac_stateJ
         CALL pert%g2l(eenac_stateJ,il1,owner)
         !
         CALL west_mp_get(dvg_exc_tmp_J,dvg_exc(:,:,:,il1),my_image_id,0,owner,owner,inter_image_comm)
@@ -647,6 +644,7 @@ SUBROUTINE wbse_davidson_diago ( )
         !
         ! root image computes eeNAC
         !
+        computing_eenac = .TRUE.
         CALL wbse_calc_eenac( dvg_exc_tmp, dvg_exc_tmp_J, omega_JI )
         !
         !$acc exit data delete(dvg_exc_tmp_J)

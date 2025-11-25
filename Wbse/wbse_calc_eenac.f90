@@ -42,7 +42,7 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !
   INTEGER :: iks, n, ia, ipol
   INTEGER, ALLOCATABLE :: reqs(:)
-  REAL(DP), ALLOCATABLE :: nac_vec(:), dvgdvg_mat(:,:,:)
+  REAL(DP), ALLOCATABLE :: nac_vec(:), dvgdvg_mat(:,:,:), dvgdvg_mat_JI(:,:,:)
   REAL(DP) :: sumnac_vec
   COMPLEX(DP), ALLOCATABLE :: z_rhs_vec(:,:,:), zvector(:,:,:), drhox1(:,:), drhox2(:,:)
   TYPE(json_file) :: json
@@ -51,6 +51,7 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   CALL start_clock('calc_eeNAC')
   !
   CALL io_push_title('Compute eeNAC')
+  !!! SPV WRITE(stdout,'(A,ES24.16)') " omega_JI = ", omega_JI
   !
   n = 3 * nat
   !
@@ -58,7 +59,8 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   ALLOCATE(nac_vec(n))
   nac_vec(:) = 0._DP
   ALLOCATE(dvgdvg_mat(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc))
-  !$acc enter data create(dvgdvg_mat)
+  ALLOCATE(dvgdvg_mat_JI(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc))
+  !$acc enter data create(dvgdvg_mat,dvgdvg_mat_JI)
   ALLOCATE(drhox1(dffts%nnr, nspin))
   !
   DO iks = 1,kpt_pool%nloc
@@ -80,6 +82,29 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !
   CALL wbse_calc_dvgdvg_mat_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat)
   !
+  !!! SPV for the band parallelization of rhs_zvec_part1 for the eenac I need dvgdvg_mat with aI and aJ switched
+  ! first I put the content of dvg_exc_tmp_J into evc1_all
+  DO iks = 1,kpt_pool%nloc
+   CALL gather_bands(dvg_exc_tmp_J(:,:,iks), evc1_all(:,:,iks), reqs(iks))
+  ENDDO
+  CALL mp_waitall(reqs)
+#if !defined(__GPU_MPI)
+  !$acc update device(evc1_all)
+#endif
+  !
+  ! then I compute dvgdvg_mat_JI with the inputs dvg_exc_tmp_I and dvg_exc_tmp_J switched
+  CALL wbse_calc_dvgdvg_mat_eenac(dvg_exc_tmp_J, dvg_exc_tmp_I, dvgdvg_mat_JI)
+  !
+  ! finally I revert back the content of dvg_exc_tmp_I into evc1_all
+DO iks = 1,kpt_pool%nloc
+   CALL gather_bands(dvg_exc_tmp_I(:,:,iks), evc1_all(:,:,iks), reqs(iks))
+  ENDDO
+  CALL mp_waitall(reqs)
+#if !defined(__GPU_MPI)
+  !$acc update device(evc1_all)
+#endif
+  !!!
+  !
   ! drhox2
   !
   ALLOCATE(drhox2(dffts%nnr, nspin))
@@ -99,7 +124,7 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
 #endif
   !
   !!! SPV
-  CALL build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, drhox1, drhox2, z_rhs_vec, omega_JI)
+  CALL build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dvgdvg_mat_JI, drhox1, drhox2, z_rhs_vec, omega_JI)
   !
   CALL solve_zvector_eq_cg(z_rhs_vec, zvector)
   !!!
@@ -178,8 +203,8 @@ SUBROUTINE wbse_calc_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !
   DEALLOCATE(reqs)
   DEALLOCATE(nac_vec)
-  !$acc exit data delete(dvgdvg_mat)
-  DEALLOCATE(dvgdvg_mat)
+  !$acc exit data delete(dvgdvg_mat,dvgdvg_mat_JI)
+  DEALLOCATE(dvgdvg_mat,dvgdvg_mat_JI)
   DEALLOCATE(drhox1)
   DEALLOCATE(drhox2)
   !
@@ -308,7 +333,6 @@ SUBROUTINE wbse_calc_drhox1_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
         !$acc parallel loop present(tmp_r)
         DO ir = 1,dffts_nnr
            !!! SPV
-           ! tmp_r(ir) = tmp_r(ir) + w1*REAL(psic(ir),KIND=DP)**2 + w2*AIMAG(psic(ir))**2
            tmp_r(ir) = tmp_r(ir) + w1*REAL(psic(ir),KIND=DP)*REAL(psic_J(ir),KIND=DP) &
                                & + w2*AIMAG(psic(ir))*AIMAG(psic_J(ir))
            !!!
@@ -336,7 +360,6 @@ SUBROUTINE wbse_calc_drhox1_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
         !$acc parallel loop present(tmp_r)
         DO ir = 1,dffts_nnr
            !!! SPV
-           ! tmp_r(ir) = tmp_r(ir) + w1*REAL(psic(ir),KIND=DP)**2
            tmp_r(ir) = tmp_r(ir) + w1*REAL(psic(ir),KIND=DP)*REAL(psic_J(ir),KIND=DP)
            !!!
         ENDDO
@@ -599,7 +622,7 @@ SUBROUTINE wbse_calc_dvgdvg_mat_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat)
   !
   ! I/O
   !
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc) !!! SPV It's not really used
   COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
   REAL(DP), INTENT(OUT) :: dvgdvg_mat(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc)
   !
@@ -1261,8 +1284,7 @@ SUBROUTINE wbse_nacvec_drhoz_eenac(n, zvector, nac_vec)
              !$acc end parallel
            ENDIF
            !
-           !!! SPV no need for the c.c.
-           ! nacvec_drhoz(3*ia-3+ipol) = nacvec_drhoz(3*ia-3+ipol) + 2._DP*this_wk*reduce
+           !!! SPV c.c. was already taken care of
            nacvec_drhoz(3*ia-3+ipol) = nacvec_drhoz(3*ia-3+ipol) + this_wk*reduce
            !
         ENDDO
@@ -1283,8 +1305,7 @@ SUBROUTINE wbse_nacvec_drhoz_eenac(n, zvector, nac_vec)
   !
   CALL wbse_calc_dens(zvector, drhoz, .FALSE.)
   !
-  !!! SPV no need for the c.c.
-  ! drhoz(:,:) = 2._DP*drhoz
+  !!!! SPV c.c. was already taken care of
   rdrhoz(:,:) = REAL(drhoz,KIND=DP)
   !
   IF(nspin == 2) THEN

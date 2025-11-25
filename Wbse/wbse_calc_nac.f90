@@ -134,7 +134,10 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !
   !!! SPV
   IF (l_genac .AND. .NOT.computing_eenac) z_rhs_vec = dvg_exc_tmp_I
-  IF (l_eenac .AND. computing_eenac) CALL build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dvgdvg_mat_JI, drhox1, drhox2, z_rhs_vec, omega_JI)
+  IF (l_eenac .AND. computing_eenac) THEN 
+     CALL build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat,&
+                            & dvgdvg_mat_JI, drhox1, drhox2, z_rhs_vec, omega_JI)
+  ENDIF
   !
   CALL solve_zvector_eq_cg(z_rhs_vec, zvector)
   !!!
@@ -154,8 +157,12 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !
   DO ia = 1,nat
      !
-     IF (l_genac .AND. .NOT.computing_eenac) WRITE(stdout, 9035) ia, ityp(ia), (nac_vec(3*ia-3+ipol), ipol = 1,3)
-     IF (l_eenac .AND. computing_eenac) WRITE(stdout, 9036) ia, ityp(ia), (nac_vec(3*ia-3+ipol), ipol = 1,3)
+     IF (l_genac .AND. .NOT.computing_eenac) THEN
+        WRITE(stdout, 9035) ia, ityp(ia), (nac_vec(3*ia-3+ipol), ipol = 1,3)
+     ENDIF
+     IF (l_eenac .AND. computing_eenac) THEN
+        WRITE(stdout, 9036) ia, ityp(ia), (nac_vec(3*ia-3+ipol), ipol = 1,3)
+     ENDIF
      !
   ENDDO
   !
@@ -163,8 +170,12 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
      !
      CALL json%initialize()
      CALL json%load(filename=TRIM(logfile))
-     IF (l_genac .AND. .NOT.computing_eenac) CALL json%add('output.nac_vec.genac_total', nac_vec(1:n))
-     IF (l_eenac .AND. computing_eenac) CALL json%add('output.nac_vec.eenac_total', nac_vec(1:n))
+     IF (l_genac .AND. .NOT.computing_eenac) THEN 
+        CALL json%add('output.nac_vec.genac_total', nac_vec(1:n))
+     ENDIF
+     IF (l_eenac .AND. computing_eenac) THEN 
+        CALL json%add('output.nac_vec.eenac_total', nac_vec(1:n))
+     ENDIF
      !
      OPEN(NEWUNIT=iunit,FILE=TRIM(logfile))
      CALL json%print(iunit)
@@ -195,8 +206,12 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !
   DO ia = 1,nat
      !
-     IF (l_genac .AND. .NOT.computing_eenac) WRITE(stdout, 9035) ia, ityp(ia), (nac_vec(3*ia-3+ipol), ipol=1,3)
-     IF (l_eenac .AND. computing_eenac) WRITE(stdout, 9036) ia, ityp(ia), (nac_vec(3*ia-3+ipol), ipol=1,3)
+     IF (l_genac .AND. .NOT.computing_eenac) THEN
+        WRITE(stdout, 9035) ia, ityp(ia), (nac_vec(3*ia-3+ipol), ipol=1,3)
+     ENDIF
+     IF (l_eenac .AND. computing_eenac) THEN 
+        WRITE(stdout, 9036) ia, ityp(ia), (nac_vec(3*ia-3+ipol), ipol=1,3)
+     ENDIF
      !
   ENDDO
   !
@@ -206,8 +221,12 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
      !
      CALL json%initialize()
      CALL json%load(filename=TRIM(logfile))
-     IF (l_genac .AND. .NOT.computing_eenac) CALL json%add('output.nac_vec.genac_corrected', nac_vec(1:n))
-     IF (l_eenac .AND. computing_eenac) CALL json%add('output.nac_vec.eenac_corrected', nac_vec(1:n))
+     IF (l_genac .AND. .NOT.computing_eenac) THEN 
+        CALL json%add('output.nac_vec.genac_corrected', nac_vec(1:n))
+     ENDIF
+     IF (l_eenac .AND. computing_eenac) THEN 
+        CALL json%add('output.nac_vec.eenac_corrected', nac_vec(1:n))
+     ENDIF
      !
      OPEN(NEWUNIT=iunit,FILE=TRIM(logfile))
      CALL json%print(iunit)
@@ -231,7 +250,7 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !
 9035 FORMAT(5X,'atom ',I4,' type ',I2,'   geNAC = ',3F14.8)
 9036 FORMAT(5X,'atom ',I4,' type ',I2,'   eeNAC = ',3F14.8)
-  !
+!
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
@@ -1352,8 +1371,12 @@ SUBROUTINE wbse_nacvec_drhoz_nac(n, zvector, nac_vec)
   !
   DO ia = 1,nat
      !
-     IF (l_genac .AND. .NOT.computing_eenac) WRITE(stdout, 9035) ia, ityp(ia), (nacvec_drhoz(3*ia-3+ipol), ipol = 1,3)
-     IF (l_eenac .AND. computing_eenac) WRITE(stdout, 9036) ia, ityp(ia), (nacvec_drhoz(3*ia-3+ipol), ipol = 1,3)
+     IF (l_genac .AND. .NOT.computing_eenac) THEN
+        WRITE(stdout, 9035) ia, ityp(ia), (nacvec_drhoz(3*ia-3+ipol), ipol = 1,3)
+     ENDIF
+     IF (l_eenac .AND. computing_eenac) THEN
+         WRITE(stdout, 9036) ia, ityp(ia), (nacvec_drhoz(3*ia-3+ipol), ipol = 1,3)
+     ENDIF
      !
   ENDDO
   !
@@ -1363,8 +1386,12 @@ SUBROUTINE wbse_nacvec_drhoz_nac(n, zvector, nac_vec)
      !
      CALL json%initialize()
      CALL json%load(filename=TRIM(logfile))
-     IF (l_genac .AND. .NOT.computing_eenac) CALL json%add('output.nac_vec.genac_drhoz', nacvec_drhoz(1:n))
-     IF (l_eenac .AND. computing_eenac) CALL json%add('output.nac_vec.eenac_drhoz', nacvec_drhoz(1:n))
+     IF (l_genac .AND. .NOT.computing_eenac) THEN
+        CALL json%add('output.nac_vec.genac_drhoz', nacvec_drhoz(1:n))
+     ENDIF
+     IF (l_eenac .AND. computing_eenac) THEN
+        CALL json%add('output.nac_vec.eenac_drhoz', nacvec_drhoz(1:n))
+     ENDIF
      !
      OPEN(NEWUNIT=iunit,FILE=TRIM(logfile))
      CALL json%print(iunit)
@@ -1388,7 +1415,7 @@ SUBROUTINE wbse_nacvec_drhoz_nac(n, zvector, nac_vec)
   !
 9035 FORMAT(5X,'atom ',I4,' type ',I2,'   geNAC = ',3F14.8)
 9036 FORMAT(5X,'atom ',I4,' type ',I2,'   eeNAC = ',3F14.8)
-  !
+!
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------

@@ -432,12 +432,16 @@ SUBROUTINE hybrid_kernel_term4(current_spin, evc1, hybrid_kd4, sf)
            !
            !!! SPV separate cases: forces and eeNACs
            ! for the forces: product of evc1 and evc1
-           IF (l_forces .AND. .NOT.computing_eenac) CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,ibnd,iks_do),evc1_all(:,jbnd,iks_do),&
-           & psic,'Wave')
+           IF (l_forces .AND. .NOT.computing_eenac) THEN 
+              CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,ibnd,iks_do),&
+                                      & evc1_all(:,jbnd,iks_do),psic,'Wave')
+           ENDIF 
            !
            ! for the eenac: product of evc1_I and evc1_J
-           IF (l_eenac .AND. computing_eenac) CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,ibnd,iks_do),evc1J_all(:,jbnd,iks_do),&
-           & psic,'Wave')
+           IF (l_eenac .AND. computing_eenac) THEN 
+              CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,ibnd,iks_do),&
+                                      & evc1J_all(:,jbnd,iks_do),psic,'Wave')
+           ENDIF
            !!!
            !
            !$acc parallel loop present(caux)

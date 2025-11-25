@@ -647,7 +647,6 @@ SUBROUTINE wbse_davidson_diago ( )
         !
         ! root image computes eeNAC
         !
-        ! quando modifichi, mettilo false prima di chiamare genac 
         computing_eenac = .TRUE.
         CALL wbse_calc_nac( dvg_exc_tmp, dvg_exc_tmp_J, omega_JI )
         !

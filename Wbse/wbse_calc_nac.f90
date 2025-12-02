@@ -79,7 +79,7 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
      IF (omega_JI==0._DP) CALL errore('chidiago','energy difference too small to compute eeNAC',1)
      CALL wbse_calc_drhox1_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
      !
-     CALL wbse_nacvec_drhox1_nac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, nac_vec, omega_JI)
+     CALL wbse_nacvec_drhox1(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, nac_vec, omega_JI)
      !
      ! < dvg | dvg >
      !
@@ -119,7 +119,8 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
      !
      CALL wbse_calc_drhox2_nac(dvgdvg_mat, drhox2)
      !
-     CALL wbse_nacvec_drhox2_eenac(n, dvgdvg_mat, drhox2, nac_vec, omega_JI)
+     CALL wbse_nacvec_drhox2(n, dvgdvg_mat, drhox2, nac_vec, omega_JI)
+     !
   ENDIF
   !
   ! Z vector
@@ -133,7 +134,10 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
 #endif
   !
   !!! SPV
-  IF (l_genac .AND. .NOT.computing_eenac) z_rhs_vec = dvg_exc_tmp_I
+  IF (l_genac .AND. .NOT.computing_eenac) THEN 
+     z_rhs_vec = dvg_exc_tmp_I
+     !$acc update device(z_rhs_vec)
+  ENDIF
   IF (l_eenac .AND. computing_eenac) THEN 
      CALL build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat,&
                             & dvgdvg_mat_JI, drhox1, drhox2, z_rhs_vec, omega_JI)
@@ -240,7 +244,8 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   IF (l_eenac .AND. computing_eenac) THEN
      DEALLOCATE(reqs)
      !$acc exit data delete(dvgdvg_mat,dvgdvg_mat_JI)
-     DEALLOCATE(dvgdvg_mat,dvgdvg_mat_JI)
+     DEALLOCATE(dvgdvg_mat)
+     DEALLOCATE(dvgdvg_mat_JI)
      DEALLOCATE(drhox1)
      DEALLOCATE(drhox2)
   ENDIF
@@ -419,13 +424,14 @@ SUBROUTINE wbse_calc_drhox1_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
   !
   CALL stop_bar_type(barra,'drhox1')
   !
-  !$acc exit data delete(tmp_r)
+  !$acc exit data delete(tmp_r,psic_J)
   DEALLOCATE(tmp_r)
+  DEALLOCATE(psic_J)
   !
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE wbse_nacvec_drhox1_nac(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, nac_vec, omega_JI)
+SUBROUTINE wbse_nacvec_drhox1(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, nac_vec, omega_JI)
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -698,7 +704,7 @@ SUBROUTINE wbse_calc_dvgdvg_mat_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat)
         IF(ibnd > n_trunc_bands .AND. ibnd <= nbndval) nbnd_do = nbnd_do+1
      ENDDO
      !
-     !$acc parallel present(dvgdvg_mat,evc1_all,dvg_exc_tmp_I,dvg_exc_tmp_J)
+     !$acc parallel present(dvgdvg_mat,evc1_all,dvg_exc_tmp_J)
      !$acc loop collapse(2)
      DO lbnd = 1,nbnd_do
         DO ibnd = 1,nbndval-n_trunc_bands
@@ -720,7 +726,7 @@ SUBROUTINE wbse_calc_dvgdvg_mat_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat)
      !$acc end parallel
      !
      IF(gstart == 2) THEN
-        !$acc parallel loop collapse(2) present(dvgdvg_mat,evc1_all,dvg_exc_tmp_I,dvg_exc_tmp_J)
+        !$acc parallel loop collapse(2) present(dvgdvg_mat,evc1_all,dvg_exc_tmp_J)
         DO lbnd = 1,nbnd_do
            DO ibnd = 1,nbndval - n_trunc_bands
               dvgdvg_mat(ibnd,lbnd,iks) = dvgdvg_mat(ibnd,lbnd,iks) &
@@ -904,7 +910,7 @@ SUBROUTINE wbse_calc_drhox2_nac(dvgdvg_mat, drhox2)
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE wbse_nacvec_drhox2_nac(n, dvgdvg_mat, drhox2, nac_vec, omega_JI)
+SUBROUTINE wbse_nacvec_drhox2(n, dvgdvg_mat, drhox2, nac_vec, omega_JI)
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout

@@ -111,8 +111,9 @@ SUBROUTINE build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, 
   ENDDO
   !
   !!! SPV 
-  !$acc parallel loop present(z_rhs_vec)
+  !$acc kernels present(z_rhs_vec)
   z_rhs_vec = -z_rhs_vec / omega_JI
+  !$acc end kernels
   !!!
   CALL stop_clock('build_zvec')
   !
@@ -285,7 +286,9 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
      !
      !!! SPV
      ! factor 2 from the derivative wrt real and complex orbitals
+     !$acc kernels present(z_rhs_vec_part1)
      z_rhs_vec_part1 = 2._DP*z_rhs_vec_part1
+     !$acc end kernels
      !!!
      IF(l_bse) CALL errore('build_rhs_zvector_eq_eenac', 'BSE NACs not implemented', 1) 
      !
@@ -363,7 +366,6 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
      !$acc parallel loop collapse(2) present(z_rhs_vec,z_rhs_vec_part1)
      DO lbnd = 1,nbnd_do
         DO ig = 1,npw
-           !!! SPV test on symmetrization
            z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks)-z_rhs_vec_part1(ig,lbnd,iks)
         ENDDO
      ENDDO
@@ -665,7 +667,6 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
         !$acc parallel loop collapse(2) present(z_rhs_vec,z_rhs_vec_part2)
         DO lbnd = 1,nbnd_do
            DO ig = 1,npw
-              !!! SPV test on symmetrization
               z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks)-z_rhs_vec_part2(ig,lbnd,iks)
            ENDDO
         ENDDO
@@ -912,7 +913,6 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
            !$acc parallel loop collapse(2) present(z_rhs_vec,z_rhs_vec_part2)
            DO lbnd = 1,nbnd_do
               DO ig = 1,npw
-                 !!! SPV test on symmetrization
                  z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks)-z_rhs_vec_part2(ig,lbnd,iks)
               ENDDO
            ENDDO
@@ -1091,7 +1091,6 @@ SUBROUTINE rhs_zvector_part3_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      !!! SPV the factor 2 is from the derivative wrt to real and complex orbitals
      DO lbnd = 1,nbnd_do
         DO ig = 1,npw
-           !!! SPV test on symmetrization
            z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks)-2._DP*z_rhs_vec_part3(ig,lbnd,iks)
         ENDDO
      ENDDO
@@ -1582,6 +1581,7 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      ENDDO
      !$acc end parallel
      !
+     !$acc parallel vector_length(1024) present(evc,tmp_vec_I,tmp_vec_J,dv_vv_mat_I,dv_vv_mat_J)
      !$acc loop collapse(2)
      DO jbnd = 1, nbndval - n_trunc_bands
         DO lbnd = 1, nbnd_do
@@ -1610,10 +1610,12 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      CALL mp_sum(dv_vv_mat_J,intra_bgrp_comm)
      !$acc end host_data
      !
-     !$acc host_data use_device(dvg_exc_tmp_J,dv_vv_mat,dpcpart)
+     !$acc host_data use_device(dvg_exc_tmp_J,dv_vv_mat_I,dpcpart_I)
      CALL DGEMM('N','T',2*npwx*npol,nbndval-n_trunc_bands,nbnd_do,-1._DP,dvg_exc_tmp_J(1,1,iks),&
      & 2*npwx*npol,dv_vv_mat_I,nbndval0x-n_trunc_bands,0._DP,dpcpart_I,2*npwx*npol)
+     !$acc end host_data
      !
+     !$acc host_data use_device(dvg_exc_tmp_I,dv_vv_mat_J,dpcpart_J)
      CALL DGEMM('N','T',2*npwx*npol,nbndval-n_trunc_bands,nbnd_do,-1._DP,dvg_exc_tmp_I(1,1,iks),&
      & 2*npwx*npol,dv_vv_mat_J,nbndval0x-n_trunc_bands,0._DP,dpcpart_J,2*npwx*npol)
      !$acc end host_data
@@ -1657,7 +1659,6 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      !$acc parallel loop collapse(2) present(z_rhs_vec,z_rhs_vec_part4)
      DO lbnd = 1,nbnd_do
         DO ig = 1,npw
-           !!! SPV test on symmetrization
            z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks)-z_rhs_vec_part4(ig,lbnd,iks)
         ENDDO
      ENDDO

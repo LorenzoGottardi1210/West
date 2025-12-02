@@ -76,7 +76,7 @@ SUBROUTINE wbse_davidson_diago ( )
   ATTRIBUTES(PINNED) :: dng_exc_tmp, dvg_exc_tmp, dvg_exc_tmp_J !!! SPV
 #endif
   !
-  INTEGER :: iks,il1,eenacI,eenacJ,ig1,lbnd,ibnd,iks_do
+  INTEGER :: iks,il1,ig1,lbnd,ibnd,iks_do
   INTEGER :: nbndval,nbnd_do,flnbndval
   INTEGER :: owner
   REAL(DP) :: time_spent(2)
@@ -131,10 +131,12 @@ SUBROUTINE wbse_davidson_diago ( )
   !$acc enter data create(dvg_exc_tmp)
   !
   !!! SPV
-  ALLOCATE( dvg_exc_tmp_J( npwx, band_group%nlocx, kpt_pool%nloc), STAT=ierr )
-  IF( ierr /= 0 ) &
-  CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
-  !$acc enter data create(dvg_exc_tmp_J)
+  IF (l_eenac) THEN
+     ALLOCATE( dvg_exc_tmp_J( npwx, band_group%nlocx, kpt_pool%nloc), STAT=ierr )
+     IF( ierr /= 0 ) &
+     CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
+     !$acc enter data create(dvg_exc_tmp_J)
+  ENDIF
   !!!
   !
   ALLOCATE( dng_exc( npwx, band_group%nlocx, kpt_pool%nloc, pert%nlocx ), STAT=ierr )
@@ -604,6 +606,11 @@ SUBROUTINE wbse_davidson_diago ( )
         computing_eenac = .FALSE.
         CALL wbse_calc_forces( dvg_exc_tmp )
         !
+        IF (.NOT.l_genac .AND. .NOT.l_eenac) THEN
+           !$acc exit data delete(dvg_exc_tmp)
+           DEALLOCATE( dvg_exc_tmp )
+        ENDIF
+        !
      ENDIF
      !
      IF (l_genac) THEN
@@ -622,6 +629,11 @@ SUBROUTINE wbse_davidson_diago ( )
         !
         computing_eenac = .FALSE.
         CALL wbse_calc_nac( dvg_exc_tmp, dvg_exc_tmp, omega_JI )
+        !
+        IF (.NOT.l_eenac) THEN
+           !$acc exit data delete(dvg_exc_tmp)
+           DEALLOCATE( dvg_exc_tmp )
+        ENDIF
         !
      ENDIF
      !

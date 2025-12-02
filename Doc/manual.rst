@@ -1324,6 +1324,72 @@ wbse_control
    * - **Description**
      - Excited state for which analytical forces are computed. Used only when l_forces is True.
 
+.. data:: l_genac
+
+.. list-table::
+   :widths: 10 90
+   :stub-columns: 0
+
+   * - **Type**
+     - bool
+   * - **Default**
+     - False
+   * - **Description**
+     - If (True), then analytical non-adiabatic coupling vectors are computed between the ground and the genac_state excited state. Used only when wbse_calculation = “D” or “d”.
+
+.. data:: genac_state
+
+.. list-table::
+   :widths: 10 90
+   :stub-columns: 0
+
+   * - **Type**
+     - int
+   * - **Default**
+     - 1
+   * - **Description**
+     - Excited state for which analytical non-adiabatic coupling vectors with the ground state are computed. Used only when l_genac is True.
+
+
+.. data:: l_eenac
+
+.. list-table::
+   :widths: 10 90
+   :stub-columns: 0
+
+   * - **Type**
+     - bool
+   * - **Default**
+     - False
+   * - **Description**
+     - If (True), then analytical non-adiabatic coupling vectors are computed between the eenac_stateI and the eenac_stateJ excited states. Used only when wbse_calculation = “D” or “d”.
+
+.. data:: eenac_stateI
+
+.. list-table::
+   :widths: 10 90
+   :stub-columns: 0
+
+   * - **Type**
+     - int
+   * - **Default**
+     - 1
+   * - **Description**
+     - Excited state I for which analytical non-adiabatic coupling vectors are computed between excited states I and J. Used only when l_eenac is True.
+
+.. data:: eenac_stateJ
+
+.. list-table::
+   :widths: 10 90
+   :stub-columns: 0
+
+   * - **Type**
+     - int
+   * - **Default**
+     - 2
+   * - **Description**
+     - Excited state J for which analytical non-adiabatic coupling vectors are computed between excited states I and J. Used only when l_eenac is True.
+
 .. data:: forces_zeq_cg_tr
 
 .. list-table::

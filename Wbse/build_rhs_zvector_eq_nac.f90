@@ -300,7 +300,7 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
         !$acc update device(evc1_all(:,:,iks),evc1J_all(:,:,iks))
 #endif    
         !
-        CALL hybrid_kernel_term3(current_spin,dvg_exc_tmp_J,z_rhs_vec_part1(:,:,iks),l_spin_flip) 
+        CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part1(:,:,iks),l_spin_flip,3) 
         !
         ! switch the contents of evc1_all and evc1J_all  
         CALL gather_bands(dvg_exc_tmp_J(:,:,iks),evc1_all(:,:,iks),req)
@@ -311,7 +311,7 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
         !$acc update device(evc1_all(:,:,iks),evc1J_all(:,:,iks))
 #endif    
         !
-        CALL hybrid_kernel_term3(current_spin,dvg_exc_tmp_I,z_rhs_vec_part1(:,:,iks),l_spin_flip) 
+        CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part1(:,:,iks),l_spin_flip,3) 
         !
         ! the contents of evc1_all and evc1J_all are reverted back (probably not necessary)
         CALL gather_bands(dvg_exc_tmp_I(:,:,iks),evc1_all(:,:,iks),req)
@@ -1512,7 +1512,7 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      !$acc update device(evc1J_all(:,:,iks_do),evc1_all(:,:,iks_do))
 #endif
      ! 
-     CALL hybrid_kernel_term4(current_spin,dvg_exc_tmp_J,z_rhs_vec_part4(:,:,iks),l_spin_flip) 
+     CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part4(:,:,iks),l_spin_flip,4) 
      !
      ! switch the contents of evc1_all and evc1J_all  
      CALL gather_bands(dvg_exc_tmp_I(:,:,iks_do),evc1J_all(:,:,iks_do),req)
@@ -1523,7 +1523,7 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      !$acc update device(evc1J_all(:,:,iks_do),evc1_all(:,:,iks_do))
 #endif
      !
-     CALL hybrid_kernel_term4(current_spin,dvg_exc_tmp_J,z_rhs_vec_part4(:,:,iks),l_spin_flip) 
+     CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part4(:,:,iks),l_spin_flip,4) 
      !
      ! the contents of evc1_all and evc1J_all is reverted back (probably not necessary)
      CALL gather_bands(dvg_exc_tmp_I(:,:,iks_do),evc1_all(:,:,iks_do),req)

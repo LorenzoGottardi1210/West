@@ -1,6 +1,6 @@
 #!/bin/bash
 
-${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/Si_ONCV_PBE-1.1.upf
+${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/Si_ONCV_PBE-1.2.upf
 
 cat > pw.in << EOF
 &control
@@ -15,18 +15,19 @@ ibrav     = 2
 a         = 5.43
 nat       = 2
 ntyp      = 1
-ecutwfc   = 25.0
+ecutwfc   = 25
 nbnd      = 16
 noinv     = .true.
 nosym     = .true.
 input_dft = 'pbe0'
+ecutfock  = 25
 /
 &electrons
+conv_thr       = 1.d-12
 diago_full_acc = .true.
-conv_thr       = 1.e-12
 /
 ATOMIC_SPECIES
-Si 28.085   Si_ONCV_PBE-1.1.upf
+Si 28.085   Si_ONCV_PBE-1.2.upf
 ATOMIC_POSITIONS crystal
 Si  0.0000  0.0000  0.0000
 Si  0.2500  0.2500  0.2500
@@ -44,7 +45,6 @@ input_west:
 wstat_control:
   wstat_calculation: S
   n_pdep_eigen: 10
-  l_minimize_exx_if_active: True
   n_exx_lowrank: 30
 EOF
 
@@ -58,7 +58,6 @@ input_west:
 wstat_control:
   wstat_calculation: S
   n_pdep_eigen: 10
-  l_minimize_exx_if_active: True
   n_exx_lowrank: 30
 
 wfreq_control:

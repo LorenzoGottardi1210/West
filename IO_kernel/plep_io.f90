@@ -21,7 +21,7 @@ MODULE plep_io
     ! ******************************************
     ! WRITE IN G SPACE
     !       wfc is passed distributed in G space
-    !       then merged and written in R space
+    !       then merged and written in G space
     ! ******************************************
     !
     SUBROUTINE plep_merge_and_write_G(fname,plepg)

@@ -1,7 +1,8 @@
 #!/bin/bash
 
-${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/H_ONCV_PBE-1.0.upf
-${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/Si_ONCV_PBE-1.1.upf
+${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/C_ONCV_PBE-1.2.upf
+${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/H_ONCV_PBE-1.2.upf
+${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/O_ONCV_PBE-1.2.upf
 
 cat > pw.in << EOF
 &control
@@ -14,25 +15,26 @@ prefix       = 'test'
 &system
 ibrav           = 1
 celldm(1)       = 20
-nat             = 5
-ntyp            = 2
-ecutwfc         = 25.0
+nat             = 4
+ntyp            = 3
+ecutwfc         = 25
 nbnd            = 30
-assume_isolated = 'mp'
 input_dft       = 'pbe0'
+ecutfock        = 25
+assume_isolated = 'mp'
 /
 &electrons
 diago_full_acc = .true.
 /
 ATOMIC_SPECIES
-Si 28.0855  Si_ONCV_PBE-1.1.upf
-H  1.00794   H_ONCV_PBE-1.0.upf
-ATOMIC_POSITIONS bohr
-Si      10.000000   10.000000  10.000000
-H       11.614581   11.614581  11.614581
-H        8.385418    8.385418  11.614581
-H        8.385418   11.614581   8.385418
-H       11.614581    8.385418   8.385418
+C 12.0107  C_ONCV_PBE-1.2.upf
+H 1.0079  H_ONCV_PBE-1.2.upf
+O 16.00  O_ONCV_PBE-1.2.upf
+ATOMIC_POSITIONS crystal
+C        0.452400000   0.500000000   0.500000000
+H        0.397141530   0.411608770   0.500000000
+H        0.397141530   0.588391230   0.500000000
+O        0.565022174   0.500000000   0.500000000
 K_POINTS gamma
 EOF
 
@@ -60,7 +62,12 @@ wbse_init_control:
   solver: TDDFT
 
 wbse_control:
-  wbse_calculation: L
-  l_dipole_realspace: True
-  n_lanczos: 200
+  wbse_calculation: D
+  n_liouville_eigen: 4
+  n_liouville_times: 10
+  trev_liouville: 0.00000001
+  trev_liouville_rel: 0.000001
+  l_pre_shift: True
+  l_forces: True
+  forces_state: 1
 EOF

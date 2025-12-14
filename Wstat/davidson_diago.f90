@@ -35,7 +35,7 @@ SUBROUTINE davidson_diago_gamma ( )
   ! ... ( chi - ev ) * dvg = 0
   !
   USE kinds,                ONLY : DP
-  USE mp_global,            ONLY : nbgrp
+  USE mp_global,            ONLY : npool,nbgrp
   USE io_global,            ONLY : stdout
   USE pwcom,                ONLY : nkstot,nks
   USE distribution_center,  ONLY : pert,kpt_pool,band_group
@@ -96,12 +96,16 @@ SUBROUTINE davidson_diago_gamma ( )
   !
   pert = idistribute()
   CALL pert%init(nvecx,'i','nvecx',.TRUE.)
-  CALL wstat_memory_report() ! Before allocating I report the memory required.
-  band_group = idistribute()
-  IF(nbgrp > MINVAL(nbnd_occ)) CALL errore('chidiago','nbgrp>nbnd_occ',1)
+  !
   kpt_pool = idistribute()
   CALL kpt_pool%init(nkstot,'p','nkstot',.FALSE.,IDIST_BLK)
-  IF(kpt_pool%nloc /= nks) CALL errore('wstat_setup','unexpected kpt_pool init error',1)
+  IF(kpt_pool%nloc /= nks) CALL errore('chidiago','unexpected kpt_pool init error',1)
+  IF(npool > nkstot) CALL errore('chidiago','npool>nkstot',1)
+  !
+  band_group = idistribute()
+  IF(nbgrp > MINVAL(nbnd_occ)) CALL errore('chidiago','nbgrp>nbnd_occ',1)
+  !
+  CALL wstat_memory_report()
   !
   ! ... MEMORY ALLOCATION
   !

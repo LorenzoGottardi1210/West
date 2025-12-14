@@ -19,24 +19,24 @@ westcom.o
 
 TLDEPS = bindir mods pwlibs pw
 
-all : title tldeps update libmodules.a
+all: title tldeps update libmodules.a
 
-tldeps :
+tldeps:
 	test -n "$(TLDEPS)" && ( cd ../.. ; $(MAKE) $(MFLAGS) $(TLDEPS) || exit 1) || :
 
-update :
-	./update_west_version ${WESTDIR} `${PYT} ../Pytools/read_json.py ../VERSION.json version`
+update:
+	./update_west_version $(WESTDIR) `$(PYT) ../Pytools/read_json.py ../VERSION.json version`
 
-libmodules.a : $(MODULES_OBJS)
+libmodules.a: $(MODULES_OBJS)
 	$(AR) $(ARFLAGS) $@ $?
 	$(RANLIB) $@
 
-clean :
+clean:
 	- /bin/rm -f *.x *.o *.a *~ *_tmp.f90 *.d *.mod *.i *.L
 	- /bin/rm -f libmodules.a
 	- /bin/rm -f west_version.f90
 
-title :
+title:
 	@echo
 	@echo "################"
 	@echo "### Modules ####"

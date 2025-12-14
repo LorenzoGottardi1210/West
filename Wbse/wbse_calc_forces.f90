@@ -294,7 +294,7 @@ SUBROUTINE wbse_calc_drhox1(dvg_exc_tmp, drhox1)
         !
         CALL double_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp(:,lbnd,iks),dvg_exc_tmp(:,lbnd+1,iks),psic,'Wave')
         !
-        !$acc parallel loop present(tmp_r)
+        !$acc parallel loop present(tmp_r,psic)
         DO ir = 1,dffts_nnr
            tmp_r(ir) = tmp_r(ir) + w1*REAL(psic(ir),KIND=DP)**2 + w2*AIMAG(psic(ir))**2
         ENDDO
@@ -315,7 +315,7 @@ SUBROUTINE wbse_calc_drhox1(dvg_exc_tmp, drhox1)
         !
         CALL single_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp(:,lbnd,iks),psic,'Wave')
         !
-        !$acc parallel loop present(tmp_r)
+        !$acc parallel loop present(tmp_r,psic)
         DO ir = 1,dffts_nnr
            tmp_r(ir) = tmp_r(ir) + w1*REAL(psic(ir),KIND=DP)**2
         ENDDO
@@ -759,7 +759,7 @@ SUBROUTINE wbse_calc_drhox2(dvgdvg_mat, drhox2)
         !
         CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),psic,'Wave')
         !
-        !$acc parallel loop present(aux_r)
+        !$acc parallel loop present(aux_r,psic)
         DO ir = 1,dffts_nnr
            aux_r(ir) = REAL(psic(ir),KIND=DP)
         ENDDO
@@ -773,7 +773,7 @@ SUBROUTINE wbse_calc_drhox2(dvgdvg_mat, drhox2)
               !
               CALL double_invfft_gamma(dffts,npw,npwx,evc(:,jbndp),evc(:,jbndp+1),psic,'Wave')
               !
-              !$acc parallel loop present(aux_r,dvgdvg_mat,drhox2)
+              !$acc parallel loop present(aux_r,psic,dvgdvg_mat,drhox2)
               DO ir = 1,dffts_nnr
                  prod = aux_r(ir) * (REAL(psic(ir),KIND=DP)*dvgdvg_mat(jbnd,lbnd,iks) &
                  &                + AIMAG(psic(ir))*dvgdvg_mat(jbnd+1,lbnd,iks))
@@ -785,7 +785,7 @@ SUBROUTINE wbse_calc_drhox2(dvgdvg_mat, drhox2)
               !
               CALL single_invfft_gamma(dffts,npw,npwx,evc(:,jbndp),psic,'Wave')
               !
-              !$acc parallel loop present(aux_r,dvgdvg_mat,drhox2)
+              !$acc parallel loop present(aux_r,psic,dvgdvg_mat,drhox2)
               DO ir = 1,dffts_nnr
                  prod = aux_r(ir) * REAL(psic(ir),KIND=DP) * dvgdvg_mat(jbnd,lbnd,iks)
                  drhox2(ir,current_spin) = drhox2(ir,current_spin) - w1*CMPLX(prod,KIND=DP)

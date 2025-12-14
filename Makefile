@@ -29,16 +29,16 @@ update_version \
 depend
 
 update_make_inc:
-	@[ "${PYT}" ] || ( echo ">> PYT is not set. Ex: make conf PYT=python3"; exit 1 )
+	@[ "$(PYT)" ] || ( echo ">> PYT is not set. Ex: make conf PYT=python3"; exit 1 )
 	@echo "Welcome to WEST!"
 	@echo
-	@echo "version : `${PYT} ./Pytools/read_json.py VERSION.json version`"
-	@echo "url : `${PYT} ./Pytools/read_json.py VERSION.json url`"
-	@echo "license : `${PYT} ./Pytools/read_json.py VERSION.json license`"
+	@echo "version : `$(PYT) ./Pytools/read_json.py VERSION.json version`"
+	@echo "url : `$(PYT) ./Pytools/read_json.py VERSION.json url`"
+	@echo "license : `$(PYT) ./Pytools/read_json.py VERSION.json license`"
 	@echo " " > west_make.inc
 	@echo WESTDIR=`pwd` >> west_make.inc
-	@echo PYT=${PYT} >> west_make.inc
-	@echo PYT_LDFLAGS=${PYT_LDFLAGS} >> west_make.inc
+	@echo PYT=$(PYT) >> west_make.inc
+	@echo PYT_LDFLAGS=$(PYT_LDFLAGS) >> west_make.inc
 	@echo
 	@echo "Generated file: west_make.inc"
 	@cat west_make.inc
@@ -50,7 +50,7 @@ include_make_inc:
 
 update_version:
 	if test -d Modules ; then \
-	( cd Modules ; ./update_west_version ${WESTDIR} `${PYT} ../Pytools/read_json.py ../VERSION.json version`; ) ; fi
+	( cd Modules ; ./update_west_version $(WESTDIR) `$(PYT) ../Pytools/read_json.py ../VERSION.json version`; ) ; fi
 	@echo "Generated file: west_version.f90"
 	@echo
 
@@ -64,38 +64,38 @@ report_build_vars:
 	@echo "# Build vars #"
 	@echo "##############"
 	@echo
-	@[ "${MPIF90}" ] || ( echo ">> MPIF90 is not set."; exit 1 )
-	@[ "${CC}" ] || ( echo ">> CC is not set."; exit 1 )
-	@echo "# WEST_VERSION_NUMBER : `${PYT} ./Pytools/read_json.py VERSION.json version`"
-	@echo "# WESTDIR : ${WESTDIR}"
-	@echo "# FDFLAGS : ${FDFLAGS}"
-	@echo "# IFLAGS : ${IFLAGS}"
-	@echo "# MOD_FLAG : ${MOD_FLAG}"
-	@echo "# MPIF90 : ${MPIF90}"
-	@echo "# CC : ${CC}"
-	@echo "# F77 : ${F77}"
-	@echo "# CPP : ${CPP}"
-	@echo "# CPPFLAGS : ${CPPFLAGS}"
-	@echo "# CFLAGS : ${CFLAGS}"
-	@echo "# F90FLAGS : ${F90FLAGS}"
-	@echo "# FFLAGS : ${FFLAGS}"
-	@echo "# FFLAGS_NOOPT : ${FFLAGS_NOOPT}"
-	@echo "# LD : ${LD}"
-	@echo "# LDFLAGS : ${LDFLAGS}"
-	@echo "# LD_LIBS : ${LD_LIBS}"
-	@echo "# BLAS_LIBS : ${BLAS_LIBS}"
-	@echo "# LAPACK_LIBS : ${LAPACK_LIBS}"
-	@echo "# SCALAPACK_LIBS : ${SCALAPACK_LIBS}"
-	@echo "# FFT_LIBS : ${FFT_LIBS}"
-	@echo "# MPI_LIBS : ${MPI_LIBS}"
-	@echo "# MASS_LIBS : ${MASS_LIBS}"
-	@echo "# AR : ${AR}"
-	@echo "# ARFLAGS : ${ARFLAGS}"
-	@echo "# RANLIB : ${RANLIB}"
-	@echo "# FLIB_TARGETS : ${FLIB_TARGETS}"
-	@echo "# WGET : ${WGET}"
-	@echo "# PYT : ${PYT}"
-	@echo "# PYT_LDFLAGS : ${PYT_LDFLAGS}"
+	@[ "$(MPIF90)" ] || ( echo ">> MPIF90 is not set."; exit 1 )
+	@[ "$(CC)" ] || ( echo ">> CC is not set."; exit 1 )
+	@echo "# WEST_VERSION_NUMBER : `$(PYT) ./Pytools/read_json.py VERSION.json version`"
+	@echo "# WESTDIR : $(WESTDIR)"
+	@echo "# FDFLAGS : $(FDFLAGS)"
+	@echo "# IFLAGS : $(IFLAGS)"
+	@echo "# MOD_FLAG : $(MOD_FLAG)"
+	@echo "# MPIF90 : $(MPIF90)"
+	@echo "# CC : $(CC)"
+	@echo "# F77 : $(F77)"
+	@echo "# CPP : $(CPP)"
+	@echo "# CPPFLAGS : $(CPPFLAGS)"
+	@echo "# CFLAGS : $(CFLAGS)"
+	@echo "# F90FLAGS : $(F90FLAGS)"
+	@echo "# FFLAGS : $(FFLAGS)"
+	@echo "# FFLAGS_NOOPT : $(FFLAGS_NOOPT)"
+	@echo "# LD : $(LD)"
+	@echo "# LDFLAGS : $(LDFLAGS)"
+	@echo "# LD_LIBS : $(LD_LIBS)"
+	@echo "# BLAS_LIBS : $(BLAS_LIBS)"
+	@echo "# LAPACK_LIBS : $(LAPACK_LIBS)"
+	@echo "# SCALAPACK_LIBS : $(SCALAPACK_LIBS)"
+	@echo "# FFT_LIBS : $(FFT_LIBS)"
+	@echo "# MPI_LIBS : $(MPI_LIBS)"
+	@echo "# MASS_LIBS : $(MASS_LIBS)"
+	@echo "# AR : $(AR)"
+	@echo "# ARFLAGS : $(ARFLAGS)"
+	@echo "# RANLIB : $(RANLIB)"
+	@echo "# FLIB_TARGETS : $(FLIB_TARGETS)"
+	@echo "# WGET : $(WGET)"
+	@echo "# PYT : $(PYT)"
+	@echo "# PYT_LDFLAGS : $(PYT_LDFLAGS)"
 	@echo
 
 
@@ -144,7 +144,7 @@ doc: include_make_inc
 	if test -d doc ; then \
 	( cd doc ; if test "$(MAKE)" = "" ; then make $(MFLAGS) html; \
 	else $(MAKE) $(MFLAGS) html ; fi ) ; fi
-	@echo "Open the file: ${WESTDIR}/doc/_build/html/index.html"
+	@echo "Open the file: $(WESTDIR)/doc/_build/html/index.html"
 
 pytools_do:
 	if test -d Pytools ; then \
@@ -198,27 +198,27 @@ io_kernel_do: para_kernel_do tools_do fft_kernel_do modules_do libraries_do
 
 wstat_do: io_kernel_do dfpt_kernel_do para_kernel_do coulomb_kernel_do fft_kernel_do tools_do modules_do libraries_do
 	if test -d Wstat ; then \
-	( cd Wstat ; if test "$(MAKE)" = "" ; then make $(MFLAGS) all PYT_LDFLAGS="${PYT_LDFLAGS}"; \
-	else $(MAKE) $(MFLAGS) all PYT_LDFLAGS="${PYT_LDFLAGS}"; fi ) ; fi
+	( cd Wstat ; if test "$(MAKE)" = "" ; then make $(MFLAGS) all PYT_LDFLAGS="$(PYT_LDFLAGS)"; \
+	else $(MAKE) $(MFLAGS) all PYT_LDFLAGS="$(PYT_LDFLAGS)"; fi ) ; fi
 
 wfreq_do: io_kernel_do dfpt_kernel_do para_kernel_do coulomb_kernel_do fft_kernel_do tools_do modules_do libraries_do
 	if test -d Wfreq ; then \
-	( cd Wfreq ; if test "$(MAKE)" = "" ; then make $(MFLAGS) all PYT_LDFLAGS="${PYT_LDFLAGS}"; \
-	else $(MAKE) $(MFLAGS) all PYT_LDFLAGS="${PYT_LDFLAGS}"; fi ) ; fi
+	( cd Wfreq ; if test "$(MAKE)" = "" ; then make $(MFLAGS) all PYT_LDFLAGS="$(PYT_LDFLAGS)"; \
+	else $(MAKE) $(MFLAGS) all PYT_LDFLAGS="$(PYT_LDFLAGS)"; fi ) ; fi
 
 wbse_do: wstat_do io_kernel_do dfpt_kernel_do para_kernel_do coulomb_kernel_do fft_kernel_do tools_do modules_do libraries_do
 	if test -d ../LR_Modules; then \
-	( cd ../LR_Modules ; if test "$(MAKE)" = "" ; then make $(MFLAGS) all PYT_LDFLAGS="${PYT_LDFLAGS}"; \
-	else $(MAKE) $(MFLAGS) all PYT_LDFLAGS="${PYT_LDFLAGS}"; fi ) ; fi
+	( cd ../LR_Modules ; if test "$(MAKE)" = "" ; then make $(MFLAGS) all PYT_LDFLAGS="$(PYT_LDFLAGS)"; \
+	else $(MAKE) $(MFLAGS) all PYT_LDFLAGS="$(PYT_LDFLAGS)"; fi ) ; fi
 	cd ../West
 	if test -d Wbse ; then \
-	( cd Wbse ; if test "$(MAKE)" = "" ; then make $(MFLAGS) all PYT_LDFLAGS="${PYT_LDFLAGS}"; \
-	else $(MAKE) $(MFLAGS) all PYT_LDFLAGS="${PYT_LDFLAGS}"; fi ) ; fi
+	( cd Wbse ; if test "$(MAKE)" = "" ; then make $(MFLAGS) all PYT_LDFLAGS="$(PYT_LDFLAGS)"; \
+	else $(MAKE) $(MFLAGS) all PYT_LDFLAGS="$(PYT_LDFLAGS)"; fi ) ; fi
 
 westpp_do: wbse_do io_kernel_do para_kernel_do coulomb_kernel_do fft_kernel_do tools_do modules_do libraries_do
 	if test -d Westpp ; then \
-	( cd Westpp ; if test "$(MAKE)" = "" ; then make $(MFLAGS) all PYT_LDFLAGS="${PYT_LDFLAGS}"; \
-	else $(MAKE) $(MFLAGS) all PYT_LDFLAGS="${PYT_LDFLAGS}"; fi ) ; fi
+	( cd Westpp ; if test "$(MAKE)" = "" ; then make $(MFLAGS) all PYT_LDFLAGS="$(PYT_LDFLAGS)"; \
+	else $(MAKE) $(MFLAGS) all PYT_LDFLAGS="$(PYT_LDFLAGS)"; fi ) ; fi
 
 clean: \
 pytools_undo \

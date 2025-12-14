@@ -14,7 +14,7 @@
 SUBROUTINE wfreq_setup
   !-----------------------------------------------------------------------
   !
-  USE mp_global,              ONLY : inter_image_comm,my_image_id,inter_pool_comm,intra_bgrp_comm,nbgrp
+  USE mp_global,              ONLY : inter_image_comm,my_image_id,inter_pool_comm,npool,intra_bgrp_comm,nbgrp
   USE mp,                     ONLY : mp_bcast,mp_sum
   USE westcom,                ONLY : lrwfc,iuwfc,wfreq_save_dir,wfreq_calculation,nbnd_occ,occupation,&
                                    & qp_bands,n_bands,alphapv_dfpt,n_imfreq,n_refreq,n_pdep_eigen_to_use,&
@@ -23,7 +23,8 @@ SUBROUTINE wfreq_setup
                                    & sigma_sc_eqplin,sigma_sc_eqpsec,sigma_diff,sigma_spectralf,&
                                    & sigma_freq,n_spectralf,l_enable_off_diagonal,ijpmap,pijmap,n_pairs,&
                                    & sigma_exx_full,sigma_vxcl_full,sigma_vxcnl_full,sigma_hf_full,&
-                                   & sigma_sc_eks_full,sigma_sc_eqplin_full,sigma_corr_full,proj_c
+                                   & sigma_sc_eks_full,sigma_sc_eqplin_full,sigma_corr_full,proj_c,&
+                                   & qdet_dc,l_dc2025
   USE wavefunctions,          ONLY : evc
   USE buffers,                ONLY : get_buffer
   USE pwcom,                  ONLY : nbnd,nkstot,nks,npw,npwx,nspin,ngk
@@ -66,21 +67,24 @@ SUBROUTINE wfreq_setup
   CALL pert%init(n_pdep_eigen_to_use,'i','npdep',.TRUE.)
   macropert = idistribute()
   CALL macropert%init(n_pdep_eigen_to_use+3,'i','npdep+macro',.TRUE.)
+  aband = idistribute()
+  CALL aband%init(nbnd,'i','nbnd',.TRUE.)
+  !
+  kpt_pool = idistribute()
+  CALL kpt_pool%init(nkstot,'p','nkstot',.FALSE.,IDIST_BLK)
+  IF(kpt_pool%nloc /= nks) CALL errore('wfreq_setup','unexpected kpt_pool init error',1)
+  IF(npool > nkstot) CALL errore('wfreq_setup','npool>nkstot',1)
+  !
+  occband = idistribute()
+  band_group = idistribute()
+  !
+  IF(nbgrp > n_bands) CALL errore('wfreq_setup','nbgrp>nbnd_qp',1)
+  IF(nbgrp > MINVAL(nbnd_occ)) CALL errore('wfreq_setup','nbgrp>nbnd_occ',1)
+  !
   ifr = idistribute()
   CALL ifr%init(n_imfreq,'z','n_imfreq',.TRUE.)
   rfr = idistribute()
   CALL rfr%init(n_refreq,'z','n_refreq',.TRUE.)
-  aband = idistribute()
-  CALL aband%init(nbnd,'i','nbnd',.TRUE.)
-  occband = idistribute()
-  band_group = idistribute()
-  !
-  kpt_pool = idistribute()
-  CALL kpt_pool%init(nkstot,'p','nkstot',.FALSE.,IDIST_BLK)
-  !
-  IF(kpt_pool%nloc /= nks) CALL errore('wfreq_setup','unexpected kpt_pool init error',1)
-  IF(nbgrp > n_bands) CALL errore('wfreq_setup','nbgrp>nbnd_qp',1)
-  IF(nbgrp > MINVAL(nbnd_occ)) CALL errore('wfreq_setup','nbgrp>nbnd_occ',1)
   !
   CALL set_freqlists()
   !
@@ -89,6 +93,13 @@ SUBROUTINE wfreq_setup
      l_macropol = .TRUE.
   CASE('n','N')
      l_macropol = .FALSE.
+  END SELECT
+  !
+  SELECT CASE(qdet_dc)
+  CASE('DC2025','dc2025')
+     l_dc2025 = .TRUE.
+  CASE DEFAULT
+     l_dc2025 = .FALSE.
   END SELECT
   !
   IF(xclib_dft_is('hybrid')) THEN

@@ -4,8 +4,6 @@ default: all
 
 all: title forpy_do json_do base64_do
 
-test: json_test_do
-
 forpy_do:
 	if test -d Forpy ; then \
 	( cd Forpy ; if test "$(MAKE)" = "" ; then make $(MFLAGS) all; \
@@ -21,12 +19,7 @@ base64_do:
 	( cd Base64 ; if test "$(MAKE)" = "" ; then make $(MFLAGS) all; \
 	else $(MAKE) $(MFLAGS) all ; fi ) ; fi
 
-json_test_do:
-	if test -d Json-test ; then \
-	( cd Json-test ; if test "$(MAKE)" = "" ; then make $(MFLAGS) all; \
-	else $(MAKE) $(MFLAGS) all ; fi ) ; fi
-
-clean: forpy_undo json_undo base64_undo json_test_undo
+clean: forpy_undo json_undo base64_undo
 
 forpy_undo:
 	if test -d Forpy ; then \
@@ -43,14 +36,9 @@ base64_undo:
 	( cd Base64 ; if test "$(MAKE)" = "" ; then make clean ; \
 	else $(MAKE) clean ; fi ) ; fi
 
-json_test_undo:
-	if test -d Json-test ; then \
-	( cd Json-test ; if test "$(MAKE)" = "" ; then make clean ; \
-	else $(MAKE) clean ; fi ) ; fi
-
 distclean: clean
 
-title :
+title:
 	@echo
 	@echo "##############"
 	@echo "## Libraries #"

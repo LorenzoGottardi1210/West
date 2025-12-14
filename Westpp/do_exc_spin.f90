@@ -16,9 +16,9 @@ SUBROUTINE do_exc_spin()
   USE kinds,                 ONLY : DP
   USE io_push,               ONLY : io_push_title
   USE bar,                   ONLY : bar_type,start_bar_type,update_bar_type,stop_bar_type
-  USE pwcom,                 ONLY : npwx,wg,nspin
+  USE pwcom,                 ONLY : npw,npwx,ngk,wg,nspin
+  USE noncollin_module,      ONLY : npol
   USE control_flags,         ONLY : gamma_only
-  USE gvect,                 ONLY : gstart
   USE mp,                    ONLY : mp_sum,mp_bcast
   USE mp_global,             ONLY : inter_image_comm,my_image_id,intra_bgrp_comm
   USE buffers,               ONLY : get_buffer
@@ -40,13 +40,13 @@ SUBROUTINE do_exc_spin()
   !
   ! ... LOCAL variables
   !
-  INTEGER :: iexc,lexc,ig,ibnd1,ibnd2,ibnd3,iunit
+  INTEGER :: iexc,lexc,ibnd1,ibnd2,ibnd3,iunit
   INTEGER :: nbndx_occ,nbnd_up,nbnd_dn
   INTEGER :: barra_load
   CHARACTER(6) :: label_exc
-  REAL(DP) :: reduce,s2,ds2,ss,norm_u,norm_d,n_alpha,n_beta
+  REAL(DP) :: s2,ds2,ss,norm_u,norm_d,n_alpha,n_beta
   LOGICAL :: flip_up
-  REAL(DP), ALLOCATABLE :: om(:,:),collect_ds2(:)
+  REAL(DP), ALLOCATABLE :: ovlp_ab(:,:),ds2_all(:)
   REAL(DP), ALLOCATABLE :: dvgdvg_uu(:,:),dvgdvg_dd(:,:),dvgdvg_ud(:,:),dvgevc_ud(:,:),dvgevc_du(:,:)
   COMPLEX(DP), ALLOCATABLE :: evc_copy(:,:)
   TYPE(bar_type) :: barra
@@ -54,9 +54,9 @@ SUBROUTINE do_exc_spin()
   !
   IF(westpp_n_liouville_to_use < 1) CALL errore('do_exc_spin','westpp_n_liouville_to_use < 1',1)
   IF(westpp_range(2) > westpp_n_liouville_to_use) &
-     CALL errore('do_exc_spin','westpp_range(2) > westpp_n_liouville_to_use',1)
-  IF(nspin /= 2) CALL errore('do_exc_spin', '<S^2> can only be computed for systems with nspin = 2', 1)
-  IF(.NOT. gamma_only) CALL errore('do_exc_spin', '<S^2> requires gamma_only', 1)
+  & CALL errore('do_exc_spin','westpp_range(2) > westpp_n_liouville_to_use',1)
+  IF(nspin /= 2) CALL errore('do_exc_spin','<S^2> can only be computed for systems with nspin = 2',1)
+  IF(.NOT. gamma_only) CALL errore('do_exc_spin','<S^2> requires gamma_only',1)
   !
 #if defined(__CUDA)
   CALL allocate_gpu()
@@ -69,9 +69,9 @@ SUBROUTINE do_exc_spin()
   !
   ! COMPUTE <S^2> FOR THE GROUND STATE
   !
-  ALLOCATE(om(nbnd, nbnd))
-  ALLOCATE(evc_copy(npwx, nbnd))
-  !$acc enter data create(om,evc_copy)
+  ALLOCATE(ovlp_ab(nbnd,nbnd))
+  ALLOCATE(evc_copy(npwx,nbnd))
+  !$acc enter data create(ovlp_ab,evc_copy)
   !
   IF(my_image_id == 0) CALL get_buffer(evc,lrwfc,iuwfc,1)
   CALL mp_bcast(evc,0,inter_image_comm)
@@ -85,53 +85,33 @@ SUBROUTINE do_exc_spin()
   CALL mp_bcast(evc,0,inter_image_comm)
   !$acc update device(evc)
   !
-  !$acc parallel vector_length(1024) present(evc_copy,evc,om)
-  !$acc loop collapse(2)
-  DO ibnd1 = 1,nbnd
-     DO ibnd2 = 1,nbnd
-        !
-        reduce = 0._DP
-        !$acc loop reduction(+:reduce)
-        DO ig = 1, npwx
-           reduce = reduce + 2._DP * REAL(evc_copy(ig,ibnd1),KIND=DP) * REAL(evc(ig,ibnd2),KIND=DP) &
-                  &        + 2._DP * AIMAG(evc_copy(ig,ibnd1)) * AIMAG(evc(ig,ibnd2))
-        ENDDO
-        !
-        IF (gstart==2) THEN
-           reduce = reduce - REAL(evc_copy(1,ibnd1),KIND=DP) * REAL(evc(1,ibnd2),KIND=DP)
-        ENDIF
-        !
-        om(ibnd1, ibnd2) = reduce
-        !
-     ENDDO
-  ENDDO
-  !$acc end parallel
+  npw = ngk(1)
   !
-  !$acc update host(om)
+  CALL glbrak_gamma(evc_copy,evc,ovlp_ab,npw,npwx,nbnd,nbnd,nbnd,npol)
   !
-  CALL mp_sum(om, intra_bgrp_comm)
+  !$acc update host(ovlp_ab)
+  !
+  CALL mp_sum(ovlp_ab,intra_bgrp_comm)
   !
   n_alpha = SUM(wg(:,1))
   n_beta = SUM(wg(:,2))
   !
-  WRITE(stdout, "(/, 5x, ' Ground State n_alpha : ', f12.6, '     n_beta', f12.6)") n_alpha, n_beta
+  WRITE(stdout,"(/,5x,' Ground State n_alpha : ',f12.6,'     n_beta',f12.6)") n_alpha,n_beta
   !
   s2 = (n_alpha - n_beta) * (n_alpha - n_beta + 2._DP) / 4._DP + n_beta
   !
   DO ibnd1 = 1,nbnd
      DO ibnd2 = 1,nbnd
-        s2 = s2 - om(ibnd1, ibnd2)**2 * wg(ibnd1, 1) * wg(ibnd2, 2)
+        s2 = s2 - ovlp_ab(ibnd1,ibnd2)**2 * wg(ibnd1,1) * wg(ibnd2,2)
      ENDDO
   ENDDO
   !
-  WRITE(stdout, "(/, 5x, ' Ground State <S^2> : ', f12.6)") s2
+  WRITE(stdout,"(/,5x,' Ground State <S^2> : ',f12.6)") s2
   !
-  IF(mpime == root) THEN
-     CALL json%add('output.ground_state.spin_square',s2)
-  ENDIF
+  IF(mpime == root) CALL json%add('output.ground_state.spin_square',s2)
   !
-  ALLOCATE(collect_ds2(westpp_range(1):westpp_range(2)))
-  collect_ds2(:) = 0._DP
+  ALLOCATE(ds2_all(westpp_range(1):westpp_range(2)))
+  ds2_all(:) = 0._DP
   !
   ! COMPUTE \Delta <S^2> FOR THE EXCITED STATES
   !
@@ -154,11 +134,11 @@ SUBROUTINE do_exc_spin()
   nbnd_up = nbnd_occ(1)
   nbnd_dn = nbnd_occ(2)
   !
-  ALLOCATE(dvgdvg_uu(nbndx_occ, nbndx_occ))
-  ALLOCATE(dvgdvg_ud(nbndx_occ, nbndx_occ))
-  ALLOCATE(dvgdvg_dd(nbndx_occ, nbndx_occ))
-  ALLOCATE(dvgevc_ud(nbndx_occ, nbndx_occ))
-  ALLOCATE(dvgevc_du(nbndx_occ, nbndx_occ))
+  ALLOCATE(dvgdvg_uu(nbndx_occ,nbndx_occ))
+  ALLOCATE(dvgdvg_ud(nbndx_occ,nbndx_occ))
+  ALLOCATE(dvgdvg_dd(nbndx_occ,nbndx_occ))
+  ALLOCATE(dvgevc_ud(nbndx_occ,nbndx_occ))
+  ALLOCATE(dvgevc_du(nbndx_occ,nbndx_occ))
   !$acc enter data create(dvgdvg_uu,dvgdvg_ud,dvgdvg_dd,dvgevc_ud,dvgevc_du) copyin(dvg_exc)
   !
   !$acc kernels present(dvgdvg_uu)
@@ -204,130 +184,46 @@ SUBROUTINE do_exc_spin()
         ! compute matrix elements
         ! Part 1: up-up
         !
-        !$acc parallel vector_length(1024) present(dvg_exc,dvgdvg_uu)
-        !$acc loop collapse(2)
-        DO ibnd1 = 1, nbnd_up
-           DO ibnd2 = 1, nbnd_up
-              !
-              reduce = 0._DP
-              !$acc loop reduction(+:reduce)
-              DO ig = 1, npwx
-                 reduce = reduce + 2._DP * REAL(dvg_exc(ig,ibnd1,1,lexc),KIND=DP) * REAL(dvg_exc(ig,ibnd2,1,lexc),KIND=DP) &
-                 &               + 2._DP * AIMAG(dvg_exc(ig,ibnd1,1,lexc)) * AIMAG(dvg_exc(ig,ibnd2,1,lexc))
-              ENDDO
-              !
-              IF(gstart == 2) THEN
-                 reduce = reduce - REAL(dvg_exc(1,ibnd1,1,lexc),KIND=DP) * REAL(dvg_exc(1,ibnd2,1,lexc),KIND=DP)
-              ENDIF
-              !
-              dvgdvg_uu(ibnd1,ibnd2) = reduce
-              !
-           ENDDO
-        ENDDO
-        !$acc end parallel
+        CALL glbrak_gamma(dvg_exc(:,:,1,lexc),dvg_exc(:,:,1,lexc),dvgdvg_uu,npw,npwx,nbnd_up,nbnd_up,nbndx_occ,npol)
         !
         !$acc update host(dvgdvg_uu)
         !
-        CALL mp_sum(dvgdvg_uu, intra_bgrp_comm)
+        CALL mp_sum(dvgdvg_uu,intra_bgrp_comm)
         !
         ! Part 2: down-down
         !
-        !$acc parallel vector_length(1024) present(dvg_exc,dvgdvg_dd)
-        !$acc loop collapse(2)
-        DO ibnd1 = 1, nbnd_dn
-           DO ibnd2 = 1, nbnd_dn
-              !
-              reduce = 0._DP
-              !$acc loop reduction(+:reduce)
-              DO ig = 1, npwx
-                 reduce = reduce + 2._DP * REAL(dvg_exc(ig,ibnd1,2,lexc),KIND=DP) * REAL(dvg_exc(ig,ibnd2,2,lexc),KIND=DP) &
-                 &               + 2._DP * AIMAG(dvg_exc(ig,ibnd1,2,lexc)) * AIMAG(dvg_exc(ig,ibnd2,2,lexc))
-              ENDDO
-              !
-              IF(gstart == 2) THEN
-                 reduce = reduce - REAL(dvg_exc(1,ibnd1,2,lexc),KIND=DP) * REAL(dvg_exc(1,ibnd2,2,lexc),KIND=DP)
-              ENDIF
-              !
-              dvgdvg_dd(ibnd1,ibnd2) = reduce
-              !
-           ENDDO
-        ENDDO
-        !$acc end parallel
+        CALL glbrak_gamma(dvg_exc(:,:,2,lexc),dvg_exc(:,:,2,lexc),dvgdvg_dd,npw,npwx,nbnd_dn,nbnd_dn,nbndx_occ,npol)
         !
         !$acc update host(dvgdvg_dd)
         !
-        CALL mp_sum(dvgdvg_dd, intra_bgrp_comm)
+        CALL mp_sum(dvgdvg_dd,intra_bgrp_comm)
         !
         ! Part 3: up-down
         !
-        !$acc parallel vector_length(1024) present(dvg_exc,dvgdvg_ud,evc,dvgevc_ud,evc_copy,dvgevc_du)
-        !$acc loop collapse(2)
-        DO ibnd1 = 1, nbnd_up
-           DO ibnd2 = 1, nbnd_dn
-              !
-              reduce = 0._DP
-              !$acc loop reduction(+:reduce)
-              DO ig = 1, npwx
-                 reduce = reduce + 2._DP * REAL(dvg_exc(ig,ibnd1,1,lexc),KIND=DP) * REAL(dvg_exc(ig,ibnd2,2,lexc),KIND=DP) &
-                 &               + 2._DP * AIMAG(dvg_exc(ig,ibnd1,1,lexc)) * AIMAG(dvg_exc(ig,ibnd2,2,lexc))
-              ENDDO
-              !
-              IF(gstart == 2) THEN
-                 reduce = reduce - REAL(dvg_exc(1,ibnd1,1,lexc),KIND=DP) * REAL(dvg_exc(1,ibnd2,2,lexc),KIND=DP)
-              ENDIF
-              !
-              dvgdvg_ud(ibnd1,ibnd2) = reduce
-              !
-              reduce = 0._DP
-              !$acc loop reduction(+:reduce)
-              DO ig = 1, npwx
-                 reduce = reduce + 2._DP * REAL(dvg_exc(ig,ibnd1,1,lexc),KIND=DP) * REAL(evc(ig,ibnd2),KIND=DP) &
-                 &               + 2._DP * AIMAG(dvg_exc(ig,ibnd1,1,lexc)) * AIMAG(evc(ig,ibnd2))
-              ENDDO
-              !
-              IF(gstart == 2) THEN
-                 reduce = reduce - REAL(dvg_exc(1,ibnd1,1,lexc),KIND=DP) * REAL(evc(1,ibnd2),KIND=DP)
-              ENDIF
-              !
-              dvgevc_ud(ibnd1,ibnd2) = reduce
-              !
-              reduce = 0._DP
-              !$acc loop reduction(+:reduce)
-              DO ig = 1, npwx
-                 reduce = reduce + 2._DP * REAL(dvg_exc(ig,ibnd2,2,lexc),KIND=DP) * REAL(evc_copy(ig,ibnd1),KIND=DP) &
-                 &               + 2._DP * AIMAG(dvg_exc(ig,ibnd2,2,lexc)) * AIMAG(evc_copy(ig,ibnd1))
-              ENDDO
-              !
-              IF(gstart == 2) THEN
-                 reduce = reduce - REAL(dvg_exc(1,ibnd2,2,lexc),KIND=DP) * REAL(evc_copy(1,ibnd1),KIND=DP)
-              ENDIF
-              !
-              dvgevc_du(ibnd2,ibnd1) = reduce
-              !
-           ENDDO
-        ENDDO
-        !$acc end parallel
+        CALL glbrak_gamma(dvg_exc(:,:,1,lexc),dvg_exc(:,:,2,lexc),dvgdvg_ud,npw,npwx,nbnd_up,nbnd_dn,nbndx_occ,npol)
+        CALL glbrak_gamma(dvg_exc(:,:,1,lexc),evc,dvgevc_ud,npw,npwx,nbnd_up,nbnd_dn,nbndx_occ,npol)
+        CALL glbrak_gamma(dvg_exc(:,:,2,lexc),evc_copy,dvgevc_du,npw,npwx,nbnd_dn,nbnd_up,nbndx_occ,npol)
         !
         !$acc update host(dvgdvg_ud,dvgevc_ud,dvgevc_du)
         !
-        CALL mp_sum(dvgdvg_ud, intra_bgrp_comm)
-        CALL mp_sum(dvgevc_ud, intra_bgrp_comm)
-        CALL mp_sum(dvgevc_du, intra_bgrp_comm)
+        CALL mp_sum(dvgdvg_ud,intra_bgrp_comm)
+        CALL mp_sum(dvgevc_ud,intra_bgrp_comm)
+        CALL mp_sum(dvgevc_du,intra_bgrp_comm)
         !
         ds2 = 0._DP
         !
-        DO ibnd1 = 1, nbnd_up
-           DO ibnd2 = 1, nbnd_dn
+        DO ibnd1 = 1,nbnd_up
+           DO ibnd2 = 1,nbnd_dn
               !
-              ds2 = ds2 - dvgevc_ud(ibnd1, ibnd2)**2 - dvgevc_du(ibnd2, ibnd1)**2 &
-                  & - 2._DP * dvgdvg_ud(ibnd1, ibnd2) * om(ibnd1, ibnd2)
+              ds2 = ds2 - dvgevc_ud(ibnd1,ibnd2)**2 - dvgevc_du(ibnd2,ibnd1)**2 &
+                  & - 2._DP * dvgdvg_ud(ibnd1,ibnd2) * ovlp_ab(ibnd1,ibnd2)
               !
-              DO ibnd3 = 1, nbnd_up
-                 ds2 = ds2 + dvgdvg_uu(ibnd1, ibnd3) * om(ibnd1, ibnd2) * om(ibnd3, ibnd2)
+              DO ibnd3 = 1,nbnd_up
+                 ds2 = ds2 + dvgdvg_uu(ibnd1,ibnd3) * ovlp_ab(ibnd1,ibnd2) * ovlp_ab(ibnd3,ibnd2)
               ENDDO
               !
-              DO ibnd3 = 1, nbnd_dn
-                 ds2 = ds2 + dvgdvg_dd(ibnd2, ibnd3) * om(ibnd1, ibnd2) * om(ibnd1, ibnd3)
+              DO ibnd3 = 1,nbnd_dn
+                 ds2 = ds2 + dvgdvg_dd(ibnd2,ibnd3) * ovlp_ab(ibnd1,ibnd2) * ovlp_ab(ibnd1,ibnd3)
               ENDDO
               !
            ENDDO
@@ -339,127 +235,43 @@ SUBROUTINE do_exc_spin()
         ! compute matrix elements
         ! Part 1: up-up
         !
-        !$acc parallel vector_length(1024) present(dvg_exc,dvgdvg_uu)
-        !$acc loop collapse(2)
-        DO ibnd1 = 1, nbnd_dn
-           DO ibnd2 = 1, nbnd_dn
-              !
-              reduce = 0._DP
-              !$acc loop reduction(+:reduce)
-              DO ig = 1, npwx
-                 reduce = reduce + 2._DP * REAL(dvg_exc(ig,ibnd1,1,lexc),KIND=DP) * REAL(dvg_exc(ig,ibnd2,1,lexc),KIND=DP) &
-                 &               + 2._DP * AIMAG(dvg_exc(ig,ibnd1,1,lexc)) * AIMAG(dvg_exc(ig,ibnd2,1,lexc))
-              ENDDO
-              !
-              IF(gstart == 2) THEN
-                 reduce = reduce - REAL(dvg_exc(1,ibnd1,1,lexc),KIND=DP) * REAL(dvg_exc(1,ibnd2,1,lexc),KIND=DP)
-              ENDIF
-              !
-              dvgdvg_uu(ibnd1,ibnd2) = reduce
-              !
-           ENDDO
-        ENDDO
-        !$acc end parallel
+        CALL glbrak_gamma(dvg_exc(:,:,1,lexc),dvg_exc(:,:,1,lexc),dvgdvg_uu,npw,npwx,nbnd_dn,nbnd_dn,nbndx_occ,npol)
         !
-        !$acc update host(dvgdvg_uu)
-        !
-        CALL mp_sum(dvgdvg_uu, intra_bgrp_comm)
+        CALL mp_sum(dvgdvg_uu,intra_bgrp_comm)
         !
         ! Part 2: down-down
         !
-        !$acc parallel vector_length(1024) present(dvg_exc,dvgdvg_dd)
-        !$acc loop collapse(2)
-        DO ibnd1 = 1, nbnd_up
-           DO ibnd2 = 1, nbnd_up
-              !
-              reduce = 0._DP
-              !$acc loop reduction(+:reduce)
-              DO ig = 1, npwx
-                 reduce = reduce + 2._DP * REAL(dvg_exc(ig,ibnd1,2,lexc),KIND=DP) * REAL(dvg_exc(ig,ibnd2,2,lexc),KIND=DP) &
-                 &               + 2._DP * AIMAG(dvg_exc(ig,ibnd1,2,lexc)) * AIMAG(dvg_exc(ig,ibnd2,2,lexc))
-              ENDDO
-              !
-              IF(gstart == 2) THEN
-                 reduce = reduce - REAL(dvg_exc(1,ibnd1,2,lexc),KIND=DP) * REAL(dvg_exc(1,ibnd2,2,lexc),KIND=DP)
-              ENDIF
-              !
-              dvgdvg_dd(ibnd1,ibnd2) = reduce
-              !
-           ENDDO
-        ENDDO
-        !$acc end parallel
+        CALL glbrak_gamma(dvg_exc(:,:,2,lexc),dvg_exc(:,:,2,lexc),dvgdvg_dd,npw,npwx,nbnd_up,nbnd_up,nbndx_occ,npol)
         !
-        !$acc update host(dvgdvg_dd)
-        !
-        CALL mp_sum(dvgdvg_dd, intra_bgrp_comm)
+        CALL mp_sum(dvgdvg_dd,intra_bgrp_comm)
         !
         ! Part 3: up-down
         !
-        !$acc parallel vector_length(1024) present(dvg_exc,evc,dvgevc_ud)
-        !$acc loop collapse(2)
-        DO ibnd1 = 1, nbnd_dn
-           DO ibnd2 = 1, nbnd_dn
-              !
-              reduce = 0._DP
-              !$acc loop reduction(+:reduce)
-              DO ig = 1, npwx
-                 reduce = reduce + 2._DP * REAL(dvg_exc(ig,ibnd1,1,lexc),KIND=DP) * REAL(evc(ig,ibnd2),KIND=DP) &
-                 &               + 2._DP * AIMAG(dvg_exc(ig,ibnd1,1,lexc)) * AIMAG(evc(ig,ibnd2))
-              ENDDO
-              !
-              IF(gstart == 2) THEN
-                 reduce = reduce - REAL(dvg_exc(1,ibnd1,1,lexc),KIND=DP) * REAL(evc(1,ibnd2),KIND=DP)
-              ENDIF
-              !
-              dvgevc_ud(ibnd1,ibnd2) = reduce
-              !
-           ENDDO
-        ENDDO
-        !$acc end parallel
+        CALL glbrak_gamma(dvg_exc(:,:,1,lexc),evc,dvgevc_ud,npw,npwx,nbnd_dn,nbnd_dn,nbndx_occ,npol)
         !
         !$acc update host(dvgevc_ud)
         !
-        CALL mp_sum(dvgevc_ud, intra_bgrp_comm)
+        CALL mp_sum(dvgevc_ud,intra_bgrp_comm)
         !
         ! Part 4: down-up
         !
-        !$acc parallel vector_length(1024) present(dvg_exc,evc_copy,dvgevc_du)
-        !$acc loop collapse(2)
-        DO ibnd1 = 1, nbnd_up
-           DO ibnd2 = 1, nbnd_up
-              !
-              reduce = 0._DP
-              !$acc loop reduction(+:reduce)
-              DO ig = 1, npwx
-                 reduce = reduce + 2._DP * REAL(dvg_exc(ig,ibnd1,2,lexc),KIND=DP) * REAL(evc_copy(ig,ibnd2),KIND=DP) &
-                 &               + 2._DP * AIMAG(dvg_exc(ig,ibnd1,2,lexc)) * AIMAG(evc_copy(ig,ibnd2))
-              ENDDO
-              !
-              IF (gstart==2) THEN
-                 reduce = reduce - REAL(dvg_exc(1,ibnd1,2,lexc),KIND=DP) * REAL(evc_copy(1,ibnd2),KIND=DP)
-              ENDIF
-              !
-              dvgevc_du(ibnd1,ibnd2) = reduce
-              !
-           ENDDO
-        ENDDO
-        !$acc end parallel
+        CALL glbrak_gamma(dvg_exc(:,:,2,lexc),evc_copy,dvgevc_du,npw,npwx,nbnd_up,nbnd_up,nbndx_occ,npol)
         !
         !$acc update host(dvgevc_du)
         !
-        CALL mp_sum(dvgevc_du, intra_bgrp_comm)
+        CALL mp_sum(dvgevc_du,intra_bgrp_comm)
         !
         ! decide whether flip up of flip down by computing the norm of dvg_u and dvg_d
         !
         norm_u = 0._DP
         norm_d = 0._DP
         !
-        DO ibnd1 = 1, nbnd_dn
-           norm_u = norm_u + dvgdvg_uu(ibnd1, ibnd1)
+        DO ibnd1 = 1,nbnd_dn
+           norm_u = norm_u + dvgdvg_uu(ibnd1,ibnd1)
         ENDDO
         !
-        DO ibnd1 = 1, nbnd_up
-           norm_d = norm_d + dvgdvg_dd(ibnd1, ibnd1)
+        DO ibnd1 = 1,nbnd_up
+           norm_d = norm_d + dvgdvg_dd(ibnd1,ibnd1)
         ENDDO
         !
         IF(ABS(norm_u - 1._DP) < 0.01_DP) flip_up = .TRUE.
@@ -472,10 +284,10 @@ SUBROUTINE do_exc_spin()
            DO ibnd1 = 1,nbnd_dn
               DO ibnd2 = 1,nbnd_dn
                  !
-                 ds2 = ds2 - dvgevc_ud(ibnd1, ibnd2)**2 + dvgevc_ud(ibnd1, ibnd1) * dvgevc_ud(ibnd2, ibnd2)
+                 ds2 = ds2 - dvgevc_ud(ibnd1,ibnd2)**2 + dvgevc_ud(ibnd1,ibnd1) * dvgevc_ud(ibnd2,ibnd2)
                  !
-                 DO ibnd3 = 1, nbnd_up
-                    ds2 = ds2 + dvgdvg_uu(ibnd1, ibnd2) * om(ibnd3, ibnd1) * om(ibnd3, ibnd2)
+                 DO ibnd3 = 1,nbnd_up
+                    ds2 = ds2 + dvgdvg_uu(ibnd1,ibnd2) * ovlp_ab(ibnd3,ibnd1) * ovlp_ab(ibnd3,ibnd2)
                  ENDDO
                  !
               ENDDO
@@ -483,13 +295,13 @@ SUBROUTINE do_exc_spin()
            !
         ELSE
            !
-           DO ibnd1 = 1, nbnd_up
-              DO ibnd2 = 1, nbnd_up
+           DO ibnd1 = 1,nbnd_up
+              DO ibnd2 = 1,nbnd_up
                  !
-                 ds2 = ds2 - dvgevc_du(ibnd1, ibnd2)**2 + dvgevc_du(ibnd1, ibnd1) * dvgevc_du(ibnd2, ibnd2)
+                 ds2 = ds2 - dvgevc_du(ibnd1,ibnd2)**2 + dvgevc_du(ibnd1,ibnd1) * dvgevc_du(ibnd2,ibnd2)
                  !
-                 DO ibnd3 = 1, nbnd_dn
-                    ds2 = ds2 + dvgdvg_dd(ibnd1, ibnd2) * om(ibnd1, ibnd3) * om(ibnd2, ibnd3)
+                 DO ibnd3 = 1,nbnd_dn
+                    ds2 = ds2 + dvgdvg_dd(ibnd1,ibnd2) * ovlp_ab(ibnd1,ibnd3) * ovlp_ab(ibnd2,ibnd3)
                  ENDDO
                  !
               ENDDO
@@ -519,7 +331,7 @@ SUBROUTINE do_exc_spin()
         !
      ENDIF
      !
-     collect_ds2(iexc) = ds2
+     ds2_all(iexc) = ds2
      !
      CALL update_bar_type(barra,'westpp',1)
      !
@@ -527,7 +339,7 @@ SUBROUTINE do_exc_spin()
   !
   CALL stop_bar_type(barra,'westpp')
   !
-  CALL mp_sum(collect_ds2,inter_image_comm)
+  CALL mp_sum(ds2_all,inter_image_comm)
   !
   !$acc exit data delete(dvgdvg_uu,dvgdvg_ud,dvgdvg_dd,dvgevc_ud,dvgevc_du,dvg_exc)
   DEALLOCATE(dvgdvg_uu)
@@ -538,17 +350,17 @@ SUBROUTINE do_exc_spin()
   !
   DO iexc = westpp_range(1),westpp_range(2)
      !
-     WRITE(stdout, "(/, 5x, ' # Exciton : | ', i12,' |','   ','spin flip : | ', L3)") iexc, westpp_l_spin_flip
+     WRITE(stdout,"(/,5x,' # Exciton : | ',i12,' |','   ','spin flip : | ',L3)") iexc,westpp_l_spin_flip
      !
      IF(westpp_l_spin_flip) THEN
         IF(flip_up) THEN
-           WRITE(stdout, "(5x, ' Transition from spin-down to spin-up')")
+           WRITE(stdout,"(5x,' Transition from spin-down to spin-up')")
         ELSE
-           WRITE(stdout, "(5x, ' Transition from spin-up to spin-down')")
+           WRITE(stdout,"(5x,' Transition from spin-up to spin-down')")
         ENDIF
      ENDIF
      !
-     WRITE(stdout, "(5x, ' Ex Energy : | ', f12.6,' |',' ','Delta <S^2> : | ', f12.6)") ev(iexc), collect_ds2(iexc)
+     WRITE(stdout,"(5x,' Ex Energy : | ',f12.6,' |',' ','Delta <S^2> : | ',f12.6)") ev(iexc),ds2_all(iexc)
      !
   ENDDO
   !
@@ -559,14 +371,14 @@ SUBROUTINE do_exc_spin()
   IF(mpime == root) THEN
      DO iexc = westpp_range(1),westpp_range(2)
         WRITE(label_exc,'(I6.6)') iexc
-        CALL json%add('output.E'//label_exc//'.delta_spin_square',collect_ds2(iexc))
+        CALL json%add('output.E'//label_exc//'.delta_spin_square',ds2_all(iexc))
      ENDDO
   ENDIF
   !
-  DEALLOCATE(collect_ds2)
+  DEALLOCATE(ds2_all)
   !
-  !$acc exit data delete(om,evc_copy)
-  DEALLOCATE(om)
+  !$acc exit data delete(ovlp_ab,evc_copy)
+  DEALLOCATE(ovlp_ab)
   DEALLOCATE(evc_copy)
   !
 #if defined(__CUDA)

@@ -29,14 +29,14 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
   USE fft_at_gamma,         ONLY : single_fwfft_gamma,single_invfft_gamma,double_fwfft_gamma,&
                                  & double_invfft_gamma
   USE westcom,              ONLY : l_bse,l_bse_triplet,l_hybrid_tddft,l_spin_flip_kernel,&
-                                 & l_qp_correction,sigma_c_head,sigma_x_head,nbnd_occ,scissor_ope,&
-                                 & n_trunc_bands,et_qp,lrwfc,iuwfc,evc1_all,forces_inexact_krylov,&
-                                 & do_inexact_krylov
+                                 & l_qp_correction,sigma_head,sigma_c_head,sigma_x_head,nbnd_occ,&
+                                 & scissor_ope,n_trunc_bands,et_qp,lrwfc,iuwfc,evc1_all,&
+                                 & forces_inexact_krylov,do_forces,do_inexact_krylov
   USE distribution_center,  ONLY : kpt_pool,band_group
   USE uspp_init,            ONLY : init_us_2
   USE exx,                  ONLY : exxalfa
   USE wbse_dv,              ONLY : wbse_dv_of_drho,wbse_dv_of_drho_sf
-  USE xc_lib,               ONLY : stop_exx,start_exx
+  USE xc_lib,               ONLY : stop_exx,start_exx,xclib_dft_is
   USE wbse_bgrp,            ONLY : gather_bands
   USE west_mp,              ONLY : west_mp_wait
   USE wavefunctions,        ONLY : evc,psic
@@ -93,33 +93,49 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
   !
   lrpa = l_bse
   !
-  If(sf .AND. l_spin_flip_kernel) THEN
-     CALL wbse_dv_of_drho_sf(dvrs)
+  IF(do_forces) THEN
+     CALL wbse_dv_of_drho(dvrs,.FALSE.,.FALSE.)
   ELSE
-     CALL wbse_dv_of_drho(dvrs,lrpa,.FALSE.)
+     If(sf .AND. l_spin_flip_kernel) THEN
+        CALL wbse_dv_of_drho_sf(dvrs)
+     ELSE
+        CALL wbse_dv_of_drho(dvrs,lrpa,.FALSE.)
+     ENDIF
   ENDIF
   !
-  IF(l_bse .OR. l_hybrid_tddft) THEN
-     do_k1d = .TRUE.
-     IF(l_hybrid_tddft .AND. do_inexact_krylov) THEN
-        IF(forces_inexact_krylov == 2 &
-        & .OR. forces_inexact_krylov == 4 &
-        & .OR. forces_inexact_krylov == 5) THEN
-           do_k1d = .FALSE.
+  IF(do_forces) THEN
+     IF(xclib_dft_is('hybrid')) THEN
+        do_k1d = .TRUE.
+        IF(do_inexact_krylov) THEN
+           IF(forces_inexact_krylov == 2 &
+           & .OR. forces_inexact_krylov == 4 &
+           & .OR. forces_inexact_krylov == 5) THEN
+              do_k1d = .FALSE.
+           ENDIF
         ENDIF
+     ELSE
+        do_k1d = .FALSE.
      ENDIF
   ELSE
-     do_k1d = .FALSE.
+     IF(l_bse .OR. l_hybrid_tddft) THEN
+        do_k1d = .TRUE.
+     ELSE
+        do_k1d = .FALSE.
+     ENDIF
   ENDIF
   !
-  IF(l_bse_triplet) THEN
-     do_k1e = .FALSE.
-  ELSEIF(sf .AND. (.NOT. l_spin_flip_kernel)) THEN
-     do_k1e = .FALSE.
-  ELSEIF(sf .AND. l_spin_flip_kernel) THEN
+  IF(do_forces) THEN
      do_k1e = .TRUE.
   ELSE
-     do_k1e = .TRUE.
+     IF(l_bse_triplet) THEN
+        do_k1e = .FALSE.
+     ELSEIF(sf .AND. (.NOT. l_spin_flip_kernel)) THEN
+        do_k1e = .FALSE.
+     ELSEIF(sf .AND. l_spin_flip_kernel) THEN
+        do_k1e = .TRUE.
+     ELSE
+        do_k1e = .TRUE.
+     ENDIF
   ENDIF
   !
   DO iks = 1,kpt_pool%nloc
@@ -179,13 +195,14 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
            !
            CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),evc(:,jbnd),psic,'Wave')
            !
-           !$acc parallel loop present(dvrs)
+           !$acc parallel loop present(psic,dvrs)
            DO ir = 1,dffts_nnr
               psic(ir) = psic(ir)*CMPLX(REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
            ENDDO
            !$acc end parallel
            !
-           CALL double_fwfft_gamma(dffts,npw,npwx,psic,evc1_new(:,lbnd,iks),evc1_new(:,lbnd+1,iks),'Wave')
+           CALL double_fwfft_gamma(dffts,npw,npwx,psic,evc1_new(:,lbnd,iks),evc1_new(:,lbnd+1,iks),&
+           & 'Wave')
            !
         ENDDO
         !
@@ -198,7 +215,7 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
            !
            CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),psic,'Wave')
            !
-           !$acc parallel loop present(dvrs)
+           !$acc parallel loop present(psic,dvrs)
            DO ir = 1,dffts_nnr
               psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
            ENDDO
@@ -210,7 +227,7 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
         !
      ENDIF
      !
-     IF(do_inexact_krylov .AND. l_hybrid_tddft) THEN
+     IF(do_forces .AND. do_inexact_krylov .AND. xclib_dft_is('hybrid')) THEN
         IF(forces_inexact_krylov == 1 .OR. forces_inexact_krylov == 5) CALL stop_exx()
      ENDIF
      !
@@ -223,28 +240,38 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
      CALL h_psi_(npwx,npw,nbnd_do,evc1(:,:,iks),hevc1)
 #endif
      !
-     IF(do_inexact_krylov .AND. l_hybrid_tddft) THEN
+     IF(do_forces .AND. do_inexact_krylov .AND. xclib_dft_is('hybrid')) THEN
         IF(forces_inexact_krylov == 1 .OR. forces_inexact_krylov == 5) CALL start_exx()
      ENDIF
      !
-     IF(l_qp_correction) THEN
+     IF(.NOT. do_forces) THEN
+        IF(l_qp_correction) THEN
 #if defined(__CUDA)
-        CALL reallocate_ps_gpu(nbnd,nbnd_do)
+           CALL reallocate_ps_gpu(nbnd,nbnd_do)
 #endif
-        CALL apply_hqp_to_m_wfcs(iks,nbnd_do,evc1(:,:,iks),hevc1)
+           CALL apply_hqp_to_m_wfcs(iks,nbnd_do,evc1(:,:,iks),hevc1)
+        ENDIF
      ENDIF
      !
      ! Subtract the eigenvalues
      !
-     IF(l_bse) THEN
-        factor = -scissor_ope+sigma_x_head+sigma_c_head
-     ELSEIF(l_hybrid_tddft) THEN
-        factor = -scissor_ope+sigma_x_head*exxalfa
+     IF(do_forces) THEN
+        IF(xclib_dft_is('hybrid')) THEN
+           factor = sigma_head*exxalfa
+        ELSE
+           factor = 0._DP
+        ENDIF
      ELSE
-        factor = -scissor_ope
+        IF(l_bse) THEN
+           factor = -scissor_ope+sigma_x_head+sigma_c_head
+        ELSEIF(l_hybrid_tddft) THEN
+           factor = -scissor_ope+sigma_head*exxalfa
+        ELSE
+           factor = -scissor_ope
+        ENDIF
      ENDIF
      !
-     IF(l_qp_correction) THEN
+     IF(l_qp_correction .AND. .NOT. do_forces) THEN
         !
         !$acc parallel loop present(factors,et_qp)
         DO lbnd = 1,nbnd_do
@@ -260,7 +287,7 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
         !
      ELSE
         !
-        !$acc parallel loop present(factors)
+        !$acc parallel loop present(factors,et)
         DO lbnd = 1,nbnd_do
            !
            ! ibnd = band_group%l2g(lbnd)+n_trunc_bands
@@ -277,7 +304,8 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
      !$acc parallel loop collapse(2) present(evc1_new,hevc1,factors,evc1)
      DO lbnd = 1,nbnd_do
         DO ig = 1,npw
-           evc1_new(ig,lbnd,iks) = evc1_new(ig,lbnd,iks)+hevc1(ig,lbnd)-factors(lbnd)*evc1(ig,lbnd,iks)
+           evc1_new(ig,lbnd,iks) = evc1_new(ig,lbnd,iks)+hevc1(ig,lbnd) &
+           & -factors(lbnd)*evc1(ig,lbnd,iks)
         ENDDO
      ENDDO
      !$acc end parallel
@@ -287,7 +315,15 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
 #if !defined(__GPU_MPI)
         !$acc update device(evc1_all(:,:,iks))
 #endif
-        CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),evc1_new(:,:,iks),sf)
+        IF(do_forces) THEN
+           IF(l_hybrid_tddft) THEN
+              CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),evc1_new(:,:,iks),sf)
+           ELSEIF(l_bse .AND. xclib_dft_is('hybrid')) THEN
+              CALL hybrid_kernel_term1234(current_spin,evc1_new(:,:,iks),sf,1)
+           ENDIF
+        ELSE
+           CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),evc1_new(:,:,iks),sf)
+        ENDIF
      ENDIF
      !
      IF(gstart == 2) THEN
@@ -348,10 +384,12 @@ SUBROUTINE west_apply_liouvillian_btda(evc1,evc1_new,sf)
   USE fft_at_gamma,         ONLY : single_fwfft_gamma,single_invfft_gamma,double_fwfft_gamma,&
                                  & double_invfft_gamma
   USE westcom,              ONLY : l_bse,l_bse_triplet,l_hybrid_tddft,l_spin_flip_kernel,nbnd_occ,&
-                                 & n_trunc_bands,lrwfc,iuwfc,forces_inexact_krylov,do_inexact_krylov
+                                 & n_trunc_bands,lrwfc,iuwfc,forces_inexact_krylov,do_forces,&
+                                 & do_inexact_krylov
   USE distribution_center,  ONLY : kpt_pool,band_group
   USE wbse_dv,              ONLY : wbse_dv_of_drho,wbse_dv_of_drho_sf
   USE wavefunctions,        ONLY : evc,psic
+  USE xc_lib,               ONLY : xclib_dft_is
 #if defined(__CUDA)
   USE west_gpu,             ONLY : dvrs,evc2_new=>hevc1,reallocate_ps_gpu
 #endif
@@ -396,33 +434,49 @@ SUBROUTINE west_apply_liouvillian_btda(evc1,evc1_new,sf)
   !
   lrpa = l_bse
   !
-  If(sf .AND. l_spin_flip_kernel) THEN
-     CALL wbse_dv_of_drho_sf(dvrs)
+  IF(do_forces) THEN
+     CALL wbse_dv_of_drho(dvrs,.FALSE.,.FALSE.)
   ELSE
-     CALL wbse_dv_of_drho(dvrs,lrpa,.FALSE.)
+     IF(sf .AND. l_spin_flip_kernel) THEN
+        CALL wbse_dv_of_drho_sf(dvrs)
+     ELSE
+        CALL wbse_dv_of_drho(dvrs,lrpa,.FALSE.)
+     ENDIF
   ENDIF
   !
-  IF(l_hybrid_tddft) THEN
-     do_k2d = .TRUE.
-     IF(do_inexact_krylov) THEN
-        IF(forces_inexact_krylov == 3 &
-        & .OR. forces_inexact_krylov == 4 &
-        & .OR. forces_inexact_krylov == 5) THEN
-           do_k2d = .FALSE.
+  IF(do_forces) THEN
+     IF(xclib_dft_is('hybrid')) THEN
+        do_k2d = .TRUE.
+        IF(do_inexact_krylov) THEN
+           IF(forces_inexact_krylov == 3 &
+           & .OR. forces_inexact_krylov == 4 &
+           & .OR. forces_inexact_krylov == 5) THEN
+              do_k2d = .FALSE.
+           ENDIF
         ENDIF
+     ELSE
+        do_k2d = .FALSE.
      ENDIF
   ELSE
-     do_k2d = .FALSE.
+     IF(l_hybrid_tddft) THEN
+        do_k2d = .TRUE.
+     ELSE
+        do_k2d = .FALSE.
+     ENDIF
   ENDIF
   !
-  IF(l_bse_triplet) THEN
-     do_k2e = .FALSE.
-  ELSEIF(sf .AND. (.NOT. l_spin_flip_kernel)) THEN
-     do_k2e = .FALSE.
-  ELSEIF(sf .AND. l_spin_flip_kernel) THEN
+  IF(do_forces) THEN
      do_k2e = .TRUE.
   ELSE
-     do_k2e = .TRUE.
+     IF(l_bse_triplet) THEN
+        do_k2e = .FALSE.
+     ELSEIF(sf .AND. (.NOT. l_spin_flip_kernel)) THEN
+        do_k2e = .FALSE.
+     ELSEIF(sf .AND. l_spin_flip_kernel) THEN
+        do_k2e = .TRUE.
+     ELSE
+        do_k2e = .TRUE.
+     ENDIF
   ENDIF
   !
   DO iks = 1,kpt_pool%nloc
@@ -463,14 +517,14 @@ SUBROUTINE west_apply_liouvillian_btda(evc1,evc1_new,sf)
         !
         ! double bands @ gamma
         !
-        DO lbnd = 1, nbnd_do-MOD(nbnd_do,2),2
+        DO lbnd = 1,nbnd_do-MOD(nbnd_do,2),2
            !
            ibnd = band_group%l2g(lbnd)+n_trunc_bands
            jbnd = band_group%l2g(lbnd+1)+n_trunc_bands
            !
            CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),evc(:,jbnd),psic,'Wave')
            !
-           !$acc parallel loop present(dvrs)
+           !$acc parallel loop present(psic,dvrs)
            DO ir = 1,dffts_nnr
               psic(ir) = psic(ir)*CMPLX(REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
            ENDDO
@@ -489,7 +543,7 @@ SUBROUTINE west_apply_liouvillian_btda(evc1,evc1_new,sf)
            !
            CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),psic,'Wave')
            !
-           !$acc parallel loop present(dvrs)
+           !$acc parallel loop present(psic,dvrs)
            DO ir = 1,dffts_nnr
               psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
            ENDDO
@@ -503,11 +557,12 @@ SUBROUTINE west_apply_liouvillian_btda(evc1,evc1_new,sf)
      !
      ! The other part beyond TDA. exx_div treatment is not needed for this part.
      !
-     IF(l_bse) CALL errore('west_apply_liouvillian_btda', 'BSE forces not implemented', 1)
+     IF(l_bse .AND. .NOT. do_forces) &
+     & CALL errore('west_apply_liouvillian_btda','Only applies to forces',1)
      !
      ! K2d part. exx_div treatment is not needed for this part.
      !
-     IF(do_k2d) CALL hybrid_kernel_term2(current_spin,evc1,evc2_new,sf)
+     IF(do_k2d) CALL hybrid_kernel_term1234(current_spin,evc2_new,sf,2)
      !
      IF(gstart == 2) THEN
         !$acc parallel loop present(evc2_new)

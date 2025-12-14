@@ -29,7 +29,7 @@ MODULE pdep_io
     ! ******************************************
     ! WRITE IN G SPACE
     !       wfc is passed distributed in G space
-    !       then merged and written in R space
+    !       then merged and written in G space
     ! ******************************************
     !
     SUBROUTINE pdep_merge_and_write_G(fname,pdepg,iq)

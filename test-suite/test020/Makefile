@@ -12,13 +12,13 @@ prepare_inputs:
 run: pw wbse
 
 pw:
-	${PARA_PREFIX_QE} ${BINDIR}/pw.x -i pw.in > pw.out 2> pw.err
+	$(PARA_PREFIX_QE) $(BINDIR)/pw.x -i pw.in > pw.out 2> pw.err
 
 wbse: pw
-	${PARA_PREFIX} ${BINDIR}/wbse.x -nimage ${NIMAGE} -npool ${NPOOL} -nband ${NBAND} -i wbse.in > wbse.out 2> wbse.err
+	$(PARA_PREFIX) $(BINDIR)/wbse.x -nimage $(NIMAGE) -nband $(NBAND) -i wbse.in > wbse.out 2> wbse.err
 
 clean:
-	- /bin/rm -rf *out *err *in *xml *upf *tab *restart *save *wfc* CRASH > /dev/null 2>&1
+	- /bin/rm -rf *out *err *in *xml *upf *tab *restart *save *wfc* *mix* CRASH > /dev/null 2>&1
 
 title:
 	@echo
@@ -29,5 +29,9 @@ title:
 
 description:
 	@echo
+<<<<<<< HEAD
 	@echo "NV- diamond gamma_only spin-polarized TDDFT (PBE) forces, geNACs and eeNACs"
+=======
+	@echo "O2 molecule gamma_only spin-flip TDDFT (LDA) forces"
+>>>>>>> develop
 	@echo

@@ -1,6 +1,26 @@
 Change Log
 ==========
 
+v6.2.1 (2025/07/31)
+-------------------
+
+- Added the spectral function to the output of `wfreq_calculation: P`. The spectral function can be used to select the most physical root of the QP equation when there are multiple roots.
+- Bug fix. Fixed `wbse` when using TDDFT with the HSE hybrid functional.
+- Updated build. Updated deprecated usage of `setup.py`.
+- Updated CI/CD. Added a test of TDDFT with the HSE functional.
+- Updated documentation. Updated build instructions for ALCF/Polaris and NERSC/Perlmutter. Added more tutorials.
+
+v6.2.0 (2025/03/15)
+-------------------
+
+- Code updated for compatibility with Quantum ESPRESSO 7.4.1. QE must be compiled without CMake.
+- Added an option to choose the double counting scheme in QDET calculations (Chen et al., J. Chem. Theory Comput. 21, 7797 (2025)).
+- Improved the performance of QDET for large active spaces.
+- Bug fix. Fixed `wfreq` when computing the off-diagonal terms of the self-energy.
+- Bug fix. Fixed `westpp` output of wave functions and PDEP functions with k-points.
+- Updated library dependency to Json-Fortran 9.0.3.
+- Updated documentation. Updated build instructions for CINECA/Leonardo, NERSC/Perlmutter, and UChicago/RCC/Midway3. Updated tutorials.
+
 v6.1.0 (2024/10/31)
 -------------------
 

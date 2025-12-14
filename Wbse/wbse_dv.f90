@@ -42,7 +42,11 @@ MODULE wbse_dv
     !
     ! 0) allocate dmuxc
     !
-    ALLOCATE(dmuxc(dfftp%nnr,nspin,nspin))
+    IF(.NOT. ALLOCATED(dmuxc)) THEN
+       ALLOCATE(dmuxc(dfftp%nnr,nspin,nspin))
+    ELSE
+       !$acc exit data delete(dmuxc)
+    ENDIF
     !
     IF(l_skip) THEN
        !
@@ -60,17 +64,13 @@ MODULE wbse_dv
        !
        ! 3) Setup gradient correction
        !
-       IF(xclib_dft_is('gradient')) THEN
-          !
-          CALL setup_dgc()
-          !
-       ENDIF
+       IF(xclib_dft_is('gradient')) CALL setup_dgc()
        !
-       !$acc enter data copyin(dmuxc,grho,dvxc_rr,dvxc_sr,dvxc_ss,dvxc_s)
+       !$acc enter data copyin(grho,dvxc_rr,dvxc_sr,dvxc_ss,dvxc_s)
        !
     ENDIF
     !
-    !$acc enter data copyin(xq,rho,rho%of_r,rho%of_g)
+    !$acc enter data copyin(dmuxc,xq,rho,rho%of_r,rho%of_g)
     !
     CALL stop_clock('dv_setup')
     !
@@ -195,13 +195,9 @@ MODULE wbse_dv
        ! NB: If nlcc=.true. we need to add here its contribution.
        ! grho contains already the core charge
        !
-       IF(xclib_dft_is('gradient')) THEN
-          CALL wbse_dgradcorr(rho%of_r, dvscf, xq, dvaux)
-       ENDIF
+       IF(xclib_dft_is('gradient')) CALL wbse_dgradcorr(rho%of_r, dvscf, xq, dvaux)
        !
-       IF(dft_is_nonlocc()) THEN
-          CALL dnonloccorr(rho%of_r, dvscf, xq, dvaux)
-       ENDIF
+       IF(dft_is_nonlocc()) CALL dnonloccorr(rho%of_r, dvscf, xq, dvaux)
        !
        IF(nlcc_any .AND. add_nlcc) THEN
           DO is = 1, nspin
@@ -238,9 +234,7 @@ MODULE wbse_dv
        !
        qg2 = (g(1,ig)+xq(1))**2 + (g(2,ig)+xq(2))**2 + (g(3,ig)+xq(3))**2
        !
-       IF(qg2 > eps8) THEN
-          dvhart(dfftp%nl(ig)) = e2 * fpi * dvscf(dfftp%nl(ig),1) / (tpiba2 * qg2)
-       ENDIF
+       IF(qg2 > eps8) dvhart(dfftp%nl(ig)) = e2 * fpi * dvscf(dfftp%nl(ig),1) / (tpiba2 * qg2)
        !
     ENDDO
     !$acc end parallel

@@ -64,28 +64,28 @@ WESTLIBS = \
 
 TLDEPS = bindir mods pwlibs pw
 
-all : title tldeps wbse.x wbse_init.x libwbse.a
+all: title tldeps wbse.x wbse_init.x libwbse.a
 
-wbse.x : wbse.o $(WBSE_OBJS) $(WESTLIBS) $(PWOBJS) $(QEMODS)
+wbse.x: wbse.o $(WBSE_OBJS) $(WESTLIBS) $(PWOBJS) $(QEMODS)
 	$(LD) $(LDFLAGS) -o $@ $^ $(QELIBS) $(PYT_LDFLAGS)
 	- ( cd ../../bin ; ln -fs ../West/Wbse/wbse.x . )
 
-wbse_init.x : wbse_init.o $(WBSE_OBJS) $(WESTLIBS) $(PWOBJS) $(QEMODS)
+wbse_init.x: wbse_init.o $(WBSE_OBJS) $(WESTLIBS) $(PWOBJS) $(QEMODS)
 	$(LD) $(LDFLAGS) -o $@ $^ $(QELIBS) $(PYT_LDFLAGS)
 	- ( cd ../../bin ; ln -fs ../West/Wbse/wbse_init.x . )
 
-tldeps :
+tldeps:
 	test -n "$(TLDEPS)" && ( cd ../.. ; $(MAKE) $(MFLAGS) $(TLDEPS) || exit 1) || :
 
-libwbse.a : $(WBSE_OBJS)
+libwbse.a: $(WBSE_OBJS)
 	$(AR) $(ARFLAGS) $@ $?
 	$(RANLIB) $@
 
-clean :
+clean:
 	- /bin/rm -f *.x *.o *.a *~ *_tmp.f90 *.d *.mod *.i *.L
 	- /bin/rm -f ../../bin/wbse.x ../../bin/wbse_init.x
 
-title :
+title:
 	@echo
 	@echo "#############"
 	@echo "### Wbse ####"

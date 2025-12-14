@@ -32,8 +32,9 @@ Advanced tutorials:
    tutorials/advanced/advanced_001.ipynb
    tutorials/advanced/advanced_002.ipynb
    tutorials/advanced/advanced_003.ipynb
+   tutorials/advanced/advanced_004.ipynb
 
-The following tutorials were used in `MICCoM Workshop & Hands-on Tutorials 2022 <http://miccom-center.org/workshop-and-hands-on-tutorials2022/index.html>`_:
+The following tutorials were used in `MICCoM Workshop & Hands-on Tutorials 2022 <https://miccom-center.org/workshop-and-hands-on-tutorials2022/index.html>`_:
 
 .. toctree::
    :maxdepth: 1
@@ -43,7 +44,7 @@ The following tutorials were used in `MICCoM Workshop & Hands-on Tutorials 2022 
    tutorials/MICCoM_School_2022/miccom_002.ipynb
    tutorials/MICCoM_School_2022/miccom_003.ipynb
 
-The following tutorials were used in `MICCoM Computational School 2017 <http://miccom-center.org/summer-school-2017/index.html>`_:
+The following tutorials were used in `MICCoM Computational School 2017 <https://miccom-center.org/summer-school-2017/index.html>`_:
 
 .. toctree::
    :maxdepth: 1

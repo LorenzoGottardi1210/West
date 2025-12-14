@@ -18,7 +18,7 @@ SUBROUTINE calc_tau()
   USE pwcom,                ONLY : isk,npw,ngk
   USE wavefunctions,        ONLY : evc
   USE westcom,              ONLY : lrwfc,iuwfc,ev,dvg,n_pdep_eigen_to_use,npwqx,nbnd_occ,l_pdep,&
-                                 & spin_channel,l_bse
+                                 & spin_channel,l_bse,l_hybrid_tddft
   USE lsda_mod,             ONLY : nspin
   USE pdep_db,              ONLY : pdep_db_read
   USE mp,                   ONLY : mp_bcast
@@ -27,6 +27,8 @@ SUBROUTINE calc_tau()
   USE class_idistribute,    ONLY : idistribute
   USE distribution_center,  ONLY : pert,kpt_pool
   USE qbox_interface,       ONLY : init_qbox,finalize_qbox
+  USE types_coulomb,        ONLY : pot3D_x,pot3D_c
+  USE exx_base,             ONLY : erfc_scrlen
 #if defined(__CUDA)
   USE west_gpu,             ONLY : allocate_gpu,deallocate_gpu
 #endif
@@ -61,6 +63,37 @@ SUBROUTINE calc_tau()
   !
   spin_resolve = spin_channel > 0 .AND. nspin > 1
   !
+  IF(l_hybrid_tddft) THEN
+     !
+     IF(erfc_scrlen > 0._DP) THEN
+        !
+        ! HSE functional, mya = 1._DP, myb = -1._DP, mymu = erfc_scrlen
+        !
+        CALL pot3D_x%init('Rho',.FALSE.,'gb',mya=1._DP,myb=-1._DP,mymu=erfc_scrlen)
+        !
+     ELSE
+        !
+        ! PBE0 functional, mya = 1._DP, myb = 0._DP, mymu = 1._DP to avoid divergence
+        !
+        CALL pot3D_x%init('Rho',.FALSE.,'gb',mya=1._DP,myb=0._DP,mymu=1._DP)
+        !
+     ENDIF
+     !
+     !$acc enter data copyin(pot3D_x)
+     !$acc enter data copyin(pot3D_x%sqvc)
+     !
+  ELSE
+     !
+     CALL pot3D_x%init('Rho',.FALSE.,'gb')
+     CALL pot3D_c%init('Wave',.FALSE.,'default')
+     !
+     !$acc enter data copyin(pot3D_x)
+     !$acc enter data copyin(pot3D_x%sqvc)
+     !$acc enter data copyin(pot3D_c)
+     !$acc enter data copyin(pot3D_c%sqvc)
+     !
+  ENDIF
+  !
   DO iks = 1,kpt_pool%nloc
      !
      current_spin = isk(iks)
@@ -88,6 +121,13 @@ SUBROUTINE calc_tau()
      ENDIF
   ENDIF
   !
+  !$acc exit data delete(pot3D_x%sqvc)
+  !$acc exit data delete(pot3D_x)
+  IF(.NOT. l_hybrid_tddft) THEN
+     !$acc exit data delete(pot3D_c%sqvc)
+     !$acc exit data delete(pot3D_c)
+  ENDIF
+  !
 #if defined(__CUDA)
   CALL deallocate_gpu()
 #endif
@@ -104,7 +144,6 @@ SUBROUTINE calc_tau_single_q(current_spin,nbndval)
   USE kinds,                ONLY : DP
   USE cell_base,            ONLY : omega
   USE io_push,              ONLY : io_push_title
-  USE types_coulomb,        ONLY : pot3D
   USE westcom,              ONLY : ev,dvg,wbse_init_calculation,wbse_init_save_dir,l_bse,l_pdep,&
                                  & chi_kernel,l_local_repr,overlap_thr,n_trunc_bands
   USE fft_base,             ONLY : dffts
@@ -121,6 +160,7 @@ SUBROUTINE calc_tau_single_q(current_spin,nbndval)
                                  & intra_bgrp_comm,me_bgrp
   USE conversions,          ONLY : itoa
   USE qbox_interface,       ONLY : sleep_and_wait_for_lock_to_be_removed
+  USE types_coulomb,        ONLY : pot3D_x,pot3D_c
   USE bar,                  ONLY : bar_type,start_bar_type,update_bar_type,stop_bar_type
   USE wbse_dv,              ONLY : wbse_dv_setup,wbse_dv_of_drho
   USE distribution_center,  ONLY : pert
@@ -271,7 +311,7 @@ SUBROUTINE calc_tau_single_q(current_spin,nbndval)
            CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd_g),evc(:,jbnd_g),psic,'Wave')
         ENDIF
         !
-        !$acc parallel loop present(aux_r)
+        !$acc parallel loop present(aux_r,psic)
         DO ir = 1,dffts_nnr
            aux_r(ir) = CMPLX(REAL(psic(ir),KIND=DP)*AIMAG(psic(ir))/omega,KIND=DP)
         ENDDO
@@ -287,9 +327,9 @@ SUBROUTINE calc_tau_single_q(current_spin,nbndval)
         tau(:) = (0._DP,0._DP)
         !$acc end kernels
         !
-        !$acc parallel loop present(tau,aux1_g,pot3D,pot3D%sqvc)
+        !$acc parallel loop present(tau,aux1_g,pot3D_x,pot3D_x%sqvc)
         DO ig = 1,npw
-           tau(ig) = aux1_g(ig)*(pot3D%sqvc(ig)**2)
+           tau(ig) = aux1_g(ig)*(pot3D_x%sqvc(ig)**2)
         ENDDO
         !$acc end parallel
         !
@@ -297,9 +337,9 @@ SUBROUTINE calc_tau_single_q(current_spin,nbndval)
            !
            IF(l_pdep) THEN
               !
-              !$acc parallel loop present(aux1_g,pot3D,pot3D%sqvc)
+              !$acc parallel loop present(aux1_g,pot3D_c,pot3D_c%sqvc)
               DO ig = 1,npw
-                 aux1_g(ig) = aux1_g(ig)*pot3D%sqvc(ig)
+                 aux1_g(ig) = aux1_g(ig)*pot3D_c%sqvc(ig)
               ENDDO
               !$acc end parallel
               !
@@ -327,14 +367,14 @@ SUBROUTINE calc_tau_single_q(current_spin,nbndval)
               ENDDO
               !
               IF(nbgrp > 1) THEN
-                 !$acc update host(aux1_g)
+                 !$acc host_data use_device(aux1_g)
                  CALL mp_sum(aux1_g,inter_bgrp_comm)
-                 !$acc update device(aux1_g)
+                 !$acc end host_data
               ENDIF
               !
-              !$acc parallel loop present(tau,aux1_g,pot3D,pot3D%sqvc)
+              !$acc parallel loop present(tau,aux1_g,pot3D_c,pot3D_c%sqvc)
               DO ig = 1,npw
-                 tau(ig) = tau(ig)+aux1_g(ig)*pot3D%sqvc(ig)
+                 tau(ig) = tau(ig)+aux1_g(ig)*pot3D_c%sqvc(ig)
               ENDDO
               !$acc end parallel
               !

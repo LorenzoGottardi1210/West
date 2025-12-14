@@ -8,17 +8,17 @@ MODFLAGS = $(MOD_FLAG).
 FORPY_OBJS = \
 forpy_mod.o
 
-all : title libforpy.a
+all: title libforpy.a
 
-libforpy.a : $(FORPY_OBJS)
+libforpy.a: $(FORPY_OBJS)
 	$(AR) $(ARFLAGS) $@ $?
 	$(RANLIB) $@
 
-clean :
+clean:
 	- /bin/rm -f *.x *.o *.a *~ *_tmp.f90 *.d *.mod *.i *.L
 	- /bin/rm -f libforpy.a
 
-title :
+title:
 	@echo
 	@echo "##############"
 	@echo "### Forpy ####"

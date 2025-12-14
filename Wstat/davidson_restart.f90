@@ -193,12 +193,12 @@ MODULE davidson_restart
             !
          ELSE
             !
-            IF(my_bgrp_id == 0) THEN
+            IF(my_pool_id == 0 .AND. my_bgrp_id == 0) THEN
                fname = TRIM(dirname)//'/V'//my_label//'.dat'
                CALL pdep_merge_and_write_G(fname,dvg(:,local_j))
             ENDIF
             !
-            IF(my_bgrp_id == 0) THEN
+            IF(my_pool_id == 0 .AND. my_bgrp_id == 0) THEN
                fname = TRIM(dirname)//'/N'//my_label//'.dat'
                CALL pdep_merge_and_write_G(fname,dng(:,local_j))
             ENDIF
@@ -324,7 +324,7 @@ MODULE davidson_restart
          WRITE(my_label,'(i6.6)') global_j
          IF(global_j > nbase) CYCLE
          !
-         IF(my_bgrp_id == 0) THEN
+         IF(my_pool_id == 0 .AND. my_bgrp_id == 0) THEN
             fname = TRIM(wstat_restart_dir)//'/V'//my_label//'.dat'
             !
             IF(PRESENT(lastdone_iq)) THEN
@@ -334,7 +334,7 @@ MODULE davidson_restart
             ENDIF
          ENDIF
          !
-         IF(my_bgrp_id == 0) THEN
+         IF(my_pool_id == 0 .AND. my_bgrp_id == 0) THEN
             fname = TRIM(wstat_restart_dir)//'/N'//my_label//'.dat'
             !
             IF(PRESENT(lastdone_iq)) THEN

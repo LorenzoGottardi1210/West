@@ -64,14 +64,14 @@ PROGRAM westpp
      ! Localization factor and inverse participation ratio
      IF( westpp_calculation(i:i) == 'l' .OR. westpp_calculation(i:i) == 'L' ) lgate(6) = .TRUE.
      !
-     ! Exciton
-     IF( westpp_calculation(i:i) == 'x' .OR. westpp_calculation(i:i) == 'X' ) lgate(7) = .TRUE.
-     !
-     ! Density response to exciton
-     IF( westpp_calculation(i:i) == 'p' .OR. westpp_calculation(i:i) == 'P' ) lgate(8) = .TRUE.
-     !
      ! Boys / Wannier localization
-     IF( westpp_calculation(i:i) == 'b' .OR. westpp_calculation(i:i) == 'B' ) lgate(9) = .TRUE.
+     IF( westpp_calculation(i:i) == 'b' .OR. westpp_calculation(i:i) == 'B' ) lgate(7) = .TRUE.
+     !
+     ! Unrelaxed differential density of BSE/TDDFT excited state
+     IF( westpp_calculation(i:i) == 'u' .OR. westpp_calculation(i:i) == 'U' ) lgate(8) = .TRUE.
+     !
+     ! Density response to BSE/TDDFT excited state
+     IF( westpp_calculation(i:i) == 'p' .OR. westpp_calculation(i:i) == 'P' ) lgate(9) = .TRUE.
      !
      ! Decomposition of BSE/TDDFT excited state and calculation of dipole moments
      IF( westpp_calculation(i:i) == 'c' .OR. westpp_calculation(i:i) == 'C' ) lgate(10) = .TRUE.
@@ -87,9 +87,9 @@ PROGRAM westpp
   IF( lgate(4) ) CALL do_sxx( )
   IF( lgate(5) ) CALL do_dip( )
   IF( lgate(6) ) CALL do_loc( )
-  IF( lgate(7) ) CALL do_exc( )
-  IF( lgate(8) ) CALL do_resp( )
-  IF( lgate(9) ) CALL do_wann( )
+  IF( lgate(7) ) CALL do_wann( )
+  IF( lgate(8) ) CALL do_exc_drho( )
+  IF( lgate(9) ) CALL do_exc_resp( )
   IF( lgate(10) ) CALL do_exc_comp( )
   IF( lgate(11) ) CALL do_exc_spin( )
   !

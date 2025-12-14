@@ -133,7 +133,7 @@ SUBROUTINE do_wann()
         !
         CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ib),psic,'Wave')
         !
-        !$acc kernels present(aux)
+        !$acc kernels present(aux,psic)
         aux(:) = REAL(psic,KIND=DP)
         !$acc end kernels
         !
@@ -149,7 +149,7 @@ SUBROUTINE do_wann()
                  !
                  reduce = 0._DP
                  !
-                 !$acc parallel loop reduction(+:reduce) present(aux,proj) copy(reduce)
+                 !$acc parallel loop reduction(+:reduce) present(aux,psic,proj) copy(reduce)
                  DO ir = 1,dffts_nnr
                     reduce = reduce + aux(ir)*REAL(psic(ir),KIND=DP)*proj(ir,il)
                  ENDDO
@@ -166,7 +166,7 @@ SUBROUTINE do_wann()
                  !
                  reduce = 0._DP
                  !
-                 !$acc parallel loop reduction(+:reduce) present(aux,proj) copy(reduce)
+                 !$acc parallel loop reduction(+:reduce) present(aux,psic,proj) copy(reduce)
                  DO ir = 1,dffts_nnr
                     reduce = reduce + aux(ir)*AIMAG(psic(ir))*proj(ir,il)
                  ENDDO
@@ -189,7 +189,7 @@ SUBROUTINE do_wann()
                  !
                  reduce = 0._DP
                  !
-                 !$acc parallel loop reduction(+:reduce) present(aux,proj) copy(reduce)
+                 !$acc parallel loop reduction(+:reduce) present(aux,psic,proj) copy(reduce)
                  DO ir = 1,dffts_nnr
                     reduce = reduce + aux(ir)*REAL(psic(ir),KIND=DP)*proj(ir,il)
                  ENDDO

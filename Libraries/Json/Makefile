@@ -13,17 +13,17 @@ json_value_module.o \
 json_file_module.o \
 json_module.o
 
-all : title libjson.a
+all: title libjson.a
 
-libjson.a : $(JSON_OBJS)
+libjson.a: $(JSON_OBJS)
 	$(AR) $(ARFLAGS) $@ $?
 	$(RANLIB) $@
 
-clean :
+clean:
 	- /bin/rm -f *.x *.o *.a *~ *_tmp.f90 *.d *.mod *.i *.L
 	- /bin/rm -f libjson.a
 
-title :
+title:
 	@echo
 	@echo "##############"
 	@echo "### Json  ####"

@@ -11,7 +11,7 @@
 ! Marco Govoni
 !
 !----------------------------------------------------------------------------
-SUBROUTINE do_wfc2 ( )
+SUBROUTINE do_wfc2()
   !----------------------------------------------------------------------------
   !
   USE kinds,                 ONLY : DP
@@ -29,6 +29,7 @@ SUBROUTINE do_wfc2 ( )
   USE class_idistribute,     ONLY : idistribute
   USE control_flags,         ONLY : gamma_only
   USE types_bz_grid,         ONLY : k_grid
+  USE noncollin_module,      ONLY : noncolin
   USE wavefunctions,         ONLY : evc,psic
 #if defined(__CUDA)
   USE west_gpu,              ONLY : allocate_gpu,deallocate_gpu
@@ -38,7 +39,7 @@ SUBROUTINE do_wfc2 ( )
   !
   ! ... LOCAL variables
   !
-  INTEGER :: ir,iks,local_ib,global_ib,dffts_nnr
+  INTEGER :: ir,iks,ib,ib_g,dffts_nnr
   REAL(DP),ALLOCATABLE :: auxr(:)
   CHARACTER(LEN=512) :: fname
   TYPE(bar_type) :: barra
@@ -60,9 +61,9 @@ SUBROUTINE do_wfc2 ( )
   !
   CALL io_push_title('(W)avefunctions')
   !
-  CALL start_bar_type( barra, 'westpp', k_grid%nps * MAX(aband%nloc,1) )
+  CALL start_bar_type(barra,'westpp',k_grid%nps*MAX(aband%nloc,1))
   !
-  DO iks = 1, k_grid%nps  ! KPOINT-SPIN LOOP
+  DO iks = 1,k_grid%nps  ! KPOINT-SPIN LOOP
      !
      ! ... Set k-point, spin, kinetic energy, needed by Hpsi
      !
@@ -77,58 +78,77 @@ SUBROUTINE do_wfc2 ( )
         !$acc update device(evc)
      ENDIF
      !
-     DO local_ib=1,aband%nloc
+     DO ib = 1,aband%nloc
         !
         ! local -> global
         !
-        global_ib = aband%l2g(local_ib)+westpp_range(1)-1
+        ib_g = aband%l2g(ib)+westpp_range(1)-1
         !
-        IF( gamma_only ) THEN
+        IF(gamma_only) THEN
            !
-           CALL single_invfft_gamma(dffts,npw,npwx,evc(:,global_ib),psic,'Wave')
+           CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ib_g),psic,'Wave')
            !
-           IF( westpp_sign ) THEN
-              !$acc parallel loop present(auxr)
-              DO ir = 1, dffts_nnr
-                 auxr(ir) = REAL(psic(ir), KIND=DP) * ABS(REAL(psic(ir), KIND=DP))
+           IF(westpp_sign) THEN
+              !$acc parallel loop present(auxr,psic)
+              DO ir = 1,dffts_nnr
+                 auxr(ir) = REAL(psic(ir),KIND=DP) * ABS(REAL(psic(ir),KIND=DP))
               ENDDO
               !$acc end parallel loop
            ELSE
-              !$acc parallel loop present(auxr)
-              DO ir = 1, dffts_nnr
-                 auxr(ir) = REAL(psic(ir), KIND=DP) * REAL(psic(ir), KIND=DP)
+              !$acc parallel loop present(auxr,psic)
+              DO ir = 1,dffts_nnr
+                 auxr(ir) = REAL(psic(ir),KIND=DP)**2
               ENDDO
               !$acc end parallel loop
            ENDIF
            !
+        ELSEIF(noncolin) THEN
+           !
+           CALL single_invfft_k(dffts,npw,npwx,evc(1:npwx,ib_g),psic,'Wave',igk_k(:,current_k))
+           !
+           !$acc parallel loop present(auxr,psic)
+           DO ir = 1,dffts_nnr
+              auxr(ir) = REAL(psic(ir),KIND=DP)**2 + AIMAG(psic(ir))**2
+           ENDDO
+           !$acc end parallel
+           !
+           CALL single_invfft_k(dffts,npw,npwx,evc(npwx+1:npwx*2,ib_g),psic,'Wave',&
+           & igk_k(:,current_k))
+           !
+           !$acc parallel loop present(auxr,psic)
+           DO ir = 1,dffts_nnr
+              auxr(ir) = auxr(ir) + REAL(psic(ir),KIND=DP)**2 + AIMAG(psic(ir))**2
+           ENDDO
+           !$acc end parallel
+           !
         ELSE
            !
-           CALL single_invfft_k(dffts,npw,npwx,evc(:,global_ib),psic,'Wave',igk_k(:,current_k))
+           CALL single_invfft_k(dffts,npw,npwx,evc(:,ib_g),psic,'Wave',igk_k(:,current_k))
            !
-           !$acc parallel loop present(auxr)
-           DO ir = 1, dffts_nnr
-              auxr(ir) = REAL(CONJG(psic(ir)) * psic(ir), KIND=DP)
+           !$acc parallel loop present(auxr,psic)
+           DO ir = 1,dffts_nnr
+              auxr(ir) = REAL(psic(ir),KIND=DP)**2 + AIMAG(psic(ir))**2
            ENDDO
            !$acc end parallel loop
            !
         ENDIF
         !
-        WRITE(labelb,'(i6.6)') global_ib
+        WRITE(labelb,'(i6.6)') ib_g
         WRITE(labelk,'(i6.6)') iks
-        fname = TRIM( westpp_save_dir ) // '/wfcK'//labelk//'B'//labelb
+        fname = TRIM(westpp_save_dir)//'/wfcK'//labelk//'B'//labelb
         !$acc update host(auxr)
-        CALL dump_r( auxr, fname )
+        CALL dump_r(auxr,fname)
         !
-        CALL update_bar_type( barra, 'westpp', 1 )
+        CALL update_bar_type(barra,'westpp',1)
         !
      ENDDO
      !
   ENDDO
   !
-  CALL stop_bar_type( barra, 'westpp' )
+  CALL stop_bar_type(barra,'westpp')
   !
   !$acc exit data delete(auxr)
-  DEALLOCATE( auxr )
+  DEALLOCATE(auxr)
   !
 #if defined(__CUDA)
   CALL deallocate_gpu()

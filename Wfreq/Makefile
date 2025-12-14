@@ -53,20 +53,20 @@ WESTLIBS = \
 
 TLDEPS = bindir mods pwlibs pw
 
-all : title tldeps wfreq.x
+all: title tldeps wfreq.x
 
-wfreq.x : $(WFREQ_OBJS) $(WESTLIBS) $(PWOBJS) $(QEMODS)
-	$(LD) $(LDFLAGS) -o $@ $^ $(QELIBS) ${PYT_LDFLAGS}
+wfreq.x: $(WFREQ_OBJS) $(WESTLIBS) $(PWOBJS) $(QEMODS)
+	$(LD) $(LDFLAGS) -o $@ $^ $(QELIBS) $(PYT_LDFLAGS)
 	- ( cd ../../bin ; ln -fs ../West/Wfreq/wfreq.x . )
 
-tldeps :
+tldeps:
 	test -n "$(TLDEPS)" && ( cd ../.. ; $(MAKE) $(MFLAGS) $(TLDEPS) || exit 1) || :
 
-clean :
+clean:
 	- /bin/rm -f *.x *.o *.a *~ *_tmp.f90 *.d *.mod *.i *.L
 	- /bin/rm -f ../../bin/wfreq.x
 
-title :
+title:
 	@echo
 	@echo "##############"
 	@echo "### Wfreq ####"

@@ -121,7 +121,7 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
            !
            CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ibnd_g),psic,'Wave')
            !
-           !$acc kernels present(aux)
+           !$acc kernels present(aux,psic)
            aux(:) = REAL(psic,KIND=DP)
            !$acc end kernels
            !
@@ -137,7 +137,7 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
                     !
                     reduce = 0._DP
                     !
-                    !$acc parallel loop reduction(+:reduce) present(proj) copy(reduce)
+                    !$acc parallel loop reduction(+:reduce) present(aux,psic,proj) copy(reduce)
                     DO ir = 1,dffts_nnr
                        reduce = reduce+aux(ir)*REAL(psic(ir),KIND=DP)*proj(ir,il)
                     ENDDO
@@ -154,7 +154,7 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
                     !
                     reduce = 0._DP
                     !
-                    !$acc parallel loop reduction(+:reduce) present(proj) copy(reduce)
+                    !$acc parallel loop reduction(+:reduce) present(aux,psic,proj) copy(reduce)
                     DO ir = 1,dffts_nnr
                        reduce = reduce+aux(ir)*AIMAG(psic(ir))*proj(ir,il)
                     ENDDO
@@ -175,7 +175,7 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
                     !
                     reduce = 0._DP
                     !
-                    !$acc parallel loop reduction(+:reduce) present(proj) copy(reduce)
+                    !$acc parallel loop reduction(+:reduce) present(aux,psic,proj) copy(reduce)
                     DO ir = 1,dffts_nnr
                        reduce = reduce+aux(ir)*REAL(psic(ir),KIND=DP)*proj(ir,il)
                     ENDDO
@@ -233,7 +233,7 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
            !
            CALL single_invfft_gamma(dffts,npw,npwx,evc_loc(:,ibnd),psic,'Wave')
            !
-           !$acc kernels present(aux)
+           !$acc kernels present(aux,psic)
            aux(:) = REAL(psic,KIND=DP)
            !$acc end kernels
            !
@@ -243,7 +243,7 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
                  !
                  CALL double_invfft_gamma(dffts,npw,npwx,evc_loc(:,jbnd),evc_loc(:,jbnd+1),psic,'Wave')
                  !
-                 !$acc kernels present(aux2)
+                 !$acc kernels present(aux2,psic)
                  aux2(:) = REAL(psic,KIND=DP)
                  !$acc end kernels
                  !
@@ -252,7 +252,7 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
                  ovl_matrix(ibnd,jbnd) = ovl_val
                  ovl_matrix(jbnd,ibnd) = ovl_val
                  !
-                 !$acc kernels present(aux2)
+                 !$acc kernels present(aux2,psic)
                  aux2(:) = AIMAG(psic)
                  !$acc end kernels
                  !
@@ -265,7 +265,7 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
                  !
                  CALL single_invfft_gamma(dffts,npw,npwx,evc_loc(:,jbnd),psic,'Wave')
                  !
-                 !$acc kernels present(aux2)
+                 !$acc kernels present(aux2,psic)
                  aux2(:) = REAL(psic,KIND=DP)
                  !$acc end kernels
                  !

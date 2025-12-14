@@ -24,7 +24,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
                              & macropol_calculation,n_lanczos,n_imfreq,n_refreq,ecut_imfreq,&
                              & ecut_refreq,wfreq_eta,n_secant_maxiter,trev_secant,l_enable_lanczos,&
                              & l_qdet_verbose,l_enable_off_diagonal,ecut_spectralf,n_spectralf,&
-                             & westpp_calculation,westpp_range,westpp_format,westpp_sign,&
+                             & qdet_dc,westpp_calculation,westpp_range,westpp_format,westpp_sign,&
                              & westpp_n_pdep_eigen_to_use,westpp_r0,westpp_nr,westpp_rmax,&
                              & westpp_epsinfty,westpp_box,westpp_n_liouville_to_use,&
                              & westpp_l_spin_flip,westpp_l_compute_tdm,westpp_wannier_tr_rel,&
@@ -48,7 +48,8 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
   USE gvect,            ONLY : ecutrho
   USE start_k,          ONLY : nk1,nk2,nk3
   USE control_flags,    ONLY : gamma_only
-  USE pwcom,            ONLY : nelec,nbnd,nspin
+  USE pwcom,            ONLY : nelec,nbnd
+  USE noncollin_module, ONLY : nspin_lsda
   !
   IMPLICIT NONE
   !
@@ -72,6 +73,9 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
   CHARACTER(LEN=512), EXTERNAL :: trimcheck
   CHARACTER(LEN=:),ALLOCATABLE :: cvalue
   INTEGER :: lenc
+  !
+  ! Workaround for nvfortran compiler bug
+  !
   INTEGER, PARAMETER :: DUMMY_DEFAULT = -1210
   !
   CALL start_clock('fetch_input')
@@ -168,7 +172,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
         IERR = dict_create(kwargs)
         IERR = kwargs%setitem('nelec', nelec)
         IERR = kwargs%setitem('ecutrho', ecutrho)
-        IERR = kwargs%setitem('nspin', nspin)
+        IERR = kwargs%setitem('nspin', nspin_lsda)
         !
         IERR = call_py(return_obj, pymod, 'read_keyword_from_file', args, kwargs)
         IERR = cast(return_dict, return_obj)
@@ -191,11 +195,11 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
         IERR = cast(tmp_list2,tmp_obj2)
         IERR = tmp_list2%len(list_len)
         IF(ALLOCATED(qp_bands)) DEALLOCATE(qp_bands)
-        ALLOCATE(qp_bands(list_len,nspin))
+        ALLOCATE(qp_bands(list_len,nspin_lsda))
         DO i = 0, list_len-1 ! Python indices start at 0
            IERR = tmp_list2%getitem(qp_bands(i+1,1), i) ! Fortran indices start at 1
         ENDDO
-        IF(nspin == 2) THEN
+        IF(nspin_lsda == 2) THEN
            IERR = tmp_list%getitem(tmp_obj2, 1)
            IERR = cast(tmp_list2,tmp_obj2)
            DO i = 0, list_len-1 ! Python indices start at 0
@@ -225,6 +229,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
         CALL tmp_list%destroy
         CALL tmp_obj%destroy
         IERR = return_dict%get(n_spectralf, 'n_spectralf', DUMMY_DEFAULT)
+        IERR = return_dict%getitem(cvalue, 'qdet_dc'); qdet_dc = TRIM(ADJUSTL(cvalue))
         !
         CALL return_dict%destroy
         !
@@ -478,7 +483,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      CALL mp_bcast(n_qp_bands,root,world_comm)
      IF(mpime /= root) THEN
         IF(ALLOCATED(qp_bands)) DEALLOCATE(qp_bands)
-        ALLOCATE(qp_bands(n_qp_bands,nspin))
+        ALLOCATE(qp_bands(n_qp_bands,nspin_lsda))
      ENDIF
      CALL mp_bcast(qp_bands,root,world_comm)
      CALL mp_bcast(macropol_calculation,root,world_comm)
@@ -495,14 +500,16 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      CALL mp_bcast(l_enable_off_diagonal,root,world_comm)
      CALL mp_bcast(ecut_spectralf,root,world_comm)
      CALL mp_bcast(n_spectralf,root,world_comm)
+     CALL mp_bcast(qdet_dc,root,world_comm)
      !
      ! CHECKS
      !
-     IF(.NOT. gamma_only) THEN
-        DO i = 1, 9
-           IF(wfreq_calculation(i:i) == 'H') CALL errore('fetch_input','Err: QDET requires gamma_only',1)
-        ENDDO
-     ENDIF
+     DO i = 1, 9
+        IF(wfreq_calculation(i:i) == 'H') THEN
+           IF(.NOT. gamma_only) CALL errore('fetch_input','Err: QDET requires gamma_only',1)
+           IF(.NOT. l_enable_off_diagonal) CALL errore('fetch_input','Err: QDET requires l_enable_off_diagonal',1)
+        ENDIF
+     ENDDO
      IF(n_lanczos < 2) CALL errore('fetch_input','Err: n_lanczos<2',1)
      IF(n_pdep_eigen_to_use < 1) CALL errore('fetch_input','Err: n_pdep_eigen_to_use<1',1)
      IF(n_pdep_eigen_to_use > n_pdep_eigen) CALL errore('fetch_input','Err: n_pdep_eigen_to_use>n_pdep_eigen',1)
@@ -517,7 +524,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      IF(ANY(qp_bands(:,:) < 1)) CALL errore('fetch_input','Err: qp_bands<1',1)
      IF(ANY(qp_bands(:,:) > nbnd)) CALL errore('fetch_input','Err: qp_bands>nbnd',1)
      IF(ecut_imfreq <= 0._DP) CALL errore('fetch_input','Err: ecut_imfreq<0.',1)
-     IF(ecut_refreq <= 0._DP) CALL errore('fetch_input','Err: ecut_imfreq<0.',1)
+     IF(ecut_refreq <= 0._DP) CALL errore('fetch_input','Err: ecut_refreq<0.',1)
      IF(ecut_spectralf(2) < ecut_spectralf(1)) CALL errore('fetch_input','Err: ecut_spectralf(2)<ecut_spectralf(1)',1)
      IF(wfreq_eta <= 0._DP) CALL errore('fetch_input','Err: wfreq_eta<0.',1)
      IF(n_secant_maxiter < 0) CALL errore('fetch_input','Err: n_secant_maxiter<0',1)
@@ -534,6 +541,12 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      CASE('N','n','C','c')
      CASE DEFAULT
         CALL errore('fetch_input','Err: macropol_calculation/=(N,C)',1)
+     END SELECT
+     !
+     SELECT CASE(qdet_dc)
+     CASE('DC2025','dc2025','DC2022','dc2022','HFDC','hfdc')
+     CASE DEFAULT
+        CALL errore('fetch_input','Err: qdet_dc/=(DC2025,DC2022,HFDC)',1)
      END SELECT
      !
   ENDIF

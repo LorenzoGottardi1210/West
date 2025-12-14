@@ -5,12 +5,12 @@ on:
   - cron: "0 4 * * *"
 
 env:
-  QE_VERSION: qe-7.4
+  QE_VERSION: qe-7.5
 
 jobs:
   test:
     runs-on: [self-hosted, linux]
-    container: miccomcenter/bot:gcc1330_0002
+    container: miccomcenter/bot:gcc1340_0002
 
     steps:
     - uses: actions/checkout@v4

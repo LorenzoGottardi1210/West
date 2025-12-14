@@ -22,9 +22,10 @@ SUBROUTINE wbse_setup()
                                  & n_liouville_maxiter,n_liouville_read_from_file,&
                                  & trev_liouville_rel,trev_liouville,alphapv_dfpt,l_use_ecutrho,&
                                  & wbse_save_dir,l_hybrid_tddft,l_spin_flip,l_spin_flip_kernel,&
-                                 & do_inexact_krylov
+                                 & do_forces,do_inexact_krylov
   USE kinds,                ONLY : DP
-  USE types_coulomb,        ONLY : pot3D
+  USE mp_global,            ONLY : npool
+  USE types_coulomb,        ONLY : pot3D,pot3D_x,pot3D_c
   USE wbse_dv,              ONLY : wbse_dv_setup,wbse_sf_kernel_setup
   USE xc_lib,               ONLY : xclib_dft_is
   USE exx_base,             ONLY : erfc_scrlen
@@ -39,6 +40,13 @@ SUBROUTINE wbse_setup()
   COMPLEX(DP), EXTERNAL :: get_alpha_pv
   !
   CALL do_setup()
+  !
+  kpt_pool = idistribute()
+  CALL kpt_pool%init(nkstot,'p','nkstot',.FALSE.,IDIST_BLK)
+  IF(kpt_pool%nloc /= nks) CALL errore('wbse_setup','unexpected kpt_pool init error',1)
+  IF(npool > nkstot) CALL errore('wbse_setup','npool>nkstot',1)
+  !
+  IF(l_spin_flip .AND. nspin /= 2) CALL errore('wbse_setup','spin flip but nspin/=2',1)
   !
   SELECT CASE(localization)
   CASE('N','n')
@@ -108,6 +116,8 @@ SUBROUTINE wbse_setup()
   !
   IF(l_hybrid_tddft) THEN
      !
+     ! TDDFT, hybrid functional
+     !
      IF(erfc_scrlen > 0._DP) THEN
         !
         ! HSE functional, mya = 1._DP, myb = -1._DP, mymu = erfc_scrlen
@@ -122,16 +132,54 @@ SUBROUTINE wbse_setup()
         !
      ENDIF
      !
+     !$acc enter data copyin(pot3D)
+     !$acc enter data copyin(pot3D%sqvc)
+     !
+  ELSEIF(l_bse) THEN
+     !
+     ! BSE, non-hybrid functional
+     !
+     CALL pot3D_x%init('Rho',.FALSE.,'gb')
+     CALL pot3D_c%init('Wave',.FALSE.,'default')
+     !
+     !$acc enter data copyin(pot3D_x)
+     !$acc enter data copyin(pot3D_x%sqvc)
+     !$acc enter data copyin(pot3D_c)
+     !$acc enter data copyin(pot3D_c%sqvc)
+     !
+     IF(xclib_dft_is('hybrid')) THEN
+        !
+        ! BSE, hybrid functional
+        !
+        IF(erfc_scrlen > 0._DP) THEN
+           !
+           ! HSE functional, mya = 1._DP, myb = -1._DP, mymu = erfc_scrlen
+           !
+           CALL pot3D%init('Rho',.FALSE.,'gb',mya=1._DP,myb=-1._DP,mymu=erfc_scrlen)
+           !
+        ELSE
+           !
+           ! PBE0 functional, mya = 1._DP, myb = 0._DP, mymu = 1._DP to avoid divergence
+           !
+           CALL pot3D%init('Rho',.FALSE.,'gb',mya=1._DP,myb=0._DP,mymu=1._DP)
+           !
+        ENDIF
+        !
+        !$acc enter data copyin(pot3D)
+        !$acc enter data copyin(pot3D%sqvc)
+        !
+     ENDIF
+     !
   ELSE
+     !
+     ! TDDFT, non-hybrid functional
      !
      CALL pot3D%init('Rho',.FALSE.,'gb')
      !
+     !$acc enter data copyin(pot3D)
+     !$acc enter data copyin(pot3D%sqvc)
+     !
   ENDIF
-  !
-  !$acc enter data copyin(pot3D)
-  !$acc enter data copyin(pot3D%sqvc)
-  !
-  CALL pot3D%print_divergence()
   !
   CALL set_nbndocc()
   !
@@ -141,17 +189,13 @@ SUBROUTINE wbse_setup()
   !
   CALL my_mkdir(wbse_save_dir)
   !
-  kpt_pool = idistribute()
-  CALL kpt_pool%init(nkstot,'p','nkstot',.FALSE.,IDIST_BLK)
-  !
-  IF(kpt_pool%nloc /= nks) CALL errore('wbse_init_setup','unexpected kpt_pool init error',1)
-  !
   IF(l_qp_correction) CALL read_qp_eigs()
   !
   ! read ovl_matrix and u_matrix, and compute macroscopic term, if any
   !
   IF(l_bse .OR. l_hybrid_tddft) CALL bse_start()
   !
+  do_forces = .FALSE.
   do_inexact_krylov = .FALSE.
   !
 END SUBROUTINE
@@ -164,11 +208,12 @@ SUBROUTINE bse_start()
   USE io_global,            ONLY : stdout
   USE pwcom,                ONLY : npwx
   USE westcom,              ONLY : tau_is_read,tau_all,n_tau,nbnd_occ,nbndval0x,n_trunc_bands,&
-                                 & sigma_c_head,sigma_x_head,wbse_epsinfty,l_local_repr,&
-                                 & overlap_thr,u_matrix,ovl_matrix,n_bse_idx,idx_matrix
+                                 & sigma_head,sigma_c_head,sigma_x_head,wbse_epsinfty,l_local_repr,&
+                                 & overlap_thr,u_matrix,ovl_matrix,n_bse_idx,idx_matrix,&
+                                 & l_bse,l_hybrid_tddft
   USE constants,            ONLY : e2,pi
-  USE cell_base,            ONLY : omega
-  USE types_coulomb,        ONLY : pot3D
+  USE types_coulomb,        ONLY : pot3D,pot3D_x,pot3D_c
+  USE xc_lib,               ONLY : xclib_dft_is
   USE wbse_io,              ONLY : read_umatrix_and_omatrix
   USE distribution_center,  ONLY : kpt_pool,band_group
   USE class_idistribute,    ONLY : idistribute,IDIST_BLK
@@ -184,14 +229,24 @@ SUBROUTINE bse_start()
   !
   ! the divergence term in Fock potential
   !
-  sigma_x_head = pot3D%compute_divergence('gb')
-  !
-  ! compute macroscopic term, it needs macroscopic dielectric constant from input
-  !
-  sigma_c_head = pot3D%compute_divergence('default')
-  sigma_c_head = sigma_c_head * ((1._DP/wbse_epsinfty) - 1._DP)
-  !
-  WRITE(stdout,'(/,5X,"Macroscopic dielectric constant correction:",f9.5)') sigma_c_head
+  IF(l_hybrid_tddft) THEN
+     !
+     sigma_head = pot3D%div
+     !
+  ELSEIF(l_bse) THEN
+     !
+     sigma_x_head = pot3D_x%div
+     !
+     ! compute macroscopic term, it needs macroscopic dielectric constant from input
+     !
+     sigma_c_head = pot3D_c%compute_divergence('default')
+     sigma_c_head = sigma_c_head * ((1._DP/wbse_epsinfty) - 1._DP)
+     !
+     WRITE(stdout,'(/,5X,"Macroscopic dielectric constant correction:",f9.5)') sigma_c_head
+     !
+     IF(xclib_dft_is('hybrid')) sigma_head = pot3D%div
+     !
+  ENDIF
   !
   nbnd_do = nbndval0x-n_trunc_bands
   !

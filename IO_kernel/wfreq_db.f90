@@ -33,11 +33,13 @@ MODULE wfreq_db
       USE mp_world,             ONLY : mpime,root
       USE io_global,            ONLY : stdout
       USE westcom,              ONLY : wfreq_save_dir,qp_bands,n_bands,wfreq_calculation,logfile,&
-                                     & sigma_exx,sigma_vxcl,sigma_vxcnl,sigma_hf,sigma_z,sigma_eqplin,&
-                                     & sigma_eqpsec,sigma_sc_eks,sigma_sc_eqplin,sigma_sc_eqpsec,&
-                                     & sigma_diff,sigma_freq,sigma_spectralf,l_enable_off_diagonal,&
-                                     & sigma_vxcl_full,sigma_vxcnl_full,sigma_exx_full,sigma_hf_full,&
-                                     & sigma_sc_eks_full,sigma_sc_eqplin_full,sigma_corr_full,occupation
+                                     & sigma_exx,sigma_vxcl,sigma_vxcnl,sigma_hf,sigma_z,&
+                                     & sigma_eqplin,sigma_eqpsec,sigma_sc_eks,sigma_sc_eqplin,&
+                                     & sigma_sc_eqpsec,sigma_diff,sigma_freq,sigma_spectralf,&
+                                     & n_spectralf,l_enable_off_diagonal,sigma_vxcl_full,&
+                                     & sigma_vxcnl_full,sigma_exx_full,sigma_hf_full,&
+                                     & sigma_sc_eks_full,sigma_sc_eqplin_full,sigma_corr_full,&
+                                     & occupation
       USE pwcom,                ONLY : et,nspin
       USE io_push,              ONLY : io_push_bar
       USE json_module,          ONLY : json_file
@@ -56,6 +58,7 @@ MODULE wfreq_db
       TYPE(json_file) :: json
       INTEGER :: iun,i
       REAL(DP),ALLOCATABLE :: eks(:),occ(:,:)
+      REAL(DP),ALLOCATABLE :: aux(:),spectralf(:)
       LOGICAL :: l_generate_plot,l_optics
       !
       ! TIMING
@@ -92,7 +95,11 @@ MODULE wfreq_db
             IF(wfreq_calculation(i:i) == 'O') l_optics = .TRUE.
          ENDDO
          !
-         IF(l_generate_plot) CALL json%add('output.P.freqlist',sigma_freq*rytoev)
+         IF(l_generate_plot) THEN
+            CALL json%add('output.P.freqlist',sigma_freq*rytoev)
+            ALLOCATE(aux(n_spectralf))
+            ALLOCATE(spectralf(n_spectralf))
+         ENDIF
          !
          ALLOCATE(eks(n_bands))
          !
@@ -155,16 +162,25 @@ MODULE wfreq_db
                   & REAL(sigma_spectralf(:,ib,iks),KIND=DP)*rytoev)
                   CALL json%add('output.P.K'//my_label_k//'.B'//my_label_b//'.sigmac.im',&
                   & AIMAG(sigma_spectralf(:,ib,iks))*rytoev)
+                  !
+                  aux(:) = sigma_freq - eks(ib) - REAL(sigma_spectralf(:,ib,iks),KIND=DP) &
+                  & - sigma_exx(ib,iks) + sigma_vxcl(ib,iks)
+                  spectralf(:) = 2._DP * ABS(AIMAG(sigma_spectralf(:,ib,iks))) &
+                  & / (aux**2 + AIMAG(sigma_spectralf(:,ib,iks))**2)
+                  CALL json%add('output.P.K'//my_label_k//'.B'//my_label_b//'.spectralf',&
+                  & spectralf/rytoev)
                ENDDO
             ENDIF
             !
-            IF(l_optics) THEN
-               CALL json%add('output.O',"optics.json")
-            ENDIF
+            IF(l_optics) CALL json%add('output.O','optics.json')
             !
          ENDDO
          !
          DEALLOCATE(eks)
+         IF(l_generate_plot) THEN
+            DEALLOCATE(aux)
+            DEALLOCATE(spectralf)
+         ENDIF
          !
          OPEN(NEWUNIT=iun,FILE=TRIM(logfile))
          CALL json%print(iun)

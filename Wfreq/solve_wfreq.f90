@@ -39,9 +39,10 @@ SUBROUTINE solve_wfreq_gamma(l_read_restart,l_generate_plot,l_QDET)
                                  & occupation,nbnd_occ,nbnd_occ_full,n_bands,l_enable_lanczos,&
                                  & iuwfc,lrwfc,wfreq_eta,imfreq_list,refreq_list,wstat_save_dir,&
                                  & fftdriver,d_epsm1_ifr,z_epsm1_rfr,z_head_rfr,d_head_ifr,&
-                                 & d_epsm1_ifr_a,d_head_ifr_a,z_epsm1_rfr_a,z_head_rfr_a
+                                 & d_epsm1_ifr_a,d_head_ifr_a,z_epsm1_rfr_a,z_head_rfr_a,l_dc2025,&
+                                 & d_epsm1_ifr_dc,d_head_ifr_dc,z_epsm1_rfr_dc,z_head_rfr_dc
   USE mp_global,            ONLY : inter_image_comm,my_image_id,nimage,inter_pool_comm,npool,&
-                                 & inter_bgrp_comm,intra_bgrp_comm,nbgrp
+                                 & inter_bgrp_comm,nbgrp,intra_bgrp_comm,me_bgrp
   USE mp,                   ONLY : mp_bcast,mp_sum
   USE cell_base,            ONLY : omega
   USE fft_base,             ONLY : dffts
@@ -117,14 +118,25 @@ SUBROUTINE solve_wfreq_gamma(l_read_restart,l_generate_plot,l_QDET)
   REAL(DP) :: mwo,ecv,dfactor,frequency,dhead
   COMPLEX(DP) :: zmwo,zfactor,zm,zp,zhead
   INTEGER :: glob_jp,ic,ifreq,il
+  INTEGER :: who
   REAL(DP),ALLOCATABLE :: dmatilda(:,:),dlambda(:,:)
+#if defined(__CUDA)
+  ATTRIBUTES(PINNED) :: dmatilda,dlambda
+#endif
   COMPLEX(DP),ALLOCATABLE :: zmatilda(:,:),zlambda(:,:)
+#if defined(__CUDA)
+  ATTRIBUTES(PINNED) :: zmatilda,zlambda
+#endif
   REAL(DP),ALLOCATABLE :: dmati(:,:,:)
   COMPLEX(DP),ALLOCATABLE :: zmatr(:,:,:)
   REAL(DP),ALLOCATABLE :: dmati_a(:,:,:)
   COMPLEX(DP),ALLOCATABLE :: zmatr_a(:,:,:)
+  REAL(DP),ALLOCATABLE :: dmati_freq0(:,:)
+  COMPLEX(DP),ALLOCATABLE :: zmatr_freq0(:,:)
+  REAL(DP),ALLOCATABLE :: dmati_a_freq0(:,:)
+  COMPLEX(DP),ALLOCATABLE :: zmatr_a_freq0(:,:)
 #if defined(__CUDA)
-  ATTRIBUTES(PINNED) :: dmatilda,dlambda,zmatilda,zlambda,dmati,zmatr,dmati_a,zmatr_a
+  ATTRIBUTES(PINNED) :: dmati,zmatr,dmati_a,zmatr_a
 #endif
   REAL(DP) :: this_et,this_occ,docc
   INTEGER,ALLOCATABLE :: l2g(:)
@@ -417,7 +429,7 @@ SUBROUTINE solve_wfreq_gamma(l_read_restart,l_generate_plot,l_QDET)
               !
               CALL single_invfft_gamma(dffts,npwq,npwqx,pertg,pertr,TRIM(fftdriver))
               !
-              !$acc parallel loop present(pertr)
+              !$acc parallel loop present(pertr,psic)
               DO ir = 1,dffts_nnr
                  pertr(ir) = psic(ir)*pertr(ir)
               ENDDO
@@ -490,9 +502,9 @@ SUBROUTINE solve_wfreq_gamma(l_read_restart,l_generate_plot,l_QDET)
 #endif
            !
            IF(nimage > 1) THEN
-              !$acc update host(overlap)
+              !$acc host_data use_device(overlap)
               CALL mp_sum(overlap,inter_image_comm)
-              !$acc update device(overlap)
+              !$acc end host_data
            ENDIF
            !
            ! Update dmati with cond
@@ -747,6 +759,12 @@ SUBROUTINE solve_wfreq_gamma(l_read_restart,l_generate_plot,l_QDET)
   IF(l_QDET) THEN
      ALLOCATE(d_epsm1_ifr_a(pert%nglob,pert%nloc,ifr%nloc))
      d_epsm1_ifr_a(:,:,:) = 0._DP
+     IF(l_dc2025) THEN
+        ALLOCATE(d_epsm1_ifr_dc(pert%nglob,pert%nloc,ifr%nloc))
+        d_epsm1_ifr_dc(:,:,:) = 0._DP
+        ALLOCATE(dmati_freq0(mypara%nglob,mypara%nloc))
+        ALLOCATE(dmati_a_freq0(mypara%nglob,mypara%nloc))
+     ENDIF
   ELSE
      ALLOCATE(d_epsm1_ifr(pert%nglob,pert%nloc,ifr%nloc))
      d_epsm1_ifr(:,:,:) = 0._DP
@@ -755,6 +773,10 @@ SUBROUTINE solve_wfreq_gamma(l_read_restart,l_generate_plot,l_QDET)
      IF(l_QDET) THEN
         ALLOCATE(d_head_ifr_a(ifr%nloc))
         d_head_ifr_a(:) = 0._DP
+        IF(l_dc2025) THEN
+           ALLOCATE(d_head_ifr_dc(ifr%nloc))
+           d_head_ifr_dc(:) = 0._DP
+        ENDIF
      ELSE
         ALLOCATE(d_head_ifr(ifr%nloc))
         d_head_ifr(:) = 0._DP
@@ -766,6 +788,20 @@ SUBROUTINE solve_wfreq_gamma(l_read_restart,l_generate_plot,l_QDET)
 #endif
   !
   CALL band_group%init(ifr%nloc,'b','band_group',.FALSE.)
+  !
+  IF(l_QDET .AND. l_dc2025) THEN
+     !
+     CALL ifr%g2l(1,ifloc,who)
+     !
+     IF(me_bgrp == who) THEN
+        dmati_freq0(:,:) = dmati(:,:,1)
+        dmati_a_freq0(:,:) = dmati_a(:,:,1)
+     ENDIF
+     !
+     CALL mp_bcast(dmati_freq0,who,intra_bgrp_comm)
+     CALL mp_bcast(dmati_a_freq0,who,intra_bgrp_comm)
+     !
+  ENDIF
   !
   DO ifloc = 1,band_group%nloc
      !
@@ -801,6 +837,28 @@ SUBROUTINE solve_wfreq_gamma(l_read_restart,l_generate_plot,l_QDET)
         ENDIF
      ENDIF
      !
+     IF(l_QDET .AND. l_dc2025) THEN
+        !
+        ! Double counting
+        !
+        dmatilda(:,:) = 0._DP
+        DO ip = 1,mypara%nloc
+           glob_ip = mypara%l2g(ip)
+           dmatilda(:,glob_ip) = dmati_freq0(:,ip)-dmati_a_freq0(:,ip)+dmati_a(:,ip,ifreq)
+        ENDDO
+        !
+        CALL mp_sum(dmatilda,inter_image_comm)
+        CALL chi_invert_real(dmatilda,dhead,dlambda,mypara%nglob)
+        !
+        DO ip = 1,pert%nloc
+           glob_ip = pert%l2g(ip)
+           d_epsm1_ifr_dc(1:n_pdep_eigen_to_use,ip,ifreq) = dlambda(1:n_pdep_eigen_to_use,glob_ip)
+        ENDDO
+        !
+        IF(l_macropol) d_head_ifr_dc(ifreq) = dhead
+        !
+     ENDIF
+     !
   ENDDO
   !
 #if defined(__CUDA)
@@ -812,10 +870,18 @@ SUBROUTINE solve_wfreq_gamma(l_read_restart,l_generate_plot,l_QDET)
   DEALLOCATE(dmatilda)
   DEALLOCATE(dmati)
   IF(l_QDET) DEALLOCATE(dmati_a)
+  IF(l_QDET .AND. l_dc2025) THEN
+     DEALLOCATE(dmati_freq0)
+     DEALLOCATE(dmati_a_freq0)
+  ENDIF
   !
   IF(l_QDET) THEN
      CALL mp_sum(d_epsm1_ifr_a,inter_bgrp_comm)
      IF(l_macropol) CALL mp_sum(d_head_ifr_a,inter_bgrp_comm)
+     IF(l_dc2025) THEN
+        CALL mp_sum(d_epsm1_ifr_dc,inter_bgrp_comm)
+        IF(l_macropol) CALL mp_sum(d_head_ifr_dc,inter_bgrp_comm)
+     ENDIF
   ELSE
      CALL mp_sum(d_epsm1_ifr,inter_bgrp_comm)
      IF(l_macropol) CALL mp_sum(d_head_ifr,inter_bgrp_comm)
@@ -829,6 +895,12 @@ SUBROUTINE solve_wfreq_gamma(l_read_restart,l_generate_plot,l_QDET)
   IF(l_QDET) THEN
      ALLOCATE(z_epsm1_rfr_a(pert%nglob,pert%nloc,rfr%nloc))
      z_epsm1_rfr_a(:,:,:) = 0._DP
+     IF(l_dc2025) THEN
+        ALLOCATE(z_epsm1_rfr_dc(pert%nglob,pert%nloc,rfr%nloc))
+        z_epsm1_rfr_dc(:,:,:) = 0._DP
+        ALLOCATE(zmatr_freq0(mypara%nglob,mypara%nloc))
+        ALLOCATE(zmatr_a_freq0(mypara%nglob,mypara%nloc))
+     ENDIF
   ELSE
      ALLOCATE(z_epsm1_rfr(pert%nglob,pert%nloc,rfr%nloc))
      z_epsm1_rfr(:,:,:) = 0._DP
@@ -837,6 +909,10 @@ SUBROUTINE solve_wfreq_gamma(l_read_restart,l_generate_plot,l_QDET)
      IF(l_QDET) THEN
         ALLOCATE(z_head_rfr_a(rfr%nloc))
         z_head_rfr_a(:) = 0._DP
+        IF(l_dc2025) THEN
+           ALLOCATE(z_head_rfr_dc(rfr%nloc))
+           z_head_rfr_dc(:) = 0._DP
+        ENDIF
      ELSE
         ALLOCATE(z_head_rfr(rfr%nloc))
         z_head_rfr(:) = 0._DP
@@ -848,6 +924,20 @@ SUBROUTINE solve_wfreq_gamma(l_read_restart,l_generate_plot,l_QDET)
 #endif
   !
   CALL band_group%init(rfr%nloc,'b','band_group',.FALSE.)
+  !
+  IF(l_QDET .AND. l_dc2025) THEN
+     !
+     CALL rfr%g2l(1,ifloc,who)
+     !
+     IF(me_bgrp == who) THEN
+        zmatr_freq0(:,:) = zmatr(:,:,1)
+        zmatr_a_freq0(:,:) = zmatr_a(:,:,1)
+     ENDIF
+     !
+     CALL mp_bcast(zmatr_freq0,who,intra_bgrp_comm)
+     CALL mp_bcast(zmatr_a_freq0,who,intra_bgrp_comm)
+     !
+  ENDIF
   !
   DO ifloc = 1,band_group%nloc
      !
@@ -883,6 +973,28 @@ SUBROUTINE solve_wfreq_gamma(l_read_restart,l_generate_plot,l_QDET)
         ENDIF
      ENDIF
      !
+     IF(l_QDET .AND. l_dc2025) THEN
+        !
+        ! Double counting
+        !
+        zmatilda(:,:) = 0._DP
+        DO ip = 1,mypara%nloc
+           glob_ip = mypara%l2g(ip)
+           zmatilda(:,glob_ip) = zmatr_freq0(:,ip)-zmatr_a_freq0(:,ip)+zmatr_a(:,ip,ifreq)
+        ENDDO
+        !
+        CALL mp_sum(zmatilda,inter_image_comm)
+        CALL chi_invert_complex(zmatilda,zhead,zlambda,mypara%nglob)
+        !
+        DO ip = 1,pert%nloc
+           glob_ip = pert%l2g(ip)
+           z_epsm1_rfr_dc(1:n_pdep_eigen_to_use,ip,ifreq) = zlambda(1:n_pdep_eigen_to_use,glob_ip)
+        ENDDO
+        !
+        IF(l_macropol) z_head_rfr_dc(ifreq) = zhead
+        !
+     ENDIF
+     !
   ENDDO
   !
 #if defined(__CUDA)
@@ -894,10 +1006,18 @@ SUBROUTINE solve_wfreq_gamma(l_read_restart,l_generate_plot,l_QDET)
   DEALLOCATE(zmatilda)
   DEALLOCATE(zmatr)
   IF(l_QDET) DEALLOCATE(zmatr_a)
+  IF(l_QDET .AND. l_dc2025) THEN
+     DEALLOCATE(zmatr_freq0)
+     DEALLOCATE(zmatr_a_freq0)
+  ENDIF
   !
   IF(l_QDET) THEN
      CALL mp_sum(z_epsm1_rfr_a,inter_bgrp_comm)
      IF(l_macropol) CALL mp_sum(z_head_rfr_a,inter_bgrp_comm)
+     IF(l_dc2025) THEN
+        CALL mp_sum(z_epsm1_rfr_dc,inter_bgrp_comm)
+        IF(l_macropol) CALL mp_sum(z_head_rfr_dc,inter_bgrp_comm)
+     ENDIF
   ELSE
      CALL mp_sum(z_epsm1_rfr,inter_bgrp_comm)
      IF(l_macropol) CALL mp_sum(z_head_rfr,inter_bgrp_comm)
@@ -920,8 +1040,8 @@ SUBROUTINE solve_wfreq_k(l_read_restart,l_generate_plot)
                                  & l_enable_lanczos,iuwfc,lrwfc,wfreq_eta,imfreq_list,refreq_list,&
                                  & wstat_save_dir,ngq,igq_q,z_epsm1_ifr_q,z_epsm1_rfr_q,z_head_rfr,&
                                  & z_head_ifr
-  USE mp_global,            ONLY : my_image_id,inter_image_comm,nimage,inter_bgrp_comm,&
-                                 & intra_bgrp_comm,nbgrp
+  USE mp_global,            ONLY : my_image_id,inter_image_comm,nimage,inter_bgrp_comm,nbgrp,&
+                                 & intra_bgrp_comm
   USE mp,                   ONLY : mp_bcast,mp_sum
   USE cell_base,            ONLY : omega
   USE fft_base,             ONLY : dffts
@@ -1369,9 +1489,9 @@ SUBROUTINE solve_wfreq_k(l_read_restart,l_generate_plot)
 #endif
               !
               IF(nimage > 1) THEN
-                 !$acc update host(overlap)
+                 !$acc host_data use_device(overlap)
                  CALL mp_sum(overlap,inter_image_comm)
-                 !$acc update device(overlap)
+                 !$acc end host_data
               ENDIF
               !
               ! Update zmati with cond

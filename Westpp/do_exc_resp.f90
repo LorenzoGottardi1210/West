@@ -10,7 +10,7 @@
 ! Contributors to this file:
 ! Marco Govoni
 !
-SUBROUTINE do_resp()
+SUBROUTINE do_exc_resp()
   !
   USE kinds,                 ONLY : DP
   USE io_push,               ONLY : io_push_title
@@ -47,9 +47,9 @@ SUBROUTINE do_resp()
   CHARACTER(LEN=512) :: fname
   TYPE(bar_type) :: barra
   !
-  IF(westpp_n_liouville_to_use < 1) CALL errore('do_resp','westpp_n_liouville_to_use < 1',1)
+  IF(westpp_n_liouville_to_use < 1) CALL errore('do_exc_resp','westpp_n_liouville_to_use < 1',1)
   IF(westpp_range(2) > westpp_n_liouville_to_use) &
-     CALL errore('do_resp','westpp_range(2) > westpp_n_liouville_to_use',1)
+  & CALL errore('do_exc_resp','westpp_range(2) > westpp_n_liouville_to_use',1)
   !
   ! ... DISTRIBUTE
   !
@@ -126,7 +126,7 @@ SUBROUTINE do_resp()
               !
               CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),dvg_exc(:,ibnd,iks,lexc),psic,'Wave')
               !
-              !$acc parallel loop present(rho)
+              !$acc parallel loop present(rho,psic)
               DO ir = 1, dffts_nnr
                  rho(ir) = rho(ir) + w1 * REAL(psic(ir),KIND=DP)*AIMAG(psic(ir))
               ENDDO
@@ -137,7 +137,7 @@ SUBROUTINE do_resp()
               CALL single_invfft_k(dffts,npw,npwx,evc(:,ibnd),psic,'Wave',igk_k(:,current_k))
               CALL single_invfft_k(dffts,npw,npwx,dvg_exc(:,ibnd,iks,lexc),psic_aux,'Wave',igk_k(:,current_k))
               !
-              !$acc parallel loop present(rho,psic_aux)
+              !$acc parallel loop present(rho,psic,psic_aux)
               DO ir = 1, dffts_nnr
                  rho(ir) = rho(ir) + w1 * CONJG(psic(ir))*psic_aux(ir)
               ENDDO

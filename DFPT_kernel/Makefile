@@ -20,20 +20,20 @@ precondition_m_wfcts.o
 
 TLDEPS = bindir mods pwlibs pw
 
-all : title tldeps lib_dfpt_kernel.a
+all: title tldeps lib_dfpt_kernel.a
 
-tldeps :
+tldeps:
 	test -n "$(TLDEPS)" && ( cd ../.. ; $(MAKE) $(MFLAGS) $(TLDEPS) || exit 1) || :
 
-lib_dfpt_kernel.a : $(DFPT_KERNEL_OBJS)
+lib_dfpt_kernel.a: $(DFPT_KERNEL_OBJS)
 	$(AR) $(ARFLAGS) $@ $?
 	$(RANLIB) $@
 
-clean :
+clean:
 	- /bin/rm -f *.x *.o *.a *~ *_tmp.f90 *.d *.mod *.i *.L
 	- /bin/rm -f lib_dfpt_kernel.a
 
-title :
+title:
 	@echo
 	@echo "####################"
 	@echo "### DFPT_kernel ####"

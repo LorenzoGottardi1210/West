@@ -149,7 +149,7 @@ SUBROUTINE bse_kernel_gamma(current_spin,evc1,bse_k1d,sf)
               CALL double_invfft_gamma(dffts,npw,npwx,caux1(:,jbnd),gaux,psic,'Wave')
               !
               IF(ibnd == my_ibnd) THEN
-                 !$acc parallel loop present(raux1)
+                 !$acc parallel loop present(raux1,psic)
                  DO ir = 1, dffts_nnr
                     raux1(ir) = raux1(ir)+REAL(psic(ir),KIND=DP)*AIMAG(psic(ir))
                  ENDDO
@@ -157,7 +157,7 @@ SUBROUTINE bse_kernel_gamma(current_spin,evc1,bse_k1d,sf)
               ENDIF
               !
               IF(ibnd == my_jbnd) THEN
-                 !$acc parallel loop present(raux2)
+                 !$acc parallel loop present(raux2,psic)
                  DO ir = 1, dffts_nnr
                     raux2(ir) = raux2(ir)+REAL(psic(ir),KIND=DP)*AIMAG(psic(ir))
                  ENDDO
@@ -172,7 +172,7 @@ SUBROUTINE bse_kernel_gamma(current_spin,evc1,bse_k1d,sf)
         !
         IF(lbnd < band_group%nloc) THEN
            !
-           !$acc parallel loop present(raux1,raux2)
+           !$acc parallel loop present(psic,raux1,raux2)
            DO ir = 1, dffts_nnr
               psic(ir) = CMPLX(raux1(ir),raux2(ir),KIND=DP)
            ENDDO
@@ -182,7 +182,7 @@ SUBROUTINE bse_kernel_gamma(current_spin,evc1,bse_k1d,sf)
            !
         ELSE
            !
-           !$acc parallel loop present(raux1)
+           !$acc parallel loop present(psic,raux1)
            DO ir = 1, dffts_nnr
               psic(ir) = CMPLX(raux1(ir),KIND=DP)
            ENDDO

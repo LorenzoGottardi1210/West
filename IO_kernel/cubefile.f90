@@ -71,7 +71,7 @@ MODULE cubefile
       !
       OPEN(NEWUNIT=iu,FILE=TRIM(ADJUSTL(fname)))
       !
-      WRITE(iu,*) 'Cubfile created from WEST calculation'
+      WRITE(iu,*) 'Cubefile created from WEST calculation'
       WRITE(iu,*) 'Comment'
       !                        origin is forced to (0.0,0.0,0.0)
       WRITE(iu,'(I5,3F12.6)') nat, 0.0_DP, 0.0_DP, 0.0_DP

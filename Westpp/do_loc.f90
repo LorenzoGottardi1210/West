@@ -11,7 +11,7 @@
 ! Marco Govoni
 !
 !----------------------------------------------------------------------------
-SUBROUTINE do_loc ( )
+SUBROUTINE do_loc()
   !----------------------------------------------------------------------------
   !
   USE kinds,                 ONLY : DP
@@ -37,7 +37,8 @@ SUBROUTINE do_loc ( )
   USE types_bz_grid,         ONLY : k_grid
   USE cell_base,             ONLY : alat,at,omega
   USE json_module,           ONLY : json_file,json_core,json_value
-  USE wavefunctions,         ONLY : evc,psic
+  USE noncollin_module,      ONLY : noncolin
+  USE wavefunctions,         ONLY : evc,psic,psic_nc
 #if defined(__CUDA)
   USE west_gpu,              ONLY : allocate_gpu,deallocate_gpu
 #endif
@@ -47,17 +48,17 @@ SUBROUTINE do_loc ( )
   ! ... LOCAL variables
   !
   LOGICAL :: l_box
-  INTEGER :: ig, ir, i, iks, ib, ib_g, ib2_g, jb, ir1, ir2, ir3, npt, nstate, iunit
+  INTEGER :: ig,ir,i,iks,ib,ib_g,ib2_g,jb,ir1,ir2,ir3,npt,nstate,iunit
   INTEGER :: dffts_nnr
-  REAL(DP), ALLOCATABLE :: local_fac(:,:), ipr(:,:)
-  REAL(DP), ALLOCATABLE :: filter(:), filter_loc(:)
+  REAL(DP), ALLOCATABLE :: local_fac(:,:),ipr(:,:)
+  REAL(DP), ALLOCATABLE :: filter(:),filter_loc(:)
   REAL(DP), ALLOCATABLE :: spav(:)
   REAL(DP), ALLOCATABLE :: ovlp_ab(:,:)
-  COMPLEX(DP), ALLOCATABLE :: auxc(:), auxg(:)
+  COMPLEX(DP), ALLOCATABLE :: auxc(:),auxg(:)
   COMPLEX(DP), ALLOCATABLE :: evc_tmp(:,:,:)
-  REAL(DP) :: rho, r_vec(3)
-  REAL(DP) :: r, dr
-  REAL(DP) :: reduce, reduce2
+  REAL(DP) :: rho,r_vec(3)
+  REAL(DP) :: r,dr
+  REAL(DP) :: reduce,reduce2
   CHARACTER(LEN=6) :: label_k
   CHARACTER(LEN=6) :: label_b
   TYPE(bar_type) :: barra
@@ -67,7 +68,7 @@ SUBROUTINE do_loc ( )
   !
   IF(westpp_range(2) > nbnd) CALL errore('do_loc','westpp_range(2) > nbnd',1)
   !
-  nstate = westpp_range(2) - westpp_range(1) + 1
+  nstate = westpp_range(2)-westpp_range(1)+1
   aband = idistribute()
   CALL aband%init(nstate,'i','westpp_range',.TRUE.)
   !
@@ -78,7 +79,7 @@ SUBROUTINE do_loc ( )
   dffts_nnr = dffts%nnr
   !
   l_box = .TRUE.
-  DO i = 1, 7
+  DO i = 1,7
      IF(westpp_format(i:i) == 's' .OR. westpp_format(i:i) == 'S') l_box = .FALSE.
   ENDDO
   !
@@ -102,7 +103,7 @@ SUBROUTINE do_loc ( )
   !
   CALL io_push_title('(L)ocalization Factor')
   !
-  CALL start_bar_type(barra, 'westpp', k_grid%nps * MAX(aband%nloc,1))
+  CALL start_bar_type(barra,'westpp',k_grid%nps*MAX(aband%nloc,1))
   !
   IF(l_box) THEN
      !
@@ -115,10 +116,10 @@ SUBROUTINE do_loc ( )
         filter(:) = 0._DP
         npt = 0
         ir = 0
-        DO ir3 = 1, dffts%nr3
-           DO ir2 = 1, dffts%nr2
-              DO ir1 = 1, dffts%nr1
-                 ir = ir + 1
+        DO ir3 = 1,dffts%nr3
+           DO ir2 = 1,dffts%nr2
+              DO ir1 = 1,dffts%nr1
+                 ir = ir+1
                  !
                  ! create real-space vector
                  !
@@ -143,12 +144,12 @@ SUBROUTINE do_loc ( )
      !
      ! scatter filter to all FFT processes
      !
-     CALL scatter_grid(dffts, filter, filter_loc)
+     CALL scatter_grid(dffts,filter,filter_loc)
      !$acc update device(filter_loc)
      !
      ! broadcast the number of points in box to all FFT processes
      !
-     CALL mp_bcast(npt, root_bgrp, intra_bgrp_comm)
+     CALL mp_bcast(npt,root_bgrp,intra_bgrp_comm)
      !
      IF(npt == 0) CALL errore('do_loc','no point found in integration volume',1)
      !
@@ -158,10 +159,10 @@ SUBROUTINE do_loc ( )
      !
   ENDIF
   !
-  ipr = 0._DP
-  local_fac = 0._DP
+  ipr(:,:) = 0._DP
+  local_fac(:,:) = 0._DP
   !
-  DO iks = 1, k_grid%nps  ! KPOINT-SPIN LOOP
+  DO iks = 1,k_grid%nps  ! KPOINT-SPIN LOOP
      !
      ! ... Set k-point, spin, kinetic energy, needed by Hpsi
      !
@@ -179,8 +180,8 @@ SUBROUTINE do_loc ( )
      IF(gamma_only .AND. nspin == 2) THEN
         !
         !$acc parallel loop collapse(2) present(evc_tmp,evc)
-        DO ib_g = westpp_range(1), westpp_range(2)
-           DO ig = 1, npwx
+        DO ib_g = westpp_range(1),westpp_range(2)
+           DO ig = 1,npwx
               evc_tmp(ig,ib_g-westpp_range(1)+1,iks) = evc(ig,ib_g)
            ENDDO
         ENDDO
@@ -204,28 +205,23 @@ SUBROUTINE do_loc ( )
            !
            IF(l_box) THEN
               !
-              !$acc parallel loop reduction(+:reduce,reduce2) present(filter_loc) copy(reduce,reduce2)
-              DO ir = 1, dffts_nnr
+              !$acc parallel loop reduction(+:reduce,reduce2) present(psic,filter_loc) copy(reduce,reduce2)
+              DO ir = 1,dffts_nnr
                  rho = REAL(psic(ir),KIND=DP)**2
                  reduce = reduce+filter_loc(ir)*rho
                  reduce2 = reduce2+rho**2
               ENDDO
               !$acc end parallel
               !
-              local_fac(ib2_g,iks) = reduce
-              ipr(ib2_g,iks) = reduce2
-              !
            ELSE
               !
-              !$acc parallel loop reduction(+:reduce2) present(auxc) copy(reduce2)
-              DO ir = 1, dffts_nnr
+              !$acc parallel loop reduction(+:reduce2) present(psic,auxc) copy(reduce2)
+              DO ir = 1,dffts_nnr
                  rho = REAL(psic(ir),KIND=DP)**2
                  auxc(ir) = CMPLX(rho,KIND=DP)
                  reduce2 = reduce2+rho**2
               ENDDO
               !$acc end parallel
-              !
-              ipr(ib2_g,iks) = reduce2
               !
               CALL single_fwfft_gamma(dffts,ngm,ngm,auxc,auxg,'Rho')
               !
@@ -236,34 +232,48 @@ SUBROUTINE do_loc ( )
               !$acc update device(spav)
               !
               !$acc parallel loop reduction(+:reduce) present(spav) copy(reduce)
-              DO ir = 1, westpp_nr+1
+              DO ir = 1,westpp_nr+1
                  r = REAL(ir-1,KIND=DP) * dr
                  reduce = reduce+(r**2)*spav(ir)
               ENDDO
               !$acc end parallel
               !
-              local_fac(ib2_g,iks) = reduce
-              !
            ENDIF
            !
-        ELSE
+        ELSEIF(noncolin) THEN
            !
-           CALL single_invfft_k(dffts,npw,npwx,evc(:,ib_g),psic,'Wave',igk_k(:,current_k))
+           CALL single_invfft_k(dffts,npw,npwx,evc(1:npwx,ib_g),psic_nc(:,1),'Wave',&
+           & igk_k(:,current_k))
+           CALL single_invfft_k(dffts,npw,npwx,evc(npwx+1:npwx*2,ib_g),psic_nc(:,2),'Wave',&
+           & igk_k(:,current_k))
            !
-           !$acc parallel loop reduction(+:reduce,reduce2) present(filter_loc) copy(reduce,reduce2)
-           DO ir = 1, dffts_nnr
-              rho = REAL(CONJG(psic(ir))*psic(ir),KIND=DP)
+           !$acc parallel loop reduction(+:reduce,reduce2) present(psic_nc,filter_loc) copy(reduce,reduce2)
+           DO ir = 1,dffts_nnr
+              rho = REAL(psic_nc(ir,1),KIND=DP)**2 + AIMAG(psic_nc(ir,1))**2 &
+                & + REAL(psic_nc(ir,2),KIND=DP)**2 + AIMAG(psic_nc(ir,2))**2
               reduce = reduce+filter_loc(ir)*rho
               reduce2 = reduce2+rho**2
            ENDDO
            !$acc end parallel
            !
-           local_fac(ib2_g,iks) = reduce
-           ipr(ib2_g,iks) = reduce2
+        ELSE
+           !
+           CALL single_invfft_k(dffts,npw,npwx,evc(:,ib_g),psic,'Wave',igk_k(:,current_k))
+           !
+           !$acc parallel loop reduction(+:reduce,reduce2) present(psic,filter_loc) copy(reduce,reduce2)
+           DO ir = 1,dffts_nnr
+              rho = REAL(psic(ir),KIND=DP)**2 + AIMAG(psic(ir))**2
+              reduce = reduce+filter_loc(ir)*rho
+              reduce2 = reduce2+rho**2
+           ENDDO
+           !$acc end parallel
            !
         ENDIF
         !
-        CALL update_bar_type(barra,'westpp', 1)
+        local_fac(ib2_g,iks) = reduce
+        ipr(ib2_g,iks) = reduce2
+        !
+        CALL update_bar_type(barra,'westpp',1)
         !
      ENDDO
      !
@@ -272,11 +282,11 @@ SUBROUTINE do_loc ( )
   ! Post processing
   !
   IF(l_box) THEN
-     local_fac(:,:) = local_fac(:,:)/(dffts%nr1*dffts%nr2*dffts%nr3)
+     local_fac(:,:) = local_fac/(dffts%nr1*dffts%nr2*dffts%nr3)
   ELSE
-     local_fac(:,:) = local_fac(:,:)*fpi*dr/omega
+     local_fac(:,:) = local_fac*fpi*dr/omega
   ENDIF
-  ipr(:,:) = ipr(:,:)/(dffts%nr1*dffts%nr2*dffts%nr3)/omega
+  ipr(:,:) = ipr/(dffts%nr1*dffts%nr2*dffts%nr3)/omega
   !
   ! sum up results
   !
@@ -304,7 +314,7 @@ SUBROUTINE do_loc ( )
      !
      ! output localization factor and IPR
      !
-     DO iks = 1, k_grid%nps
+     DO iks = 1,k_grid%nps
         WRITE(label_k,'(I6.6)') iks
         CALL json%add('output.L.K'//label_k//'.local_factor',local_fac(:,iks))
         CALL json%add('output.L.K'//label_k//'.ipr',ipr(:,iks))
@@ -315,7 +325,7 @@ SUBROUTINE do_loc ( )
         CALL jcor%create_array(jval,'overlap_ab')
         CALL json%add('output.L.overlap_ab',jval)
         !
-        DO ib = 1, nstate
+        DO ib = 1,nstate
            !
            jb = MAXLOC(ABS(ovlp_ab(:,ib)),DIM=1)
            !
@@ -336,7 +346,7 @@ SUBROUTINE do_loc ( )
      !
   ENDIF
   !
-  CALL stop_bar_type(barra, 'westpp')
+  CALL stop_bar_type(barra,'westpp')
   !
   IF(l_box) THEN
      DEALLOCATE(filter)

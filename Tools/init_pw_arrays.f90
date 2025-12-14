@@ -35,6 +35,7 @@ SUBROUTINE init_pw_arrays(ncalbec)
   USE lsda_mod,               ONLY : nspin
   USE wvfct,                  ONLY : nbnd,npwx
   USE kinds,                  ONLY : i8b
+  USE command_line_options,   ONLY : command_line
   !
   IMPLICIT NONE
   !
@@ -48,8 +49,11 @@ SUBROUTINE init_pw_arrays(ncalbec)
   LOGICAL :: exst
   LOGICAL :: exst_mem
   LOGICAL :: l_open_buffer
+  LOGICAL :: is_wbse_init
   INTEGER(i8b) :: lrwfc_int8
+  INTEGER(i8b) :: recl_int8
   INTEGER(i8b),PARAMETER :: max_int4 = 2147483647
+  LOGICAL,EXTERNAL :: matches
   !
   CALL start_clock('init_pw_ar')
   !
@@ -68,15 +72,32 @@ SUBROUTINE init_pw_arrays(ncalbec)
   ! Stop if lrwfc overflows 4-byte integer
   !
   lrwfc_int8 = 1_i8b*nbnd*npwx*npol
-  IF(lrwfc_int8 > max_int4) CALL errore('init_pw_ar','lrwfc too large',1)
+  IF(lrwfc_int8 > max_int4) &
+  & CALL errore('init_pw_ar','lrwfc too large, rerun with more R&G parallelization',1)
   !
   lrwfc = nbnd*npwx*npol
   !
-  IF((.NOT. gamma_only) .OR. nks > 1 .OR. (xclib_dft_is('hybrid') .AND. n_exx_lowrank < 1)) THEN
-     l_open_buffer = .TRUE.
-  ELSE
-     l_open_buffer = .FALSE.
+  ! Decide if buffers are needed
+  !
+  l_open_buffer = .FALSE.
+  IF(.NOT. gamma_only) l_open_buffer = .TRUE.
+  IF(nks > 1) l_open_buffer = .TRUE.
+  is_wbse_init = matches('wbse_init.x',command_line)
+  IF(.NOT. is_wbse_init) THEN
+     IF(xclib_dft_is('hybrid') .AND. n_exx_lowrank < 1) l_open_buffer = .TRUE.
   ENDIF
+  !
+#if defined(__NVCOMPILER) || defined(__PGI)
+  IF(l_open_buffer) THEN
+     !
+     ! Handle nvfortran compiler bug
+     ! Fortran direct access I/O fails if record length overflows 4-byte integer
+     !
+     recl_int8 = 1_i8b*nbnd*npwx*npol*16
+     IF(recl_int8 > max_int4) &
+     & CALL errore('init_pw_ar','recl too large, rerun with more R&G parallelization',1)
+  ENDIF
+#endif
   !
   IF(my_image_id == 0) THEN
      IF(l_open_buffer) THEN

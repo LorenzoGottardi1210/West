@@ -16,6 +16,7 @@
 12. SiH4 molecule, QDET, Gamma only
 13. SiH4 molecule, QDET verbosity, Gamma only
 14. NV- diamond, spin-polarized QDET, Gamma only
+<<<<<<< HEAD
 15. SiH4 molecule, GW hybrid no ACE, Gamma only
 16. SiH4 molecule, BSE Lanczos, Gamma only
 17. SiH4 molecule, BSE Davidson, Gamma only
@@ -28,8 +29,28 @@
 24. O2 molecule, spin-flip TDDFT (PBE) forces, Gamma only
 25. O2 molecule, spin-flip TDDFT (PBE0) forces, Gamma only
 26. Formaldehyde molecule, westpp excited state decomposition, Gamma only
-27. NV- diamond spin-flip TDDFT (PBE) forces and eeNACs, Gamma only
-28. NV- diamond spin-flip TDDFT (PBE0) forces and eeNACs, Gamma only
+=======
+15. SiH4 molecule, TDDFT (PBE0) Lanczos, Gamma only
+16. Formaldehyde molecule, TDDFT (PBE) forces, geNACs and eeNACs, Gamma only
+17. NV- diamond spin-polarized TDDFT (PBE) forces, geNACs and eeNACs, Gamma only
+18. Formaldehyde molecule, TDDFT (PBE0) forces and eeNACs, Gamma only
+19. NV- diamond spin-polarized TDDFT (DDH) forces and eeNACs, Gamma only
+20. O2 molecule, spin-flip TDDFT (LDA) forces, Gamma only
+21. O2 molecule, spin-flip TDDFT (PBE) forces, Gamma only
+22. O2 molecule, spin-flip TDDFT (PBE0) forces, Gamma only
+23. O2 molecule, spin-flip TDDFT (HSE) forces, Gamma only
+24. Formaldehyde molecule, westpp excited state decomposition, Gamma only
+25. SiH4 molecule, BSE (PBE) Lanczos, Gamma only
+26. Formaldehyde molecule, BSE (PBE) forces, Gamma only
+27. NV- diamond spin-polarized BSE (PBE) forces, Gamma only
+28. Formaldehyde molecule, BSE (PBE0) forces, Gamma only
+29. NV- diamond spin-polarized BSE (DDH) forces, Gamma only
+30. O2 molecule, spin-flip BSE (PBE) forces, Gamma only
+31. O2 molecule, spin-flip BSE (HSE) forces, Gamma only
+32. Pb atom, GW, spin orbit
+33. NV- diamond spin-flip TDDFT (PBE) forces and eeNACs, Gamma only
+34. NV- diamond spin-flip TDDFT (PBE0) forces and eeNACs, Gamma only
+>>>>>>> develop
 
 ## Executing tests
 

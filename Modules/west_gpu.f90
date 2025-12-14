@@ -763,12 +763,10 @@ MODULE west_gpu
       ALLOCATE(gaux(npwx))
       !$acc enter data create(gaux)
    ENDIF
-   IF(.NOT. l_bse) THEN
-      ALLOCATE(caux4(3,dfftp%nnr,nspin_gga))
-      !$acc enter data create(caux4)
-      ALLOCATE(gdrho(3,dfftp%nnr,nspin_gga))
-      !$acc enter data create(gdrho)
-   ENDIF
+   ALLOCATE(caux4(3,dfftp%nnr,nspin_gga))
+   !$acc enter data create(caux4)
+   ALLOCATE(gdrho(3,dfftp%nnr,nspin_gga))
+   !$acc enter data create(gdrho)
    ALLOCATE(hevc1(npwx*npol,nbndlocx))
    !$acc enter data create(hevc1)
    ALLOCATE(dvrs(dffts%nnr,nspin))

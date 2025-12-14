@@ -21,6 +21,7 @@ SUBROUTINE solve_zvector_eq_cg(z_rhs, z_out)
   USE pwcom,                ONLY : npwx,nspin
   USE westcom,              ONLY : forces_zeq_cg_tr,forces_zeq_n_cg_maxiter,l_pre_shift,&
                                  & forces_inexact_krylov,forces_inexact_krylov_tr,do_inexact_krylov
+  USE wbse_dv,              ONLY : wbse_dv_setup
   USE io_push,              ONLY : io_push_title
   USE distribution_center,  ONLY : kpt_pool,band_group
   USE mp_global,            ONLY : inter_image_comm
@@ -72,6 +73,8 @@ SUBROUTINE solve_zvector_eq_cg(z_rhs, z_out)
   ALLOCATE(dotp(nspin))
   ALLOCATE(rz_new(nspin))
   ALLOCATE(rz_old(nspin))
+  !
+  CALL wbse_dv_setup(.FALSE.)
   !
   CALL wbse_dot(z_rhs,z_rhs,band_group%nlocx,dotp)
   !

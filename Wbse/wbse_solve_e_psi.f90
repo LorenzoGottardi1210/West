@@ -155,13 +155,13 @@ SUBROUTINE compute_d0psi_rs()
            !
            CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),evc(:,jbnd),psic,'Wave')
            !
-           !$acc kernels present(aux_r)
+           !$acc kernels present(aux_r,psic)
            aux_r(:) = psic
            !$acc end kernels
            !
            DO ip = 1, n_ipol
               !
-              !$acc parallel loop present(aux_r,r)
+              !$acc parallel loop present(psic,aux_r,r)
               DO ir = 1, dffts_nnr
                  psic(ir) = aux_r(ir)*r(ir,ip)*alat
               ENDDO
@@ -177,13 +177,13 @@ SUBROUTINE compute_d0psi_rs()
            !
            CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),psic,'Wave')
            !
-           !$acc kernels present(aux_r)
+           !$acc kernels present(aux_r,psic)
            aux_r(:) = psic
            !$acc end kernels
            !
            DO ip = 1, n_ipol
               !
-              !$acc parallel loop present(aux_r,r)
+              !$acc parallel loop present(psic,aux_r,r)
               DO ir = 1, dffts_nnr
                  psic(ir) = CMPLX(REAL(aux_r(ir),KIND=DP)*r(ir,ip)*alat,KIND=DP)
               ENDDO

@@ -177,8 +177,7 @@ SUBROUTINE hybrid_kernel_term3(current_spin, evc1, hybrid_kd3, sf)
   USE fft_at_gamma,          ONLY : single_fwfft_gamma,double_invfft_gamma
   USE mp_global,             ONLY : inter_image_comm,my_image_id
   USE pwcom,                 ONLY : npw,npwx,isk,ngk
-  USE westcom,               ONLY : nbnd_occ,iuwfc,lrwfc,n_trunc_bands,evc1_all,&
-                                    evc1J_all, l_forces, l_eenac, computing_eenac 
+  USE westcom,               ONLY : nbnd_occ,iuwfc,lrwfc,n_trunc_bands,evc1_all
   USE exx,                   ONLY : exxalfa
   USE buffers,               ONLY : get_buffer
   USE distribution_center,   ONLY : kpt_pool,band_group
@@ -189,7 +188,7 @@ SUBROUTINE hybrid_kernel_term3(current_spin, evc1, hybrid_kd3, sf)
   ! I/O
   !
   INTEGER, INTENT(IN) :: current_spin
-  COMPLEX(DP), INTENT(IN) :: evc1(npwx,band_group%nlocx,kpt_pool%nloc) !!! It's not actually used
+  COMPLEX(DP), INTENT(IN) :: evc1(npwx,band_group%nlocx,kpt_pool%nloc)
   LOGICAL, INTENT(IN) :: sf
   COMPLEX(DP), INTENT(INOUT) :: hybrid_kd3(npwx,band_group%nlocx)
   !
@@ -259,7 +258,7 @@ SUBROUTINE hybrid_kernel_term3(current_spin, evc1, hybrid_kd3, sf)
         !
         DO jbnd = 1, flnbndval - n_trunc_bands ! index to be summed
            !
-           ! product of evc1_all and evc
+           ! product of evc1 and evc
            !
            CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,jbnd,ikq),evc(:,ibndp),psic,'Wave')
            !
@@ -279,9 +278,7 @@ SUBROUTINE hybrid_kernel_term3(current_spin, evc1, hybrid_kd3, sf)
            ENDDO
            !$acc end parallel
            !
-           ! two separate cases: forces and eeNACs
-           IF (l_forces .AND. .NOT.computing_eenac) CALL double_invfft_gamma(dffts,npw,npwx,gaux,evc1_all(:,jbnd,ikq),caux,'Wave') 
-           IF (l_eenac  .AND. computing_eenac) CALL double_invfft_gamma(dffts,npw,npwx,gaux,evc1J_all(:,jbnd,ikq),caux,'Wave') 
+           CALL double_invfft_gamma(dffts,npw,npwx,gaux,evc1_all(:,jbnd,ikq),caux,'Wave')
            !
            !$acc parallel loop present(caux)
            DO ir = 1, dffts_nnr
@@ -347,8 +344,7 @@ SUBROUTINE hybrid_kernel_term4(current_spin, evc1, hybrid_kd4, sf)
   USE fft_at_gamma,          ONLY : single_fwfft_gamma,double_invfft_gamma
   USE mp_global,             ONLY : inter_image_comm,my_image_id
   USE pwcom,                 ONLY : npw,npwx,isk,ngk
-  USE westcom,               ONLY : nbnd_occ,iuwfc,lrwfc,n_trunc_bands,evc1_all,&
-                                    evc1J_all, l_forces, l_eenac, computing_eenac 
+  USE westcom,               ONLY : nbnd_occ,iuwfc,lrwfc,n_trunc_bands,evc1_all
   USE exx,                   ONLY : exxalfa
   USE buffers,               ONLY : get_buffer
   USE distribution_center,   ONLY : kpt_pool,band_group
@@ -359,7 +355,7 @@ SUBROUTINE hybrid_kernel_term4(current_spin, evc1, hybrid_kd4, sf)
   ! I/O
   !
   INTEGER, INTENT(IN) :: current_spin
-  COMPLEX(DP), INTENT(IN) :: evc1(npwx,band_group%nlocx,kpt_pool%nloc) !!! It's not actually used
+  COMPLEX(DP), INTENT(IN) :: evc1(npwx,band_group%nlocx,kpt_pool%nloc)
   LOGICAL, INTENT(IN) :: sf
   COMPLEX(DP), INTENT(INOUT) :: hybrid_kd4(npwx,band_group%nlocx)
   !
@@ -429,18 +425,10 @@ SUBROUTINE hybrid_kernel_term4(current_spin, evc1, hybrid_kd4, sf)
            !
            jbndp = jbnd + n_trunc_bands
            !
-           ! two separate cases: forces and eeNACs
-           ! for the forces: product of evc1 and evc1
-           IF (l_forces .AND. .NOT.computing_eenac) THEN 
-              CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,ibnd,iks_do),&
-                                      & evc1_all(:,jbnd,iks_do),psic,'Wave')
-           ENDIF 
+           ! product of evc1 and evc1
            !
-           ! for the eenac: product of evc1_I and evc1_J
-           IF (l_eenac .AND. computing_eenac) THEN 
-              CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,ibnd,iks_do),&
-                                      & evc1J_all(:,jbnd,iks_do),psic,'Wave')
-           ENDIF
+           CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,ibnd,iks_do),evc1_all(:,jbnd,iks_do),&
+           & psic,'Wave')
            !
            !$acc parallel loop present(caux)
            DO ir = 1, dffts_nnr

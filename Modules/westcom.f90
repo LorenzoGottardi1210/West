@@ -51,6 +51,9 @@ MODULE scratch_area
   REAL(DP),    ALLOCATABLE :: d_epsm1_ifr_a(:,:,:)
   COMPLEX(DP), ALLOCATABLE :: z_epsm1_ifr_a(:,:,:)
   COMPLEX(DP), ALLOCATABLE :: z_epsm1_rfr_a(:,:,:)
+  REAL(DP),    ALLOCATABLE :: d_epsm1_ifr_dc(:,:,:)
+  COMPLEX(DP), ALLOCATABLE :: z_epsm1_ifr_dc(:,:,:)
+  COMPLEX(DP), ALLOCATABLE :: z_epsm1_rfr_dc(:,:,:)
 #if defined(__CUDA)
   ATTRIBUTES(PINNED) :: d_epsm1_ifr
 #endif
@@ -80,6 +83,8 @@ MODULE scratch_area
   COMPLEX(DP), ALLOCATABLE :: z_body_rfr_full(:,:,:,:)
   REAL(DP),    ALLOCATABLE :: d_head_ifr_a(:)
   COMPLEX(DP), ALLOCATABLE :: z_head_rfr_a(:)
+  REAL(DP),    ALLOCATABLE :: d_head_ifr_dc(:)
+  COMPLEX(DP), ALLOCATABLE :: z_head_rfr_dc(:)
   !
   ! CORRELATION with q-points
   !
@@ -183,6 +188,7 @@ MODULE wfreq_center
   CHARACTER(LEN=1) :: macropol_calculation
   REAL(DP) :: ecut_spectralf(2)
   INTEGER :: n_spectralf
+  CHARACTER(LEN=7) :: qdet_dc
   !
   ! Common workspace
   !
@@ -190,6 +196,7 @@ MODULE wfreq_center
   CHARACTER(LEN=512) :: wfreq_restart_dir
   LOGICAL, PARAMETER :: l_skip_nl_part_of_hcomr = .FALSE.
   LOGICAL :: l_macropol
+  LOGICAL :: l_dc2025
   INTEGER, ALLOCATABLE :: na_ikb(:)
   INTEGER, ALLOCATABLE :: ijkb0_ikb(:)
   !
@@ -338,6 +345,7 @@ MODULE wbse_center
   REAL(DP) :: wbse_epsinfty
   CHARACTER(LEN=1) :: spin_excitation
   LOGICAL :: l_forces
+  LOGICAL :: do_forces
   INTEGER :: forces_state
   REAL(DP) :: forces_zeq_cg_tr
   INTEGER :: forces_zeq_n_cg_maxiter
@@ -359,6 +367,7 @@ MODULE wbse_center
   LOGICAL :: l_davidson
   LOGICAL :: l_bse_triplet
   INTEGER :: n_tau
+  REAL(DP) :: sigma_head
   REAL(DP) :: sigma_c_head
   REAL(DP) :: sigma_x_head
   LOGICAL :: do_inexact_krylov

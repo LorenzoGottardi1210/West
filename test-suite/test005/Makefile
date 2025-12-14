@@ -12,16 +12,16 @@ prepare_inputs:
 run: pw wstat westpp
 
 pw:
-	${PARA_PREFIX_QE} ${BINDIR}/pw.x -i pw.in > pw.out 2> pw.err
+	$(PARA_PREFIX_QE) $(BINDIR)/pw.x -i pw.in > pw.out 2> pw.err
 
 wstat: pw
-	${PARA_PREFIX} ${BINDIR}/wstat.x -nimage ${NIMAGE} -nband ${NBAND} -i wstat.in > wstat.out 2> wstat.err
+	$(PARA_PREFIX) $(BINDIR)/wstat.x -nimage $(NIMAGE) -nband $(NBAND) -i wstat.in > wstat.out 2> wstat.err
 
 westpp: wstat
-	${PARA_PREFIX} ${BINDIR}/westpp.x -nimage ${NIMAGE} -i westpp.in > westpp.out 2> westpp.err
+	$(PARA_PREFIX) $(BINDIR)/westpp.x -nimage $(NIMAGE) -i westpp.in > westpp.out 2> westpp.err
 
 clean:
-	- /bin/rm -rf *out *err *in *xml *upf *tab *restart *save *wfc* CRASH > /dev/null 2>&1
+	- /bin/rm -rf *out *err *in *xml *upf *tab *restart *save *wfc* *mix* CRASH > /dev/null 2>&1
 
 title:
 	@echo

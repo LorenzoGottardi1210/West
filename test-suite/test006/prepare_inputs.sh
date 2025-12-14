@@ -1,7 +1,7 @@
 #!/bin/bash
 
-${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/H_ONCV_PBE-1.0.upf
-${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/Si_ONCV_PBE-1.1.upf
+${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/H_ONCV_PBE-1.2.upf
+${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/Si_ONCV_PBE-1.2.upf
 
 cat > pw.in << EOF
 &control
@@ -16,17 +16,18 @@ ibrav           = 1
 celldm(1)       = 20
 nat             = 5
 ntyp            = 2
-ecutwfc         = 25.0
+ecutwfc         = 25
 nbnd            = 30
-assume_isolated = 'mp'
 input_dft       = 'pbe0'
+ecutfock        = 25
+assume_isolated = 'mp'
 /
 &electrons
 diago_full_acc = .true.
 /
 ATOMIC_SPECIES
-Si 28.0855  Si_ONCV_PBE-1.1.upf
-H  1.00794   H_ONCV_PBE-1.0.upf
+Si 28.0855  Si_ONCV_PBE-1.2.upf
+H  1.00794   H_ONCV_PBE-1.2.upf
 ATOMIC_POSITIONS bohr
 Si      10.000000   10.000000  10.000000
 H       11.614581   11.614581  11.614581
@@ -46,7 +47,6 @@ input_west:
 wstat_control:
   wstat_calculation: S
   n_pdep_eigen: 30
-  l_minimize_exx_if_active: True
 EOF
 
 
@@ -59,7 +59,6 @@ input_west:
 wstat_control:
   wstat_calculation: S
   n_pdep_eigen: 30
-  l_minimize_exx_if_active: True
 
 wfreq_control:
   wfreq_calculation: XWGQ

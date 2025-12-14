@@ -220,7 +220,7 @@ MODULE pdep_db
     ! *****************************
     !
     !------------------------------------------------------------------------
-    SUBROUTINE pdep_db_read(nglob_to_be_read,iq,lprintinfo)
+    SUBROUTINE pdep_db_read(nglob_to_be_read,iq,lprintinfo,lpara)
       !------------------------------------------------------------------------
       !
       USE westcom,             ONLY : n_pdep_eigen,ev,dvg,npwqx,wstat_save_dir
@@ -239,13 +239,16 @@ MODULE pdep_db
       INTEGER,INTENT(IN) :: nglob_to_be_read
       INTEGER,INTENT(IN),OPTIONAL :: iq
       LOGICAL,INTENT(IN),OPTIONAL :: lprintinfo
+      LOGICAL,INTENT(IN),OPTIONAL :: lpara
       !
       ! Workspace
       !
       INTEGER,PARAMETER :: default_iq = 1
       LOGICAL,PARAMETER :: default_lprintinfo = .TRUE.
+      LOGICAL,PARAMETER :: default_lpara = .TRUE.
       INTEGER :: iq_
       LOGICAL :: lprintinfo_
+      LOGICAL :: lpara_
       CHARACTER(LEN=9) :: label_i
       REAL(DP),EXTERNAL :: GET_CLOCK
       REAL(DP) :: time_spent(2)
@@ -272,6 +275,11 @@ MODULE pdep_db
          lprintinfo_ = lprintinfo
       ELSE
          lprintinfo_ = default_lprintinfo
+      ENDIF
+      IF(PRESENT(lpara)) THEN
+         lpara_ = lpara
+      ELSE
+         lpara_ = default_lpara
       ENDIF
       !
       CALL start_clock('pdep_db')
@@ -332,22 +340,43 @@ MODULE pdep_db
       !
       ! 3) READ THE EIGENVECTOR FILES
       !
-      IF(.NOT. ALLOCATED(dvg)) THEN
-         ALLOCATE(dvg(npwqx,pert%nlocx))
-         dvg = 0._DP
+      IF(lpara_) THEN
+         !
+         ! Regular case
+         !
+         IF(.NOT. ALLOCATED(dvg)) THEN
+            ALLOCATE(dvg(npwqx,pert%nlocx))
+            dvg(:,:) = 0._DP
+         ENDIF
+         !
+         DO local_j = 1,pert%nloc
+            !
+            ! local -> global
+            !
+            global_j = pert%l2g(local_j)
+            IF(global_j > n_eigen_to_get) CYCLE
+            !
+            fname = TRIM(wstat_save_dir)//'/'//TRIM(ADJUSTL(eigenpot_filename(global_j)))
+            CALL pdep_read_G_and_distribute(fname,dvg(:,local_j),iq_)
+            !
+         ENDDO
+      ELSE
+         !
+         ! BSE forces
+         !
+         IF(.NOT. ALLOCATED(dvg)) THEN
+            ALLOCATE(dvg(npwqx,n_eigen_to_get))
+            dvg(:,:) = 0._DP
+         ENDIF
+         !
+         DO global_j = 1,n_eigen_to_get
+            !
+            fname = TRIM(wstat_save_dir)//'/'//TRIM(ADJUSTL(eigenpot_filename(global_j)))
+            CALL pdep_read_G_and_distribute(fname,dvg(:,global_j),iq_)
+            !
+         ENDDO
+         !
       ENDIF
-      !
-      DO local_j = 1,pert%nloc
-         !
-         ! local -> global
-         !
-         global_j = pert%l2g(local_j)
-         IF(global_j > n_eigen_to_get) CYCLE
-         !
-         fname = TRIM(wstat_save_dir)//'/'//TRIM(ADJUSTL(eigenpot_filename(global_j)))
-         CALL pdep_read_G_and_distribute(fname,dvg(:,local_j),iq_)
-         !
-      ENDDO
       !
       ! Timing
       !

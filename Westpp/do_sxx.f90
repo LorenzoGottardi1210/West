@@ -195,7 +195,7 @@ SUBROUTINE do_sxx ( )
                  !
                  CALL single_invfft_gamma(dffts,npw,npwx,evc(:,iv),pertr,'Wave')
                  !
-                 !$acc parallel loop present(pertr)
+                 !$acc parallel loop present(pertr,psic)
                  DO ir = 1, dffts_nnr
                     pertr(ir)=psic(ir)*pertr(ir)
                  ENDDO
@@ -208,7 +208,7 @@ SUBROUTINE do_sxx ( )
                  CALL single_invfft_k(dffts,npwkq,npwx,evckmq(1:npwx,iv),pertr_nc(:,1),'Wave',igk_k(:,ikqs))
                  CALL single_invfft_k(dffts,npwkq,npwx,evckmq(1+npwx:npwx*2,iv),pertr_nc(:,2),'Wave',igk_k(:,ikqs))
                  !
-                 !$acc parallel loop present(pertr_nc,phase)
+                 !$acc parallel loop present(pertr_nc,phase,psic_nc)
                  DO ir = 1, dffts_nnr
                     pertr_nc(ir,1)=CONJG(pertr_nc(ir,1)*phase(ir))*psic_nc(ir,1)+CONJG(pertr_nc(ir,2)*phase(ir))*psic_nc(ir,2)
                  ENDDO
@@ -220,7 +220,7 @@ SUBROUTINE do_sxx ( )
                  !
                  CALL single_invfft_k(dffts,npwkq,npwx,evckmq(:,iv),pertr,'Wave',igk_k(:,ikqs))
                  !
-                 !$acc parallel loop present(pertr,phase)
+                 !$acc parallel loop present(pertr,phase,psic)
                  DO ir = 1, dffts_nnr
                     pertr(ir)=CONJG(pertr(ir)*phase(ir)) * psic(ir)
                  ENDDO

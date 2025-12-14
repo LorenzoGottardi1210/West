@@ -31,7 +31,7 @@ SUBROUTINE wbse_davidson_diago ( )
                                  & wstat_calculation,n_pdep_read_from_file,n_steps_write_restart,&
                                  & trev_pdep_rel,l_is_wstat_converged,nbnd_occ,lrwfc,iuwfc,dvg_exc,&
                                  & dng_exc,nbndval0x,n_trunc_bands,l_preconditioning,l_pre_shift,&
-                                 & l_spin_flip,l_forces,forces_state,&
+                                 & l_spin_flip,l_forces,do_forces,forces_state,&
                                  & l_genac,l_eenac,genac_state,eenac_stateI,eenac_stateJ,computing_eenac 
   USE plep_db,              ONLY : plep_db_write,plep_db_read
   USE davidson_restart,     ONLY : davidson_restart_write,davidson_restart_clear,&
@@ -95,21 +95,19 @@ SUBROUTINE wbse_davidson_diago ( )
   !
   ! ... DISTRIBUTE nvecx
   !
-  IF(nimage > nvecx) CALL errore('chidiago','nimage>nvecx',1)
-  !
   pert = idistribute()
   CALL pert%init(nvecx,'i','nvecx',.TRUE.)
+  IF(nimage > nvecx) CALL errore('chidiago','nimage>nvecx',1)
   !
   ! ... DISTRIBUTE nbndval
   !
-  IF(nbgrp > nbndval0x-n_trunc_bands) CALL errore('chidiago','nbgrp>nbndval',1)
-  !
   band_group = idistribute()
   CALL band_group%init(nbndval0x-n_trunc_bands,'b','nbndval',.TRUE.,IDIST_BLK)
+  IF(nbgrp > nbndval0x-n_trunc_bands) CALL errore('chidiago','nbgrp>nbndval',1)
   !
   CALL init_gather_bands()
   !
-  CALL wbse_memory_report() ! Before allocating I report the memory required.
+  CALL wbse_memory_report()
   !
 #if defined(__CUDA)
   CALL allocate_gpu()
@@ -577,6 +575,8 @@ SUBROUTINE wbse_davidson_diago ( )
   CALL stop_clock( 'chidiago' )
   !
   IF(l_forces .OR. l_genac .OR. l_eenac) THEN
+     !
+     do_forces = .TRUE.
      !
      IF(.NOT. l_is_wstat_converged) THEN
       IF (l_forces) CALL errore('chidiago','davidson not converged, cannot compute forces',1)

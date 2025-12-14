@@ -45,24 +45,24 @@ WESTLIBS = \
 
 TLDEPS = bindir mods pwlibs pw
 
-all : title tldeps wstat.x libwstat.a
+all: title tldeps wstat.x libwstat.a
 
-wstat.x : $(WSTAT_OBJS) $(WESTLIBS) $(PWOBJS) $(QEMODS)
+wstat.x: $(WSTAT_OBJS) $(WESTLIBS) $(PWOBJS) $(QEMODS)
 	$(LD) $(LDFLAGS) -o $@ $^ $(QELIBS) $(PYT_LDFLAGS)
 	- ( cd ../../bin ; ln -fs ../West/Wstat/wstat.x . )
 
-tldeps :
+tldeps:
 	test -n "$(TLDEPS)" && ( cd ../.. ; $(MAKE) $(MFLAGS) $(TLDEPS) || exit 1) || :
 
-libwstat.a : $(WSTAT_OBJS)
+libwstat.a: $(WSTAT_OBJS)
 	$(AR) $(ARFLAGS) $@ $?
 	$(RANLIB) $@
 
-clean :
+clean:
 	- /bin/rm -f *.x *.o *.a *~ *_tmp.f90 *.d *.mod *.i *.L
 	- /bin/rm -f ../../bin/wstat.x
 
-title :
+title:
 	@echo
 	@echo "##############"
 	@echo "### Wstat ####"

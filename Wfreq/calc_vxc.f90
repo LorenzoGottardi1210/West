@@ -16,7 +16,7 @@ SUBROUTINE calc_vxc( sigma_vxcl, sigma_vxcnl )
   !
   ! store in sigma_vxc(n,iks) = < qp_bands(n),iks | V_vxc | qp_bands(n),iks >     n = 1,n_bands
   !
-  ! IF (l_enable_off_diagonal .AND. l_full) store in
+  ! IF(l_enable_off_diagonal .AND. l_full) store in
   ! sigma_vxc_full(ijpmap(m,n),iks) = < qp_bands(m),iks | V_vxc | qp_bands(n),iks >     n,m = 1,n_bands & m <= n
   !
   USE kinds,                ONLY : DP
@@ -50,8 +50,8 @@ SUBROUTINE calc_vxc( sigma_vxcl, sigma_vxcnl )
   !
   ! I/O
   !
-  REAL(DP),INTENT(OUT) :: sigma_vxcl( n_bands, k_grid%nps )
-  REAL(DP),INTENT(OUT) :: sigma_vxcnl( n_bands, k_grid%nps )
+  REAL(DP),INTENT(OUT) :: sigma_vxcl(n_bands,k_grid%nps)
+  REAL(DP),INTENT(OUT) :: sigma_vxcnl(n_bands,k_grid%nps)
   !
   ! Workspace
   !
@@ -59,22 +59,20 @@ SUBROUTINE calc_vxc( sigma_vxcl, sigma_vxcnl )
   REAL(DP) :: vtxc_
   REAL(DP) :: ee_
   REAL(DP), ALLOCATABLE :: vxc(:,:)
-  INTEGER :: ib,ir,iks,iks_g,is,jb_glob,ipair
-  COMPLEX(DP) :: braket
+  INTEGER :: ib,ir,iks,iks_g,is,jb_glob,ipair,ig
+  REAL(DP) :: braket
   REAL(DP) :: nnr
   TYPE(bar_type) :: barra
   INTEGER :: barra_load
   INTEGER :: dfftp_nnr
   COMPLEX(DP), ALLOCATABLE :: xpsi(:,:),vxpsi(:,:)
   COMPLEX(DP), ALLOCATABLE :: psic1(:)
-  REAL(DP), EXTERNAL :: DDOT
-  COMPLEX(DP), EXTERNAL :: ZDOTC
   TYPE(idistribute) :: gwbnd
   !
-  ALLOCATE( vxc(dfftp%nnr,nspin) )
+  ALLOCATE(vxc(dfftp%nnr,nspin))
   !
-  IF (l_enable_off_diagonal) THEN
-     ALLOCATE( psic1(dfftp%nnr) )
+  IF(l_enable_off_diagonal) THEN
+     ALLOCATE(psic1(dfftp%nnr))
      !$acc enter data create(psic1)
   ENDIF
   !
@@ -92,17 +90,17 @@ SUBROUTINE calc_vxc( sigma_vxcl, sigma_vxcnl )
   !
   dfftp_nnr = dfftp%nnr
   !
-  CALL v_xc( rho, rho_core, rhog_core, etxc_, vtxc_, vxc )
+  CALL v_xc(rho,rho_core,rhog_core,etxc_,vtxc_,vxc)
   !
   !$acc enter data copyin(vxc)
   !
-  sigma_vxcl = 0._DP
-  sigma_vxcnl = 0._DP
+  sigma_vxcl(:,:) = 0._DP
+  sigma_vxcnl(:,:) = 0._DP
   !
-  nnr = REAL( dfftp%nr1*dfftp%nr2*dfftp%nr3, KIND=DP )
+  nnr = REAL(dfftp%nr1 * dfftp%nr2 * dfftp%nr3, KIND=DP)
   !
   barra_load = kpt_pool%nloc
-  CALL start_bar_type( barra, 'sigmavxc', barra_load )
+  CALL start_bar_type(barra,'sigmavxc',barra_load)
   !
   ! LOOP
   !
@@ -115,7 +113,7 @@ SUBROUTINE calc_vxc( sigma_vxcl, sigma_vxcnl )
      !
      npw = ngk(iks)
      current_k = iks
-     IF ( lsda ) current_spin = isk(iks)
+     IF(lsda) current_spin = isk(iks)
      !
      ! ... read in wavefunctions from the previous iteration
      !
@@ -127,36 +125,37 @@ SUBROUTINE calc_vxc( sigma_vxcl, sigma_vxcnl )
      !
      ! NON-HYBRID CONTRIBUTION TO VXC
      !
-     IF( gwbnd%nloc>0 ) THEN
+     IF(gwbnd%nloc > 0) THEN
         !
         IF(gamma_only) THEN
            !
            DO ib = 1, gwbnd%nloc
+              !
               CALL single_invfft_gamma(dffts,npw,npwx,evc(:,qp_bands(gwbnd%l2g(ib),is)),psic,'Wave')
               !
               DO jb_glob = 1, n_bands
                  !
                  braket = 0._DP
                  !
-                 IF (l_enable_off_diagonal) ipair = ijpmap(jb_glob,gwbnd%l2g(ib))
+                 IF(l_enable_off_diagonal) ipair = ijpmap(jb_glob,gwbnd%l2g(ib))
                  !
-                 IF (l_enable_off_diagonal .AND. jb_glob < gwbnd%l2g(ib)) THEN
+                 IF(l_enable_off_diagonal .AND. jb_glob < gwbnd%l2g(ib)) THEN
                     CALL single_invfft_gamma(dffts,npw,npwx,evc(:,qp_bands(jb_glob,is)),psic1,'Wave')
-                    !$acc parallel loop reduction(+:braket) present(psic1,vxc) copy(braket)
+                    !$acc parallel loop reduction(+:braket) present(psic,psic1,vxc) copy(braket)
                     DO ir = 1, dfftp_nnr
-                       braket = braket + psic(ir) * CONJG(psic1(ir)) * vxc(ir,current_spin)
+                       braket = braket + vxc(ir,current_spin) * (REAL(psic(ir),KIND=DP) * REAL(psic1(ir),KIND=DP) &
+                       & + AIMAG(psic(ir)) * AIMAG(psic1(ir)))
                     ENDDO
                     !$acc end parallel
-                    sigma_vxcl_full(ipair,iks_g) = REAL(braket,KIND=DP) / nnr
-                 ELSEIF ( jb_glob == gwbnd%l2g(ib) ) THEN
-                    !$acc parallel loop reduction(+:braket) present(vxc) copy(braket)
+                    sigma_vxcl_full(ipair,iks_g) = braket / nnr
+                 ELSEIF(jb_glob == gwbnd%l2g(ib)) THEN
+                    !$acc parallel loop reduction(+:braket) present(psic,vxc) copy(braket)
                     DO ir = 1, dfftp_nnr
-                       braket = braket + psic(ir) * CONJG(psic(ir)) * vxc(ir,current_spin)
+                       braket = braket + vxc(ir,current_spin) * (REAL(psic(ir),KIND=DP)**2 + AIMAG(psic(ir))**2)
                     ENDDO
                     !$acc end parallel
-                    sigma_vxcl(gwbnd%l2g(ib),iks_g)&
-                    &= REAL(braket,KIND=DP) / nnr
-                    IF (l_enable_off_diagonal) sigma_vxcl_full(ipair,iks_g) = REAL(braket,KIND=DP) / nnr
+                    sigma_vxcl(gwbnd%l2g(ib),iks_g) = braket / nnr
+                    IF(l_enable_off_diagonal) sigma_vxcl_full(ipair,iks_g) = braket / nnr
                  ENDIF
                  !
               ENDDO
@@ -169,27 +168,26 @@ SUBROUTINE calc_vxc( sigma_vxcl, sigma_vxcnl )
               CALL single_invfft_k(dffts,npw,npwx,evc(:,qp_bands(gwbnd%l2g(ib),is)),psic,'Wave',&
               & igk_k(:,current_k))
               braket = 0._DP
-              !$acc parallel loop reduction(+:braket) present(vxc) copy(braket)
+              !$acc parallel loop reduction(+:braket) present(psic,vxc) copy(braket)
               DO ir = 1, dfftp_nnr
-                 braket = braket + psic(ir) * CONJG(psic(ir)) * vxc(ir,current_spin)
+                 braket = braket + vxc(ir,current_spin) * (REAL(psic(ir),KIND=DP)**2 + AIMAG(psic(ir))**2)
               ENDDO
               !$acc end parallel
-              sigma_vxcl(gwbnd%l2g(ib),iks_g) = REAL(braket,KIND=DP) / nnr
+              sigma_vxcl(gwbnd%l2g(ib),iks_g) = braket / nnr
            ENDDO
            !
            IF(noncolin) THEN
               !
-              DO ib = 1,gwbnd%nloc
+              DO ib = 1, gwbnd%nloc
                  CALL single_invfft_k(dffts,npw,npwx,evc(1+npwx:npwx*2,qp_bands(gwbnd%l2g(ib),is)),&
                  & psic,'Wave',igk_k(:,current_k))
                  braket = 0._DP
-                 !$acc parallel loop reduction(+:braket) present(vxc) copy(braket)
+                 !$acc parallel loop reduction(+:braket) present(psic,vxc) copy(braket)
                  DO ir = 1, dfftp_nnr
-                    braket = braket + psic(ir) * CONJG(psic(ir)) * vxc(ir,current_spin)
+                    braket = braket + vxc(ir,current_spin) * (REAL(psic(ir),KIND=DP)**2 + AIMAG(psic(ir))**2)
                  ENDDO
                  !$acc end parallel
-                 sigma_vxcl(gwbnd%l2g(ib),iks_g) = &
-                 & sigma_vxcl(gwbnd%l2g(ib),iks_g) + REAL(braket,KIND=DP) / nnr
+                 sigma_vxcl(gwbnd%l2g(ib),iks_g) = sigma_vxcl(gwbnd%l2g(ib),iks_g) + braket / nnr
               ENDDO
               !
            ENDIF
@@ -200,46 +198,56 @@ SUBROUTINE calc_vxc( sigma_vxcl, sigma_vxcnl )
      !
      ! HYBRID CONTRIBUTION TO VXC
      !
-     IF( xclib_dft_is('hybrid') ) THEN
+     IF(xclib_dft_is('hybrid')) THEN
         !
-        IF( gwbnd%nloc>0 ) THEN
+        IF(gwbnd%nloc > 0) THEN
            !
-           ALLOCATE( vxpsi(npwx*npol,gwbnd%nloc ) )
-           ALLOCATE(  xpsi(npwx*npol,gwbnd%nloc ) )
+           ALLOCATE(xpsi(npwx*npol,gwbnd%nloc))
+           ALLOCATE(vxpsi(npwx*npol,gwbnd%nloc))
            !
-           xpsi = 0._DP
-           DO ib=1,gwbnd%nloc
+           xpsi(:,:) = 0._DP
+           DO ib = 1, gwbnd%nloc
               xpsi(:,ib) = evc(:,qp_bands(gwbnd%l2g(ib),is))
            ENDDO
            !
-           vxpsi = 0._DP
-           IF( use_ace ) THEN
-              IF( gamma_only ) THEN
-                 CALL vexxace_gamma( npwx, gwbnd%nloc, xpsi, ee_, vxpsi )
+           vxpsi(:,:) = 0._DP
+           IF(use_ace) THEN
+              IF(gamma_only) THEN
+                 CALL vexxace_gamma(npwx,gwbnd%nloc,xpsi,ee_,vxpsi)
               ELSE
-                 CALL vexxace_k( npwx, gwbnd%nloc, xpsi, ee_, vxpsi )
+                 CALL vexxace_k(npwx,gwbnd%nloc,xpsi,ee_,vxpsi)
               ENDIF
            ELSE
-              CALL vexx( npwx, npw, gwbnd%nloc, xpsi, vxpsi )
+              CALL vexx(npwx,npw,gwbnd%nloc,xpsi,vxpsi)
            ENDIF
            !
-           IF( gamma_only ) THEN
+           IF(gamma_only) THEN
               !
-              DO ib = 1,gwbnd%nloc
+              DO ib = 1, gwbnd%nloc
                  !
                  DO jb_glob = 1, n_bands
                     !
-                    IF (l_enable_off_diagonal) ipair = ijpmap(jb_glob,gwbnd%l2g(ib))
+                    IF(l_enable_off_diagonal) ipair = ijpmap(jb_glob,gwbnd%l2g(ib))
                     !
-                    IF (l_enable_off_diagonal .AND. jb_glob < gwbnd%l2g(ib)) THEN
-                       braket = 2._DP * REAL( ZDOTC( npw, evc(1,qp_bands(jb_glob,is)),1,vxpsi(1,ib),1), KIND=DP )
-                       IF(gstart==2) braket = braket - REAL( evc(1,qp_bands(jb_glob,is)), KIND=DP) * REAL( vxpsi(1,ib), KIND=DP)
-                       sigma_vxcnl_full(ipair,iks_g) = REAL( braket, KIND=DP )
-                    ELSEIF ( jb_glob == gwbnd%l2g(ib) ) THEN
-                       braket = 2._DP * DDOT( 2*npw, xpsi(1,ib), 1, vxpsi(1,ib), 1)
-                       IF(gstart==2) braket = braket - REAL( xpsi(1,ib), KIND=DP) * REAL( vxpsi(1,ib), KIND=DP)
-                       sigma_vxcnl(gwbnd%l2g(ib),iks_g) = REAL( braket, KIND=DP )
-                       IF (l_enable_off_diagonal) sigma_vxcnl_full(ipair,iks_g) = REAL( braket, KIND=DP )
+                    IF(l_enable_off_diagonal .AND. jb_glob < gwbnd%l2g(ib)) THEN
+                       braket = 0._DP
+                       DO ig = 1, npw
+                          braket = braket &
+                          & + 2._DP * REAL(evc(ig,qp_bands(jb_glob,is)),KIND=DP) * REAL(vxpsi(ig,ib),KIND=DP) &
+                          & + 2._DP * AIMAG(evc(ig,qp_bands(jb_glob,is))) * AIMAG(vxpsi(ig,ib))
+                       ENDDO
+                       IF(gstart == 2) braket = braket &
+                       & - REAL(evc(1,qp_bands(jb_glob,is)), KIND=DP) * REAL(vxpsi(1,ib), KIND=DP)
+                       sigma_vxcnl_full(ipair,iks_g) = braket
+                    ELSEIF(jb_glob == gwbnd%l2g(ib)) THEN
+                       braket = 0._DP
+                       DO ig = 1, npw
+                          braket = braket + 2._DP * REAL(xpsi(ig,ib),KIND=DP) * REAL(vxpsi(ig,ib),KIND=DP) &
+                          & + 2._DP * AIMAG(xpsi(ig,ib)) * AIMAG(vxpsi(ig,ib))
+                       ENDDO
+                       IF(gstart == 2) braket = braket - REAL(xpsi(1,ib),KIND=DP) * REAL(vxpsi(1,ib),KIND=DP)
+                       sigma_vxcnl(gwbnd%l2g(ib),iks_g) = braket
+                       IF(l_enable_off_diagonal) sigma_vxcnl_full(ipair,iks_g) = braket
                     ENDIF
                     !
                  ENDDO
@@ -248,56 +256,62 @@ SUBROUTINE calc_vxc( sigma_vxcl, sigma_vxcnl )
               !
            ELSE
               !
-              DO ib = 1,gwbnd%nloc
-                 braket = ZDOTC( npw, xpsi(1,ib),1,vxpsi(1,ib),1)
-                 sigma_vxcnl(gwbnd%l2g(ib),iks_g) = REAL( braket, KIND=DP )
+              DO ib = 1, gwbnd%nloc
+                 braket = 0._DP
+                 DO ig = 1, npw
+                    braket = braket + REAL(xpsi(ig,ib),KIND=DP) * REAL(vxpsi(ig,ib),KIND=DP) &
+                    & + AIMAG(xpsi(ig,ib)) * AIMAG(vxpsi(ig,ib))
+                 ENDDO
+                 sigma_vxcnl(gwbnd%l2g(ib),iks_g) = braket
               ENDDO
               !
               IF(noncolin) THEN
-                 !
                  DO ib = 1, gwbnd%nloc
-                    braket = ZDOTC( npw, xpsi(1+npwx,ib),1,vxpsi(1+npwx,ib),1)
-                    sigma_vxcnl(gwbnd%l2g(ib),iks_g) = &
-                    & sigma_vxcnl(gwbnd%l2g(ib),iks_g) + REAL( braket, KIND=DP )
+                    braket = 0._DP
+                    DO ig = 1, npw
+                       braket = braket + REAL(xpsi(ig+npwx,ib),KIND=DP) * REAL(vxpsi(ig+npwx,ib),KIND=DP) &
+                       & + AIMAG(xpsi(ig+npwx,ib)) * AIMAG(vxpsi(ig+npwx,ib))
+                    ENDDO
+                    sigma_vxcnl(gwbnd%l2g(ib),iks_g) = sigma_vxcnl(gwbnd%l2g(ib),iks_g) + braket
                  ENDDO
               ENDIF
               !
            ENDIF
            !
-           DEALLOCATE( vxpsi )
-           DEALLOCATE(  xpsi )
+           DEALLOCATE(xpsi)
+           DEALLOCATE(vxpsi)
            !
         ENDIF
         !
      ENDIF
      !
-     CALL update_bar_type( barra, 'sigmavxc', 1 )
+     CALL update_bar_type(barra,'sigmavxc',1)
      !
   ENDDO
   !
-  CALL stop_bar_type( barra, 'sigmavxc' )
+  CALL stop_bar_type(barra,'sigmavxc')
   !
-  CALL mp_sum( sigma_vxcl, intra_bgrp_comm )
-  CALL mp_sum( sigma_vxcnl, intra_bgrp_comm )
-  CALL mp_sum( sigma_vxcl, inter_pool_comm )
-  CALL mp_sum( sigma_vxcnl, inter_pool_comm )
-  CALL mp_sum( sigma_vxcl, inter_image_comm )
-  CALL mp_sum( sigma_vxcnl, inter_image_comm )
+  CALL mp_sum(sigma_vxcl,intra_bgrp_comm)
+  CALL mp_sum(sigma_vxcnl,intra_bgrp_comm)
+  CALL mp_sum(sigma_vxcl,inter_pool_comm)
+  CALL mp_sum(sigma_vxcnl,inter_pool_comm)
+  CALL mp_sum(sigma_vxcl,inter_image_comm)
+  CALL mp_sum(sigma_vxcnl,inter_image_comm)
   !
-  IF (l_enable_off_diagonal) THEN
-     CALL mp_sum( sigma_vxcl_full, intra_bgrp_comm )
-     CALL mp_sum( sigma_vxcnl_full, intra_bgrp_comm )
-     CALL mp_sum( sigma_vxcl_full, inter_pool_comm )
-     CALL mp_sum( sigma_vxcnl_full, inter_pool_comm )
-     CALL mp_sum( sigma_vxcl_full, inter_image_comm )
-     CALL mp_sum( sigma_vxcnl_full, inter_image_comm )
+  IF(l_enable_off_diagonal) THEN
+     CALL mp_sum(sigma_vxcl_full,intra_bgrp_comm)
+     CALL mp_sum(sigma_vxcnl_full,intra_bgrp_comm)
+     CALL mp_sum(sigma_vxcl_full,inter_pool_comm)
+     CALL mp_sum(sigma_vxcnl_full,inter_pool_comm)
+     CALL mp_sum(sigma_vxcl_full,inter_image_comm)
+     CALL mp_sum(sigma_vxcnl_full,inter_image_comm)
   ENDIF
   !
   !$acc exit data delete(vxc)
-  DEALLOCATE( vxc )
-  IF (l_enable_off_diagonal) THEN
+  DEALLOCATE(vxc)
+  IF(l_enable_off_diagonal) THEN
      !$acc exit data delete(psic1)
-     DEALLOCATE( psic1 )
+     DEALLOCATE(psic1)
   ENDIF
   !
 #if defined(__CUDA)

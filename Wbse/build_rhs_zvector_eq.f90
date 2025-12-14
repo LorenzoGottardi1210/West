@@ -63,11 +63,7 @@ SUBROUTINE build_rhs_zvector_eq(dvg_exc_tmp, dvgdvg_mat, drhox1, drhox2, z_rhs_v
   !
   ! part4: d < a | K1d | a > / d | v >
   !
-  IF(l_hybrid_tddft) THEN
-     CALL rhs_zvector_part4( dvg_exc_tmp, z_rhs_vec )
-  ELSEIF(l_bse) THEN
-     CALL errore('build_rhs_zvector_eq', 'BSE forces not implemented', 1)
-  ENDIF
+  IF(l_hybrid_tddft .OR. l_bse) CALL rhs_zvector_part4( dvg_exc_tmp, z_rhs_vec )
   !
   ! part1: d < a | D | a > / d | v >
   !
@@ -127,9 +123,10 @@ SUBROUTINE rhs_zvector_part1( dvg_exc_tmp, dvgdvg_mat, drhox1, drhox2, z_rhs_vec
   USE bar,                  ONLY : bar_type,start_bar_type,update_bar_type,stop_bar_type
   USE distribution_center,  ONLY : kpt_pool,band_group
   USE mp_global,            ONLY : inter_image_comm,my_image_id
-  USE wbse_dv,              ONLY : wbse_dv_of_drho
+  USE wbse_dv,              ONLY : wbse_dv_setup,wbse_dv_of_drho
   USE wbse_bgrp,            ONLY : gather_bands
   USE west_mp,              ONLY : west_mp_wait
+  USE xc_lib,               ONLY : xclib_dft_is
   USE wavefunctions,        ONLY : evc,psic
 #if defined(__CUDA)
   USE cublas
@@ -146,7 +143,6 @@ SUBROUTINE rhs_zvector_part1( dvg_exc_tmp, dvgdvg_mat, drhox1, drhox2, z_rhs_vec
   !
   ! Workspace
   !
-  LOGICAL :: lrpa
   INTEGER :: ibnd,jbnd,iks,iks_do,ir,ig,nbndval,nbnd_do,lbnd
   INTEGER :: dffts_nnr
   INTEGER :: req
@@ -167,7 +163,7 @@ SUBROUTINE rhs_zvector_part1( dvg_exc_tmp, dvgdvg_mat, drhox1, drhox2, z_rhs_vec
   z_rhs_vec_part1(:,:,:) = (0._DP,0._DP)
   !$acc end kernels
   !
-  IF(l_bse .OR. l_hybrid_tddft) THEN
+  IF(xclib_dft_is('hybrid')) THEN
      !
      ALLOCATE(tmp_vec(npwx*npol, band_group%nlocx, kpt_pool%nloc))
      !$acc enter data create(tmp_vec)
@@ -196,9 +192,9 @@ SUBROUTINE rhs_zvector_part1( dvg_exc_tmp, dvgdvg_mat, drhox1, drhox2, z_rhs_vec
   !
   !$acc enter data copyin(drhox)
   !
-  lrpa = l_bse
+  CALL wbse_dv_setup(.FALSE.)
   !
-  CALL wbse_dv_of_drho(drhox,lrpa,.FALSE.)
+  CALL wbse_dv_of_drho(drhox,.FALSE.,.FALSE.)
   !
   CALL start_bar_type(barra,'zvec1',kpt_pool%nloc)
   !
@@ -240,7 +236,7 @@ SUBROUTINE rhs_zvector_part1( dvg_exc_tmp, dvgdvg_mat, drhox1, drhox2, z_rhs_vec
         !
         CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),evc(:,jbnd),psic,'Wave')
         !
-        !$acc parallel loop present(drhox)
+        !$acc parallel loop present(psic,drhox)
         DO ir = 1,dffts_nnr
            psic(ir) = psic(ir)*CMPLX(REAL(drhox(ir,current_spin),KIND=DP),KIND=DP)
         ENDDO
@@ -259,7 +255,7 @@ SUBROUTINE rhs_zvector_part1( dvg_exc_tmp, dvgdvg_mat, drhox1, drhox2, z_rhs_vec
         !
         CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),psic,'Wave')
         !
-        !$acc parallel loop present(drhox)
+        !$acc parallel loop present(psic,drhox)
         DO ir = 1,dffts_nnr
            psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(drhox(ir,current_spin),KIND=DP),KIND=DP)
         ENDDO
@@ -269,11 +265,9 @@ SUBROUTINE rhs_zvector_part1( dvg_exc_tmp, dvgdvg_mat, drhox1, drhox2, z_rhs_vec
         !
      ENDIF
      !
-     IF(l_bse) CALL errore('build_rhs_zvector_eq', 'BSE forces not implemented', 1)
-     !
-     IF(l_hybrid_tddft) THEN
+     IF(xclib_dft_is('hybrid')) THEN
         !
-        CALL hybrid_kernel_term3(current_spin,dvg_exc_tmp,z_rhs_vec_part1(:,:,iks),l_spin_flip)
+        CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part1(:,:,iks),l_spin_flip,3)
         !
         IF(l_spin_flip) THEN
            iks_do = flks(iks)
@@ -291,7 +285,11 @@ SUBROUTINE rhs_zvector_part1( dvg_exc_tmp, dvgdvg_mat, drhox1, drhox2, z_rhs_vec
 #if !defined(__GPU_MPI)
         !$acc update device(evc1_all(:,:,iks))
 #endif
-        CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),z_rhs_vec_part1(:,:,iks),.FALSE.)
+        IF(l_hybrid_tddft) THEN
+           CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),z_rhs_vec_part1(:,:,iks),.FALSE.)
+        ELSEIF(l_bse) THEN
+           CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part1(:,:,iks),.FALSE.,1)
+        ENDIF
         !
      ENDIF
      !
@@ -327,7 +325,7 @@ SUBROUTINE rhs_zvector_part1( dvg_exc_tmp, dvgdvg_mat, drhox1, drhox2, z_rhs_vec
   DEALLOCATE(dotp)
   !$acc exit data delete(z_rhs_vec_part1)
   DEALLOCATE(z_rhs_vec_part1)
-  IF(l_bse .OR. l_hybrid_tddft) THEN
+  IF(xclib_dft_is('hybrid')) THEN
      !$acc exit data delete(tmp_vec)
      DEALLOCATE(tmp_vec)
   ENDIF
@@ -457,7 +455,7 @@ SUBROUTINE rhs_zvector_part2( dvg_exc_tmp, z_rhs_vec )
            !
            CALL double_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp(:,lbnd,iks),dvg_exc_tmp(:,lbnd+1,iks),psic,'Wave')
            !
-           !$acc parallel loop present(dvrs)
+           !$acc parallel loop present(psic,dvrs)
            DO ir = 1,dffts_nnr
               psic(ir) = psic(ir)*CMPLX(REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
            ENDDO
@@ -475,7 +473,7 @@ SUBROUTINE rhs_zvector_part2( dvg_exc_tmp, z_rhs_vec )
            !
            CALL single_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp(:,lbnd,iks),psic,'Wave')
            !
-           !$acc parallel loop present(dvrs)
+           !$acc parallel loop present(psic,dvrs)
            DO ir = 1,dffts_nnr
               psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
            ENDDO
@@ -502,7 +500,7 @@ SUBROUTINE rhs_zvector_part2( dvg_exc_tmp, z_rhs_vec )
               !
               CALL double_invfft_gamma(dffts,npw,npwx,evc(:,jbndp),evc(:,kbndp),psic,'Wave')
               !
-              !$acc parallel loop present(dvrs)
+              !$acc parallel loop present(psic,dvrs)
               DO ir = 1,dffts_nnr
                  psic(ir) = psic(ir)*CMPLX(REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
               ENDDO
@@ -541,7 +539,7 @@ SUBROUTINE rhs_zvector_part2( dvg_exc_tmp, z_rhs_vec )
               !
               CALL single_invfft_gamma(dffts,npw,npwx,evc(:,jbndp),psic,'Wave')
               !
-              !$acc parallel loop present(dvrs)
+              !$acc parallel loop present(psic,dvrs)
               DO ir = 1,dffts_nnr
                  psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
               ENDDO
@@ -577,9 +575,9 @@ SUBROUTINE rhs_zvector_part2( dvg_exc_tmp, z_rhs_vec )
         & 2*npwx*npol,dv_vv_mat,nbndval0x-n_trunc_bands,0._DP,dpcpart,2*npwx*npol)
         !$acc end host_data
         !
-        !$acc update host(dpcpart)
+        !$acc host_data use_device(dpcpart)
         CALL mp_sum(dpcpart,inter_bgrp_comm)
-        !$acc update device(dpcpart)
+        !$acc end host_data
         !
         !$acc parallel loop collapse(2) present(z_rhs_vec_part2,dpcpart)
         DO lbnd = 1,nbnd_do
@@ -614,6 +612,8 @@ SUBROUTINE rhs_zvector_part2( dvg_exc_tmp, z_rhs_vec )
         CALL update_bar_type(barra,'zvec2',1)
         !
      ENDDO
+     !
+     CALL stop_bar_type(barra,'zvec2')
      !
   ELSE
      !
@@ -670,7 +670,7 @@ SUBROUTINE rhs_zvector_part2( dvg_exc_tmp, z_rhs_vec )
               !
               CALL double_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp(:,lbnd,iks_do),dvg_exc_tmp(:,lbnd+1,iks_do),psic,'Wave')
               !
-              !$acc parallel loop present(dvrs)
+              !$acc parallel loop present(psic,dvrs)
               DO ir = 1,dffts_nnr
                  psic(ir) = psic(ir)*CMPLX(REAL(dvrs(ir,iks_do),KIND=DP),KIND=DP)
               ENDDO
@@ -688,7 +688,7 @@ SUBROUTINE rhs_zvector_part2( dvg_exc_tmp, z_rhs_vec )
               !
               CALL single_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp(:,lbnd,iks_do),psic,'Wave')
               !
-              !$acc parallel loop present(dvrs)
+              !$acc parallel loop present(psic,dvrs)
               DO ir = 1,dffts_nnr
                  psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(dvrs(ir,iks_do),KIND=DP),KIND=DP)
               ENDDO
@@ -740,7 +740,7 @@ SUBROUTINE rhs_zvector_part2( dvg_exc_tmp, z_rhs_vec )
                  !
                  CALL double_invfft_gamma(dffts,npw,npwx,evc_copy(:,jbnd),evc_copy(:,kbnd),psic,'Wave')
                  !
-                 !$acc parallel loop present(dvrs)
+                 !$acc parallel loop present(psic,dvrs)
                  DO ir = 1,dffts_nnr
                     psic(ir) = psic(ir)*CMPLX(REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
                  ENDDO
@@ -779,7 +779,7 @@ SUBROUTINE rhs_zvector_part2( dvg_exc_tmp, z_rhs_vec )
                  !
                  CALL single_invfft_gamma(dffts,npw,npwx,evc_copy(:,jbnd),psic,'Wave')
                  !
-                 !$acc parallel loop present(dvrs)
+                 !$acc parallel loop present(psic,dvrs)
                  DO ir = 1,dffts_nnr
                     psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
                  ENDDO
@@ -815,9 +815,9 @@ SUBROUTINE rhs_zvector_part2( dvg_exc_tmp, z_rhs_vec )
            & 2*npwx*npol,dv_vv_mat,nbndval0x-n_trunc_bands,0._DP,dpcpart,2*npwx*npol)
            !$acc end host_data
            !
-           !$acc update host(dpcpart)
+           !$acc host_data use_device(dpcpart)
            CALL mp_sum(dpcpart,inter_bgrp_comm)
-           !$acc update device(dpcpart)
+           !$acc end host_data
            !
            ! recompute nbnd_do for the current spin channel
            !
@@ -861,14 +861,14 @@ SUBROUTINE rhs_zvector_part2( dvg_exc_tmp, z_rhs_vec )
            !
         ENDDO
         !
+        CALL stop_bar_type(barra,'zvec2')
+        !
         !$acc exit data delete(evc_copy)
         DEALLOCATE(evc_copy)
         !
      ENDIF
      !
   ENDIF
-  !
-  CALL stop_bar_type(barra,'zvec2')
   !
   ALLOCATE(dotp(nspin))
   !
@@ -988,7 +988,7 @@ SUBROUTINE rhs_zvector_part3( dvg_exc_tmp, z_rhs_vec )
         !
         CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),evc(:,jbnd),psic,'Wave')
         !
-        !$acc parallel loop present(ddvxc)
+        !$acc parallel loop present(psic,ddvxc)
         DO ir = 1,dffts_nnr
            psic(ir) = psic(ir)*CMPLX(REAL(ddvxc(ir,current_spin),KIND=DP),KIND=DP)
         ENDDO
@@ -1007,7 +1007,7 @@ SUBROUTINE rhs_zvector_part3( dvg_exc_tmp, z_rhs_vec )
         !
         CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),psic,'Wave')
         !
-        !$acc parallel loop present(ddvxc)
+        !$acc parallel loop present(psic,ddvxc)
         DO ir = 1,dffts_nnr
            psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(ddvxc(ir,current_spin),KIND=DP),KIND=DP)
         ENDDO
@@ -1307,7 +1307,8 @@ SUBROUTINE rhs_zvector_part4( dvg_exc_tmp, z_rhs_vec )
   USE kinds,                ONLY : DP
   USE io_push,              ONLY : io_push_title
   USE gvect,                ONLY : gstart
-  USE westcom,              ONLY : iuwfc,lrwfc,nbnd_occ,nbndval0x,n_trunc_bands,l_spin_flip,evc1_all
+  USE westcom,              ONLY : iuwfc,lrwfc,nbnd_occ,nbndval0x,n_trunc_bands,l_bse,&
+                                 & l_hybrid_tddft,l_spin_flip,evc1_all
   USE pwcom,                ONLY : isk,lsda,nspin,current_spin,current_k,ngk,npwx,npw
   USE mp,                   ONLY : mp_sum,mp_bcast
   USE buffers,              ONLY : get_buffer
@@ -1402,7 +1403,11 @@ SUBROUTINE rhs_zvector_part4( dvg_exc_tmp, z_rhs_vec )
      !
      ! Compute the first part
      !
-     CALL hybrid_kernel_term4(current_spin,dvg_exc_tmp,z_rhs_vec_part4(:,:,iks),l_spin_flip)
+     IF((.NOT. l_bse) .AND. l_hybrid_tddft) THEN
+        CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part4(:,:,iks),l_spin_flip,4)
+     ELSEIF(l_bse) THEN
+        CALL bse_kernel_term4(current_spin,z_rhs_vec_part4(:,:,iks),l_spin_flip)
+     ENDIF
      !
      ! Compute the second part: dv_vv_mat
      !
@@ -1445,9 +1450,9 @@ SUBROUTINE rhs_zvector_part4( dvg_exc_tmp, z_rhs_vec )
      & 2*npwx*npol,dv_vv_mat,nbndval0x-n_trunc_bands,0._DP,dpcpart,2*npwx*npol)
      !$acc end host_data
      !
-     !$acc update host(dpcpart)
+     !$acc host_data use_device(dpcpart)
      CALL mp_sum(dpcpart,inter_bgrp_comm)
-     !$acc update device(dpcpart)
+     !$acc end host_data
      !
      ! compute nbnd_do for the current spin channel
      !

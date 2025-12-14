@@ -13,7 +13,7 @@ Midway3 is the HPC cluster of the University of Chicago, maintained by UChicago'
 Building WEST
 ~~~~~~~~~~~~~
 
-WEST executables can be compiled using the following script (tested on November 26, 2024):
+WEST executables can be compiled using the following script (tested on October 7, 2025):
 
 .. code-block:: bash
 
@@ -68,6 +68,8 @@ The following is an example executable script `run_west.sh` to run the `wstat.x`
 
    export LD_LIBRARY_PATH=$PYTHON_DIR/lib:$LD_LIBRARY_PATH
    export OMP_NUM_THREADS=1
+
+   ulimit -s unlimited
 
    mpirun -np 96 ./wstat.x -i wstat.in > wstat.out
 

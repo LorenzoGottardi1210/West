@@ -570,6 +570,23 @@ wfreq_control
    * - **Description**
      - Number of frequecies used to plot the spectral function (the "P" runlevel), sampling the interval [ecut_spectralf[0],ecut_spectralf[1]].
 
+.. data:: qdet_dc
+
+.. list-table::
+   :widths: 10 90
+   :stub-columns: 0
+
+   * - **Type**
+     - string
+   * - **Default**
+     - "DC2025"
+   * - **Description**
+     - Controls how the QDET double counting is treated. Used only when wfreq_calculation contains "H".
+
+       - "DC2025" : 2025 version of refined double counting.
+       - "DC2022" : 2022 version of double counting.
+       - "HFDC" : Hartree-Fock double counting.
+
 |
 
 
@@ -596,10 +613,10 @@ westpp_control
        - "S" : Output the screened exchange constant.
        - "D" : Output the dipole matrix elements.
        - "L" : Output the localization factor and the inverse participation ratio.
-       - "X" : Output the exciton state.
-       - "P" : Output the density response to exciton state.
        - "B" : Output the unitary transformation matrix of Boys/Wannier localization.
-       - "C" : Output the decomposition of BSE/TDDFT excited state, and the transition dipole moments.
+       - "U" : Output the unrelaxed differential density of the BSE/TDDFT excited state.
+       - "P" : Output the density response to the BSE/TDDFT excited state.
+       - "C" : Output the decomposition of the BSE/TDDFT excited state, and the transition dipole moments.
        - "M" : Output the spin multiplicity of the BSE/TDDFT excited state (<S^2>, nspin = 2).
 
 .. data:: westpp_range
@@ -613,7 +630,7 @@ westpp_control
    * - **Default**
      - [1,2]
    * - **Description**
-     - Range of bands in W, S, D, L, or B run. Range of PDEP eigenpotentials in E run. Range of excited states in X, P, C, or M run.
+     - Range of bands in W, S, D, L, or B run. Range of PDEP eigenpotentials in E run. Range of excited states in U, P, C, or M run.
 
 .. data:: westpp_format
 
@@ -736,7 +753,7 @@ westpp_control
    * - **Default**
      - 1
    * - **Description**
-     - Number of Liouville eigenvectors to read/use. Used only when westpp_calculation = "X", "P", "C", or "M".
+     - Number of Liouville eigenvectors to read/use. Used only when westpp_calculation = "U", "P", "C", or "M".
 
 .. data:: westpp_l_spin_flip
 
@@ -1017,12 +1034,9 @@ wbse_control
    * - **Type**
      - string
    * - **Default**
-     - "None"
+     - "" (empty string)
    * - **Description**
-     - Available options are:
-
-       - "None" : Quasiparticle corrections are not added.
-       - Specify the name of the wfreq output file (in JSON format) from which quasiparticle corrections are read.
+     - Specify the name of the wfreq output file (in JSON format) from which QP corrections are read. If empty, QP corrections are not added.
 
 .. data:: scissor_ope
 

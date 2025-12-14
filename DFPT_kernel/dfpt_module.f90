@@ -95,9 +95,8 @@ MODULE dfpt_module
       !
       COMPLEX(DP), PARAMETER :: zero = (0._DP,0._DP)
       !
-      IF (l_frac_occ .AND. .NOT. gamma_only) THEN
-         CALL errore('dfpt', 'fraction occupation only implemented for gamma-only case', 1)
-      ENDIF
+      IF (l_frac_occ .AND. .NOT. gamma_only) &
+      & CALL errore('dfpt', 'fraction occupation only implemented for gamma-only case', 1)
       !
       ! Allocation
       !
@@ -161,9 +160,12 @@ MODULE dfpt_module
 #endif
          !
          nbndval = nbnd_occ(iks)
-         IF (l_frac_occ) THEN
+         nbndval_frac = 0
+         IF(l_frac_occ) THEN
             nbndval_full = nbnd_occ_full(iks)
             nbndval_frac = nbndval - nbndval_full
+         ENDIF
+         IF(nbndval_frac > 0) THEN
             ALLOCATE(psi_dvpsi(nbndval_frac,band_group%nloc))
             !$acc enter data create(psi_dvpsi)
          ENDIF
@@ -249,7 +251,7 @@ MODULE dfpt_module
                   !
                   CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),evc(:,jbnd),psic,'Wave')
                   !
-                  !$acc parallel loop present(aux_r)
+                  !$acc parallel loop present(psic,aux_r)
                   DO ir = 1,dffts_nnr
                      psic(ir) = psic(ir)*REAL(aux_r(ir),KIND=DP)
                   ENDDO
@@ -267,7 +269,7 @@ MODULE dfpt_module
                   !
                   CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),psic,'Wave')
                   !
-                  !$acc parallel loop present(aux_r)
+                  !$acc parallel loop present(psic,aux_r)
                   DO ir = 1,dffts_nnr
                      psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(aux_r(ir),KIND=DP),KIND=DP)
                   ENDDO
@@ -290,7 +292,7 @@ MODULE dfpt_module
                   ! ... construct right-hand-side term of Sternheimer equation:
                   ! ... product of wavefunction at [k-q], phase and perturbation in real space
                   !
-                  !$acc parallel loop present(phase,aux_r)
+                  !$acc parallel loop present(psic,phase,aux_r)
                   DO ir = 1,dffts_nnr
                      psic(ir) = psic(ir)*phase(ir)*aux_r(ir)
                   ENDDO
@@ -312,7 +314,7 @@ MODULE dfpt_module
                      !
                      CALL single_invfft_k(dffts,npwkq,npwx,evckmq(npwx+1:npwx*2,ibnd),psic,'Wave',igk_k(:,ikqs))
                      !
-                     !$acc parallel loop present(phase,aux_r)
+                     !$acc parallel loop present(psic,phase,aux_r)
                      DO ir = 1,dffts_nnr
                         psic(ir) = psic(ir)*phase(ir)*aux_r(ir)
                      ENDDO
@@ -325,12 +327,12 @@ MODULE dfpt_module
                !
             ENDIF
             !
-            IF(l_frac_occ) THEN
+            IF(nbndval_frac > 0) THEN
                !
                ! Compute <psi_j| dV |psi_i>
                !
-               CALL glbrak_gamma(evc(1,nbndval_full+1),dvpsi,psi_dvpsi,npw,npwx,nbndval_frac,&
-               & band_group%nloc,nbndval_frac,npol)
+               CALL glbrak_gamma(evc(:,nbndval_full+1:nbndval_full+nbndval_frac),dvpsi,psi_dvpsi,&
+               & npw,npwx,nbndval_frac,band_group%nloc,nbndval_frac,npol)
                !$acc update host(psi_dvpsi)
                !
                CALL mp_sum(psi_dvpsi,intra_bgrp_comm)
@@ -356,11 +358,11 @@ MODULE dfpt_module
                CALL linsolve_sternheimer_m_wfcts( nbndval, band_group%nloc, dvpsi, dpsi, et_loc, eprec_loc, tr2, ierr )
                !
                IF(ierr /= 0) &
-                  WRITE(stdout, '(7X,"** WARNING : PERT ",I8," iks ",I8," not converged, ierr = ",I8)') ipert,iks,ierr
+               & WRITE(stdout, '(7X,"** WARNING : PERT ",I8," iks ",I8," not converged, ierr = ",I8)') ipert,iks,ierr
                !
             ENDIF
             !
-            IF(l_frac_occ) THEN
+            IF(nbndval_frac > 0) THEN
                !
                ! Add to dpsi: \sum_j <psi_j| dV | psi_i> / (e_i - e_j) |psi_j>
                !
@@ -414,7 +416,7 @@ MODULE dfpt_module
                   CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),dpsi(:,lbnd),psic,'Wave')
                   !
                   this_occ = occupation(ibnd,iks)
-                  !$acc parallel loop present(aux_r)
+                  !$acc parallel loop present(aux_r,psic)
                   DO ir = 1,dffts_nnr
                      aux_r(ir) = aux_r(ir)+CMPLX(this_occ*REAL(psic(ir),KIND=DP)*AIMAG(psic(ir)),KIND=DP)
                   ENDDO
@@ -436,7 +438,7 @@ MODULE dfpt_module
                   !
                   CALL single_invfft_k(dffts,npw,npwx,dpsi(1:npwx,lbnd),dpsic,'Wave',igk_k(:,iks))
                   !
-                  !$acc parallel loop present(aux_r,phase,dpsic)
+                  !$acc parallel loop present(aux_r,psic,phase,dpsic)
                   DO ir = 1,dffts_nnr
                      aux_r(ir) = aux_r(ir)+CONJG(psic(ir)*phase(ir))*dpsic(ir)
                   ENDDO
@@ -453,7 +455,7 @@ MODULE dfpt_module
                      !
                      CALL single_invfft_k(dffts,npw,npwx,dpsi(npwx+1:npwx*2,lbnd),dpsic,'Wave',igk_k(:,iks))
                      !
-                     !$acc parallel loop present(aux_r,phase,dpsic)
+                     !$acc parallel loop present(aux_r,psic,phase,dpsic)
                      DO ir = 1,dffts_nnr
                         aux_r(ir) = aux_r(ir)+CONJG(psic(ir)*phase(ir))*dpsic(ir)
                      ENDDO
@@ -490,7 +492,7 @@ MODULE dfpt_module
             !
          ENDDO ! ipert
          !
-         IF (l_frac_occ) THEN
+         IF(nbndval_frac > 0) THEN
             !$acc exit data delete(psi_dvpsi)
             DEALLOCATE(psi_dvpsi)
          ENDIF

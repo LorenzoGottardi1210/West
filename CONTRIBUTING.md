@@ -1,6 +1,6 @@
 # Contributing to the source
 
-Contributions are welcomed via merge requests. Contact the **WEST** developers before starting work to ensure it meshes well with the planned development direction and
+Contributions are welcomed via pull requests. Contact the **WEST** developers before starting work to ensure it meshes well with the planned development direction and
 standards set for the project.
 
 ## Version control
@@ -32,9 +32,9 @@ Add demonstrations of new functionality, e.g. using Jupyter notebooks.
 
 # Developer's workflow
 
-  1. Clone the repository to your local machine
+  1. Clone the repository to your local machine:
 ```bash
-  $ git clone <http-git-repo>
+  $ git clone <https-or-ssh-git-repo>
 ```
 
   2. Use the following to see all the available branches and which branch you are on:
@@ -52,7 +52,7 @@ Add demonstrations of new functionality, e.g. using Jupyter notebooks.
   $ touch <file>
 ```
 
-  5. Check which files have been changed in your local directory by
+  5. Check which files have been changed in your local directory by:
 ```bash
   $ git status
 ```
@@ -64,18 +64,18 @@ Add demonstrations of new functionality, e.g. using Jupyter notebooks.
   $ git push origin <myfeature>
 ```
 
-  7. (Optional) Check commit history by
+  7. (Optional) Check commit history by:
 ```bash
   $ git log
 ```
 
-  8. Then create a merge request on the gitlab website that hosts the remote repository:
+  8. Then create a pull request on github.com that hosts the remote repository.
 
-  9. You can do one of the following after the merge request has been approved:
+  9. You can do one of the following after the pull request has been approved or closed:
      - Delete the branch `myfeature`
      - Keep the original branch and keep working on it
 
-## Often-countered scenarios
+## Often-encountered scenarios
 
   1. When you want to add another feature, create a new branch for the new feature, e.g. `another_feature`, branching from the latest `develop` branch.
 
@@ -93,13 +93,13 @@ Add demonstrations of new functionality, e.g. using Jupyter notebooks.
 ```
   Then repeat #4-#9 above.
 
-  2. Suppose you are working on your feature branch and other people have changed the `develop` branch in the remote repository after you created your `myfeature` branch, you need to merge the `develop` branch into your `myfeature` branch before submitting a merge request.
+  2. Suppose you are working on your feature branch and other people have changed the `develop` branch in the remote repository after you created your `myfeature` branch, you need to merge the `develop` branch into your `myfeature` branch before submitting a pull request.
 
-  To merge the `develop` branch into your `myfeature` branch, you need checkout your `myfeature` branch.
+  To merge the `develop` branch into your `myfeature` branch, you need to checkout your `myfeature` branch:
 ```bash
   $ git checkout <myfeature>
 ```
-  Then do the following to merge the `develop` branch into the branch you are on it
+  Then do the following to merge the `develop` branch into your branch:
 ```bash
   $ git pull origin develop
 ```

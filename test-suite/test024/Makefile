@@ -9,16 +9,19 @@ all: prepare_inputs run
 prepare_inputs:
 	bash prepare_inputs.sh
 
-run: pw wbse
+run: pw wbse westpp
 
 pw:
-	${PARA_PREFIX_QE} ${BINDIR}/pw.x -i pw.in > pw.out 2> pw.err
+	$(PARA_PREFIX_QE) $(BINDIR)/pw.x -i pw.in > pw.out 2> pw.err
 
 wbse: pw
-	${PARA_PREFIX} ${BINDIR}/wbse.x -nimage ${NIMAGE} -nband ${NBAND} -i wbse.in > wbse.out 2> wbse.err
+	$(PARA_PREFIX) $(BINDIR)/wbse.x -nimage $(NIMAGE) -nband $(NBAND) -i wbse.in > wbse.out 2> wbse.err
+
+westpp: wbse
+	$(PARA_PREFIX) $(BINDIR)/westpp.x -nimage $(NIMAGE) -i westpp.in > westpp.out 2> westpp.err
 
 clean:
-	- /bin/rm -rf *out *err *in *xml *upf *tab *restart *save *wfc* CRASH > /dev/null 2>&1
+	- /bin/rm -rf *out *err *in *xml *upf *tab *restart *save *wfc* *mix* CRASH > /dev/null 2>&1
 
 title:
 	@echo
@@ -29,5 +32,5 @@ title:
 
 description:
 	@echo
-	@echo "O2 molecule gamma_only spin-flip TDDFT (PBE) forces"
+	@echo "Formaldehyde molecule gamma_only excited state decomposition"
 	@echo

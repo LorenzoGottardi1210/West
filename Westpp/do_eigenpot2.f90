@@ -92,13 +92,13 @@ SUBROUTINE do_eigenpot2 ( )
            CALL single_invfft_gamma(dffts,npwq,npwqx,dvg(:,local_j),psic,TRIM(fftdriver))
            !
            IF( westpp_sign ) THEN
-              !$acc parallel loop present(auxr)
+              !$acc parallel loop present(auxr,psic)
               DO ir = 1, dffts_nnr
                  auxr(ir) = REAL(psic(ir), KIND=DP) * ABS(REAL(psic(ir), KIND=DP))
               ENDDO
               !$acc end parallel loop
            ELSE
-              !$acc parallel loop present(auxr)
+              !$acc parallel loop present(auxr,psic)
               DO ir = 1, dffts_nnr
                  auxr(ir) = REAL(psic(ir), KIND=DP) * REAL(psic(ir), KIND=DP)
               ENDDO
@@ -109,7 +109,7 @@ SUBROUTINE do_eigenpot2 ( )
            !
            CALL single_invfft_k(dffts,npwq,npwqx,dvg(:,local_j),psic,'Wave',igq_q(:,iq))
            !
-           !$acc parallel loop present(auxr)
+           !$acc parallel loop present(auxr,psic)
            DO ir = 1, dffts_nnr
               auxr(ir) = REAL(CONJG(psic(ir)) * psic(ir), KIND=DP)
            ENDDO

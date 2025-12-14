@@ -11,7 +11,7 @@
 ! Marco Govoni
 !
 !----------------------------------------------------------------------------
-SUBROUTINE do_rho ( )
+SUBROUTINE do_rho()
   !----------------------------------------------------------------------------
   !
   USE kinds,                 ONLY : DP
@@ -29,7 +29,8 @@ SUBROUTINE do_rho ( )
   USE class_idistribute,     ONLY : idistribute
   USE control_flags,         ONLY : gamma_only
   USE types_bz_grid,         ONLY : k_grid
-  USE wavefunctions,         ONLY : evc,psic
+  USE noncollin_module,      ONLY : noncolin,npol
+  USE wavefunctions,         ONLY : evc,psic,psic_nc
 #if defined(__CUDA)
   USE west_gpu,              ONLY : allocate_gpu,deallocate_gpu
 #endif
@@ -38,8 +39,8 @@ SUBROUTINE do_rho ( )
   !
   ! ... LOCAL variables
   !
-  INTEGER :: ir, iks, local_ib, global_ib, dffts_nnr
-  REAL(DP) :: wt_k, wt_b
+  INTEGER :: ir,iks,ipol,local_ib,global_ib,dffts_nnr
+  REAL(DP) :: wt_k,wt_b
   REAL(DP),ALLOCATABLE :: auxr(:)
   CHARACTER(LEN=512) :: fname
   TYPE(bar_type) :: barra
@@ -62,9 +63,9 @@ SUBROUTINE do_rho ( )
   !
   CALL io_push_title('(R)ho')
   !
-  CALL start_bar_type( barra, 'westpp', k_grid%nps )
+  CALL start_bar_type(barra,'westpp',k_grid%nps)
   !
-  DO iks = 1, k_grid%nps  ! KPOINT-SPIN LOOP
+  DO iks = 1,k_grid%nps  ! KPOINT-SPIN LOOP
      !
      ! ... Set k-point, spin, kinetic energy, needed by Hpsi
      !
@@ -80,47 +81,69 @@ SUBROUTINE do_rho ( )
         !$acc update device(evc)
      ENDIF
      !
-     DO local_ib = 1, aband%nloc
+     DO local_ib = 1,aband%nloc
         !
         ! local -> global
         !
         global_ib = aband%l2g(local_ib)
-        IF( global_ib > nbnd_occ(iks) ) CYCLE
+        IF(global_ib > nbnd_occ(iks)) CYCLE
         !
         wt_b = occupation(global_ib,iks)
         !
-        IF( gamma_only ) THEN
+        IF(gamma_only) THEN
+           !
            CALL single_invfft_gamma(dffts,npw,npwx,evc(:,global_ib),psic,'Wave')
-           !$acc parallel loop present(auxr)
-           DO ir = 1, dffts_nnr
-              auxr(ir) = auxr(ir) + REAL( psic(ir), KIND=DP) * REAL( psic(ir), KIND=DP) * wt_k * wt_b
+           !
+           !$acc parallel loop present(auxr,psic)
+           DO ir = 1,dffts_nnr
+              auxr(ir) = auxr(ir) + (REAL(psic(ir),KIND=DP)**2) * wt_k * wt_b
            ENDDO
            !$acc end parallel
+           !
+        ELSEIF(noncolin) THEN
+           !
+           CALL single_invfft_k(dffts,npw,npwx,evc(1:npwx,global_ib),psic_nc(:,1),'Wave',&
+           & igk_k(:,current_k))
+           CALL single_invfft_k(dffts,npw,npwx,evc(npwx+1:npwx*2,global_ib),psic_nc(:,2),'Wave',&
+           & igk_k(:,current_k))
+           !
+           DO ipol = 1,npol
+              !$acc parallel loop present(auxr,psic_nc)
+              DO ir = 1,dffts_nnr
+                 auxr(ir) = auxr(ir) &
+                 & + (REAL(psic_nc(ir,ipol),KIND=DP)**2 + AIMAG(psic_nc(ir,ipol))**2) * wt_k * wt_b
+              ENDDO
+              !$acc end parallel
+           ENDDO
+           !
         ELSE
+           !
            CALL single_invfft_k(dffts,npw,npwx,evc(:,global_ib),psic,'Wave',igk_k(:,current_k))
-           !$acc parallel loop present(auxr)
-           DO ir = 1, dffts_nnr
-              auxr(ir) = auxr(ir) + REAL( CONJG( psic(ir) ) * psic(ir), KIND=DP) * wt_k * wt_b
+           !
+           !$acc parallel loop present(auxr,psic)
+           DO ir = 1,dffts_nnr
+              auxr(ir) = auxr(ir) + (REAL(psic(ir),KIND=DP)**2 + AIMAG(psic(ir))**2) * wt_k * wt_b
            ENDDO
            !$acc end parallel
+           !
         ENDIF
         !
      ENDDO
      !
-     CALL update_bar_type( barra,'westpp', 1 )
+     CALL update_bar_type(barra,'westpp',1)
      !
   ENDDO
   !
   !$acc update host(auxr)
-  CALL mp_sum( auxr, inter_image_comm )
+  CALL mp_sum(auxr,inter_image_comm)
   !
-  CALL stop_bar_type( barra, 'westpp' )
+  CALL stop_bar_type(barra,'westpp')
   !
-  fname = TRIM( westpp_save_dir ) // '/rho'
-  IF(my_image_id == 0) CALL dump_r(auxr, fname)
+  fname = TRIM(westpp_save_dir)//'/rho'
+  IF(my_image_id == 0) CALL dump_r(auxr,fname)
   !
   !$acc exit data delete(auxr)
-  DEALLOCATE( auxr )
+  DEALLOCATE(auxr)
   !
 #if defined(__CUDA)
   CALL deallocate_gpu()

@@ -19,5 +19,7 @@ MODULE types_coulomb
   IMPLICIT NONE
   !
   TYPE(coulomb) :: pot3D
+  TYPE(coulomb) :: pot3D_c
+  TYPE(coulomb) :: pot3D_x
   !
 END MODULE

@@ -109,7 +109,7 @@ SUBROUTINE wbse_calc_dens(devc, drho, sf)
         !
         CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),devc(:,lbnd,iks),psic,'Wave')
         !
-        !$acc parallel loop present(tmp_r)
+        !$acc parallel loop present(tmp_r,psic)
         DO ir = 1, dffts_nnr
            tmp_r(ir) = tmp_r(ir) + w1*REAL(psic(ir),KIND=DP)*AIMAG(psic(ir))
         ENDDO

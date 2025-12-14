@@ -12,20 +12,21 @@ MODFLAGS = $(BASEMOD_FLAGS) \
            $(MOD_FLAG)../Modules \
            $(MOD_FLAG)../Para_kernel \
            $(MOD_FLAG)../Tools \
+           $(MOD_FLAG)../Wbse \
            $(MOD_FLAG).
 
 WESTPP_OBJS = \
 do_dip.o \
 do_eigenpot2.o \
-do_exc.o \
 do_exc_comp.o \
+do_exc_drho.o \
+do_exc_resp.o \
 do_exc_spin.o \
+do_loc.o \
 do_rho.o \
 do_sxx.o \
 do_wann.o \
 do_wfc2.o \
-do_loc.o \
-do_resp.o \
 dump_r.o \
 westpp.o \
 westpp_setup.o \
@@ -52,20 +53,20 @@ WESTLIBS = \
 
 TLDEPS = bindir mods pwlibs pw
 
-all : title tldeps westpp.x
+all: title tldeps westpp.x
 
-westpp.x : $(WESTPP_OBJS) $(WESTLIBS) $(PWOBJS) $(QEMODS)
+westpp.x: $(WESTPP_OBJS) $(WESTLIBS) $(PWOBJS) $(QEMODS)
 	$(LD) $(LDFLAGS) -o $@ $^ $(QELIBS) $(PYT_LDFLAGS)
 	- ( cd ../../bin ; ln -fs ../West/Westpp/westpp.x . )
 
-tldeps :
+tldeps:
 	test -n "$(TLDEPS)" && ( cd ../.. ; $(MAKE) $(MFLAGS) $(TLDEPS) || exit 1) || :
 
-clean :
+clean:
 	- /bin/rm -f *.x *.o *.a *~ *_tmp.f90 *.d *.mod *.i *.L
 	- /bin/rm -f ../../bin/westpp.x
 
-title :
+title:
 	@echo
 	@echo "##############"
 	@echo "### Westpp ###"

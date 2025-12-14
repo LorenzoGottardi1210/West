@@ -62,17 +62,17 @@ SUBROUTINE wfreq_memory_report()
   mem_tot = mem_tot + mem_partial
   !
   IF( .NOT. gamma_only ) THEN
-     mem_partial = (1.0_DP/Mb)*complex_size*nbnd*npwx
+     mem_partial = (1.0_DP/Mb)*complex_size*nbnd*npwx*npol
      WRITE(stdout,'(5x,"[MEM] evckpq                  ",f10.2," Mb", 5x,"(",i7,",",i5,")")') &
-        mem_partial, npwx, nbnd
+        mem_partial, npwx*npol, nbnd
      IF( mpime == root ) CALL json%add( 'memory.evckpq', mem_partial )
      mem_tot = mem_tot + mem_partial
   ENDIF
   !
   IF( l_macropol .AND. .NOT. l_skip_nl_part_of_hcomr .AND. nkb > 0 ) THEN
-     mem_partial = (1.0_DP/Mb)*complex_size*nkb*npwx*2
+     mem_partial = (1.0_DP/Mb)*complex_size*nkb*npwx*npol*2
      WRITE(stdout,'(5x,"[MEM] Hr commutator workspace ",f10.2," Mb", 5x,"(",i7,",",i5,")")') &
-        mem_partial, npwx, nkb*2
+        mem_partial, npwx*npol, nkb*2
      IF( mpime == root ) CALL json%add( 'memory.hcomr', mem_partial )
      mem_tot = mem_tot + mem_partial
   ENDIF

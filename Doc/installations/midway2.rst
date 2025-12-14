@@ -13,7 +13,7 @@ Midway2 is the HPC cluster of the University of Chicago, maintained by UChicago'
 Building WEST
 ~~~~~~~~~~~~~
 
-WEST executables can be compiled using the following script (tested on June 23, 2022):
+WEST executables can be compiled using the following script (tested on October 7, 2025):
 
 .. code-block:: bash
 
@@ -28,9 +28,9 @@ WEST executables can be compiled using the following script (tested on June 23, 
    export MPIF90=mpiifort
    export F90=ifort
    export CC=icc
-   export SCALAPACK_LIBS="-lmkl_scalapack_lp64 -Wl,--start-group -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -lmkl_blacs_intelmpi_lp64 -Wl,--end-group"
+   export SCALAPACK_LIBS="-lmkl_scalapack_lp64 -Wl,--start-group -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lmkl_blacs_intelmpi_lp64 -Wl,--end-group"
 
-   ./configure --with-scalapack=intel --enable-openmp
+   ./configure --with-scalapack=intel
    make -j 8 pw
 
    cd West
@@ -48,7 +48,7 @@ To use the script do:
 Running WEST Jobs
 ~~~~~~~~~~~~~~~~~
 
-The following is an example executable script `run_west.sh` to run the `wstat.x` WEST executable on two nodes of Midway2 with 32 MPI ranks per node. The <project_name> and <account_name> must be replaced with an active project allocation.
+The following is an example executable script `run_west.sh` to run the `wstat.x` WEST executable on two nodes of Midway2 with 28 MPI ranks per node. The <project_name> and <account_name> must be replaced with an active project allocation.
 
 .. code-block:: bash
 
@@ -58,7 +58,7 @@ The following is an example executable script `run_west.sh` to run the `wstat.x`
    #SBATCH --partition=<partition_name>
    #SBATCH --account=<account_name>
    #SBATCH --nodes=2
-   #SBATCH --ntasks-per-node=48
+   #SBATCH --ntasks-per-node=28
    #SBATCH --cpus-per-task=1
 
    module load intel/19.1.1
@@ -70,7 +70,9 @@ The following is an example executable script `run_west.sh` to run the `wstat.x`
    export LD_LIBRARY_PATH=/software/python-3.8.5-el7-x86_64/lib:$LD_LIBRARY_PATH
    export OMP_NUM_THREADS=1
 
-   srun -n 96 -N 2 ./wstat.x -i wstat.in > wstat.out
+   ulimit -s unlimited
+
+   srun -n 56 ./wstat.x -i wstat.in > wstat.out
 
 Job submission is done with the following:
 

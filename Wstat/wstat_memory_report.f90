@@ -108,9 +108,9 @@ SUBROUTINE wstat_memory_report()
   mem_tot = mem_tot + mem_partial
   !
   IF( .NOT. gamma_only ) THEN
-     mem_partial = (1.0_DP/Mb)*complex_size*nbnd*npwx
+     mem_partial = (1.0_DP/Mb)*complex_size*nbnd*npwx*npol
      WRITE(stdout,'(5x,"[MEM] evckmq                  ",f10.2," Mb", 5x,"(",i7,",",i5,")")') &
-        mem_partial, npwx, nbnd
+        mem_partial, npwx*npol, nbnd
      IF( mpime == root ) CALL json%add( 'memory.evckmq', mem_partial )
      mem_tot = mem_tot + mem_partial
   ENDIF

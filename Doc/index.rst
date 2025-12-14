@@ -2,14 +2,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to West's documentation!
-==================================
-
-.. .. important::
-
-    This is documentation for the **WEST** *code*, which is part of the WEST_ framework.
-
-.. _WEST: https://west-code.org
+Welcome to the documentation of WEST |version|
+==============================================
 
 Contents
 --------
@@ -27,27 +21,27 @@ Contents
 
 .. glossary::
 
-    :ref:`overview`
+   :ref:`overview`
       An illustration of **WEST**.
 
-    :ref:`installation`
+   :ref:`installation`
       Instructions on how to install **WEST**.
 
-    :ref:`tutorial`
-      Compact demonstration of usage of **WEST**.
+   :ref:`tutorial`
+      A compact demonstration of the usage of **WEST**.
 
-    :ref:`quickreference`
-      Quick reference for **WEST** input file examples.
+   :ref:`quickreference`
+      A quick reference for **WEST** input file examples.
 
-    :ref:`manual`
-      The complete reference.
+   :ref:`manual`
+      The complete documentation of **WEST** input keywords.
 
-    :ref:`acknowledge`
+   :ref:`acknowledge`
       Instructions on how to acknowledge this software in publications.
+
+The **WEST** package is hosted on `GitHub <https://github.com/west-code-development/West>`_ and licensed under the open-source GPLv3 license.
 
 .. note::
 
-   To get help using the **WEST** package, send an email to `mgovoni@anl.gov <mailto:mgovoni@anl.gov>`_.
-
-The **WEST** package is hosted on `GitHub <https://github.com/west-code-development/West>`_ and licensed under the open-source GPLv3 license.
+   To get help using the **WEST** package, send an email to `mgovoni@unimore.it <mailto:mgovoni@unimore.it>`_.
 

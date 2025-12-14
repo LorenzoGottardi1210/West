@@ -159,8 +159,8 @@ SUBROUTINE do_exc_comp()
         nbndval = nbnd_occ(iks)
         flnbndval = nbnd_occ(iks_do)
         !
-        CALL glbrak_gamma(evc(1,nbndval+1),dvg_exc(1,1,iks,lexc),projection_matrix(1,1,iks,iexc),npw,npwx, &
-        & nbnd-nbndval,flnbndval,nbndx_emp,npol)
+        CALL glbrak_gamma(evc(:,nbndval+1:nbnd),dvg_exc(:,:,iks,lexc),projection_matrix(:,:,iks,iexc),npw,&
+        & npwx,nbnd-nbndval,flnbndval,nbndx_emp,npol)
         !
         CALL update_bar_type(barra,'westpp',1)
         !

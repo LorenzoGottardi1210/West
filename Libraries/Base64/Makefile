@@ -9,17 +9,17 @@ BASE64_OBJS = \
 cbase64.o \
 base64module.o
 
-all : title libbase64.a
+all: title libbase64.a
 
-libbase64.a : $(BASE64_OBJS)
+libbase64.a: $(BASE64_OBJS)
 	$(AR) $(ARFLAGS) $@ $?
 	$(RANLIB) $@
 
-clean :
+clean:
 	- /bin/rm -f *.x *.o *.a *~ *_tmp.f90 *.d *.mod *.i *.L
 	- /bin/rm -f libbase64.a
 
-title :
+title:
 	@echo
 	@echo "##############"
 	@echo "### Base64 ###"

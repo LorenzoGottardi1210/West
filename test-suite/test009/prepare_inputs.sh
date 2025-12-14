@@ -1,6 +1,6 @@
 #!/bin/bash
 
-${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/O_ONCV_PBE-1.0.upf
+${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/O_ONCV_PBE-1.2.upf
 
 cat > pw.in << EOF
 &control
@@ -13,25 +13,25 @@ prefix       = 'test'
 &system
 ibrav           = 1
 celldm(1)       = 20
-nat             = 2
 ntyp            = 1
-ecutwfc         = 25.0
+nat             = 2
+ecutwfc         = 25
 nbnd            = 12
-assume_isolated = 'mp'
 occupations     = 'from_input'
+assume_isolated = 'mp'
 /
 &electrons
 diago_full_acc = .true.
 /
 ATOMIC_SPECIES
-O 15.9994 O_ONCV_PBE-1.0.upf
+O 15.9994 O_ONCV_PBE-1.2.upf
 ATOMIC_POSITIONS angstrom
 O    6.25001033  6.25001033  5.64063432
 O    6.25001033  6.25001033  6.84863432
 K_POINTS gamma
 OCCUPATIONS
-2.00  2.00  2.00  2.00  2.00  1.00  1.00  0.00  0.00  0.00
-0.00  0.00
+2 2 2 2 2 1 1 0 0 0
+0 0
 EOF
 
 

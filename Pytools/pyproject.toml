@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "WEST"
+authors = [
+    {name = "Marco Govoni", email = "mgovoni@unimore.it"},
+]
+description = "Python tools for WEST"
+requires-python = ">=3.6, <4"
+license = "GPL-3.0-only"
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "h5py",
+    "pyyaml",
+    "pytest",
+    "datetime",
+    "setuptools",
+    "sphinx_rtd_theme",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://west-code.org/"
+Documentation = "https://west-code.org/doc/West/latest/"
+Repository = "https://github.com/west-code-development/West"
+
+[tool.setuptools.packages]
+find = {}

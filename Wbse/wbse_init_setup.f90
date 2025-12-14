@@ -17,10 +17,8 @@ SUBROUTINE wbse_init_setup()
   USE westcom,              ONLY : solver,l_bse,bse_method,l_pdep,localization,l_local_repr,&
                                  & l_use_ecutrho,wbse_init_save_dir,l_hybrid_tddft
   USE kinds,                ONLY : DP
-  USE types_coulomb,        ONLY : pot3D
   USE mp_global,            ONLY : npool,nbgrp
   USE xc_lib,               ONLY : xclib_dft_is
-  USE exx_base,             ONLY : erfc_scrlen
   USE pwcom,                ONLY : nkstot,nks
   USE distribution_center,  ONLY : kpt_pool
   USE class_idistribute,    ONLY : idistribute,IDIST_BLK
@@ -74,40 +72,13 @@ SUBROUTINE wbse_init_setup()
   !
   CALL set_npwq()
   !
-  IF(l_hybrid_tddft) THEN
-     !
-     IF(erfc_scrlen > 0._DP) THEN
-        !
-        ! HSE functional, mya = 1._DP, myb = -1._DP, mymu = erfc_scrlen
-        !
-        CALL pot3D%init('Rho',.FALSE.,'gb',mya=1._DP,myb=-1._DP,mymu=erfc_scrlen)
-        !
-     ELSE
-        !
-        ! PBE0 functional, mya = 1._DP, myb = 0._DP, mymu = 1._DP to avoid divergence
-        !
-        CALL pot3D%init('Rho',.FALSE.,'gb',mya=1._DP,myb=0._DP,mymu=1._DP)
-        !
-     ENDIF
-     !
-  ELSE
-     !
-     CALL pot3D%init('Wave',.FALSE.,'default')
-     !
-  ENDIF
-  !
-  !$acc enter data copyin(pot3D)
-  !$acc enter data copyin(pot3D%sqvc)
-  !
-  CALL pot3D%print_divergence()
-  !
   CALL set_nbndocc()
   !
   CALL my_mkdir(wbse_init_save_dir)
   !
   kpt_pool = idistribute()
   CALL kpt_pool%init(nkstot,'p','nkstot',.FALSE.,IDIST_BLK)
-  !
   IF(kpt_pool%nloc /= nks) CALL errore('wbse_init_setup','unexpected kpt_pool init error',1)
+  IF(npool > nkstot) CALL errore('wbse_init_setup','npool>nkstot',1)
   !
 END SUBROUTINE

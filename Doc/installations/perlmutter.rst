@@ -13,7 +13,7 @@ Perlmutter is an HPE Cray EX supercomputer located at National Energy Research S
 Building WEST (GPU)
 ~~~~~~~~~~~~~~~~~~~
 
-WEST executables can be compiled using the following script (tested on February 21, 2025):
+WEST executables can be compiled using the following script (tested on April 28, 2025):
 
 .. code-block:: bash
 
@@ -21,13 +21,14 @@ WEST executables can be compiled using the following script (tested on February 
    #!/bin/bash
 
    module unload darshan
+   module load gpu
    module load PrgEnv-nvidia
-   module load nvidia/23.9
-   module load cudatoolkit/12.2
+   module load nvidia/24.5
+   module load cudatoolkit/12.4
    module load craype-accel-nvidia80
    module load cray-python/3.11.7
 
-   ./configure --with-cuda=$CUDA_HOME --with-cuda-runtime=12.2 --with-cuda-cc=80 --with-cuda-mpi=yes
+   ./configure --with-cuda=$CUDA_HOME --with-cuda-runtime=12.4 --with-cuda-cc=80 --with-cuda-mpi=yes
 
    # Manually edit make.inc:
 
@@ -56,12 +57,6 @@ Running WEST Jobs (GPU)
 
 The following is an example executable script `run_west.sh` to run the `wstat.x` WEST executable on two GPU nodes of Perlmutter with 4 MPI ranks and 4 GPUs per node. The <project_name> must be replaced with an active project allocation.
 
-**Important**: The following environment variable is needed to work around a bug in ROMIO, Cray MPICH.
-
-.. code-block:: bash
-
-   export ROMIO_FSTYPE_FORCE="ufs:"
-
 **Important**: It is recommended to run the calculation from the Lustre file system (`$SCRATCH` instead of `/home`).
 
 .. code-block:: bash
@@ -80,9 +75,10 @@ The following is an example executable script `run_west.sh` to run the `wstat.x`
    #SBATCH --cpus-per-task=32
 
    module unload darshan
+   module load gpu
    module load PrgEnv-nvidia
-   module load nvidia/23.9
-   module load cudatoolkit/12.2
+   module load nvidia/24.5
+   module load cudatoolkit/12.4
    module load craype-accel-nvidia80
    module load cray-python/3.11.7
 
@@ -90,7 +86,6 @@ The following is an example executable script `run_west.sh` to run the `wstat.x`
    export OMP_NUM_THREADS=1
    export SLURM_CPU_BIND=cores
    export MPICH_GPU_SUPPORT_ENABLED=1
-   export ROMIO_FSTYPE_FORCE="ufs:"
 
    srun -n 8 ./wstat.x -i wstat.in &> wstat.out
 
@@ -103,7 +98,7 @@ Job submission is done with the following:
 Building WEST (CPU)
 ~~~~~~~~~~~~~~~~~~~
 
-WEST executables can be compiled using the following script (tested on February 21, 2025):
+WEST executables can be compiled using the following script (tested on April 28, 2025):
 
 .. code-block:: bash
 
@@ -146,12 +141,6 @@ Running WEST Jobs (CPU)
 
 The following is an example executable script `run_west.sh` to run the `wstat.x` WEST executable on two CPU nodes of Perlmutter with 128 MPI ranks per node. The <project_name> must be replaced with an active project allocation.
 
-**Important**: The following environment variable is needed to work around a bug in ROMIO, Cray MPICH.
-
-.. code-block:: bash
-
-   export ROMIO_FSTYPE_FORCE="ufs:"
-
 **Important**: It is recommended to run the calculation from the Lustre file system (`$SCRATCH` instead of `/home`).
 
 .. code-block:: bash
@@ -176,7 +165,6 @@ The following is an example executable script `run_west.sh` to run the `wstat.x`
    export LD_LIBRARY_PATH=/opt/cray/pe/python/3.11.7/lib:$LD_LIBRARY_PATH
    export OMP_NUM_THREADS=1
    export SLURM_CPU_BIND=cores
-   export ROMIO_FSTYPE_FORCE="ufs:"
 
    srun -n 256 ./wstat.x -i wstat.in &> wstat.out
 

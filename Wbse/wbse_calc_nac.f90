@@ -90,7 +90,7 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
      !
      CALL wbse_calc_dvgdvg_mat_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat)
      !
-     ! or the band parallelization of rhs_zvec_part1 for the eenac I need dvgdvg_mat with aI and aJ switched
+     ! For the band parallelization of rhs_zvec_part1 for the eenac I need dvgdvg_mat with aI and aJ switched
      ! first I put the content of dvg_exc_tmp_J into evc1_all
      DO iks = 1,kpt_pool%nloc
       CALL gather_bands(dvg_exc_tmp_J(:,:,iks), evc1_all(:,:,iks), reqs(iks))

@@ -32,5 +32,5 @@ title:
 
 description:
 	@echo
-	@echo "NV- diamond gamma_only spin-polarized TDDFT (DDH) forces and eeNACs"
+	@echo "NV- diamond gamma_only spin-flip TDDFT (DDH) forces and eeNACs"
 	@echo

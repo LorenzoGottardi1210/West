@@ -9,15 +9,12 @@ all: prepare_inputs run
 prepare_inputs:
 	bash prepare_inputs.sh
 
-run: pw wbse_init wbse
+run: pw wbse
 
 pw:
 	${PARA_PREFIX_QE} ${BINDIR}/pw.x -i pw.in > pw.out 2> pw.err
 
-wbse_init: pw
-	${PARA_PREFIX} ${BINDIR}/wbse_init.x -nimage ${NIMAGE} -npool ${NPOOL} -nband ${NBAND} -i wbse_init.in > wbse_init.out 2> wbse_init.err
-
-wbse: wbse_init
+wbse: pw
 	${PARA_PREFIX} ${BINDIR}/wbse.x -nimage ${NIMAGE} -npool ${NPOOL} -nband ${NBAND} -i wbse.in > wbse.out 2> wbse.err
 
 clean:
@@ -26,11 +23,11 @@ clean:
 title:
 	@echo
 	@echo "###############"
-	@echo "### test022 ###"
+	@echo "### test020 ###"
 	@echo "###############"
 	@echo
 
 description:
 	@echo
-	@echo "NV- diamond gamma_only spin-polarized TDDFT (DDH) forces and eeNACs"
+	@echo "NV- diamond gamma_only spin-flip TDDFT (PBE) forces and eeNACs"
 	@echo

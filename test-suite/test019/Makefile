@@ -29,5 +29,5 @@ title:
 
 description:
 	@echo
-	@echo "Formaldehyde molecule gamma_only TDDFT (PBE) forces"
+	@echo "Formaldehyde molecule gamma_only TDDFT (PBE) forces, geNACs and eeNACs"
 	@echo

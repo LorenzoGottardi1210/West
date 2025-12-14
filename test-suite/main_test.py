@@ -200,6 +200,38 @@ def read_and_test_wbse_forces(fileA,fileB,tol):
         assert np.allclose(test_f[key],ref_f[key],rtol=0,atol=tol),f'TDDFT forces changed, field {key}'
 
 
+def read_wbse_nac_vec(fileName):
+    """
+    Reads the NAC vectors in wbse
+    """
+
+    with open(fileName,'r') as f:
+        data = json.load(f)
+
+    nac_vec = {}
+    for key in data['output']['nac_vec']:
+        nac_vec[key] = np.array(data['output']['nac_vec'][key],dtype='f8')
+
+    return nac_vec
+
+
+def read_and_test_wbse_nac_vec(fileA,fileB,tol):
+    """
+    Reads and tests TDDFT NAC vectors
+    """
+
+    test_f = read_wbse_nac_vec(fileA)
+    ref_f = read_wbse_nac_vec(fileB)
+
+    maxDiff = 0.0
+    for key in ref_f:
+        maxDiff = max(maxDiff,np.amax(np.abs(test_f[key]-ref_f[key])))
+    print(f'TDDFT NAC vectors (wbse) max diff: {maxDiff}')
+
+    for key in ref_f:
+        assert np.allclose(test_f[key],ref_f[key],rtol=0,atol=tol),f'TDDFT NAC vectors changed, field {key}'
+
+
 def read_qdet_1body(fileName):
     """
     Reads QDET one-body term

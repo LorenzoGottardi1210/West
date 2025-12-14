@@ -29,5 +29,5 @@ title:
 
 description:
 	@echo
-	@echo "NV- diamond gamma_only spin-polarized TDDFT (PBE) forces"
+	@echo "NV- diamond gamma_only spin-polarized TDDFT (PBE) forces, geNACs and eeNACs"
 	@echo

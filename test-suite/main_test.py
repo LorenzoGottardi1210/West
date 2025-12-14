@@ -364,3 +364,10 @@ def test_tddftForces(testdir):
     with open('parameters.json','r') as f:
         parameters = json.load(f)
     read_and_test_wbse_forces(testdir+'/test.wbse.save/wbse.json',testdir+'/ref/wbse.json',float(parameters['tolerance']['forces']))
+
+
+@pytest.mark.parametrize('testdir',['test019','test020','test021','test022','test033','test034'])
+def test_tddftNACs(testdir):
+    with open('parameters.json','r') as f:
+        parameters = json.load(f)
+    read_and_test_wbse_nac_vec(testdir+'/test.wbse.save/wbse.json',testdir+'/ref/wbse.json',float(parameters['tolerance']['forces']))

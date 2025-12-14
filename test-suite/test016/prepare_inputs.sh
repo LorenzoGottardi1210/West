@@ -56,4 +56,9 @@ wbse_control:
   l_pre_shift: True
   l_forces: True
   forces_state: 1
+  l_genac: True
+  genac_state: 1
+  l_eenac: True
+  eenac_stateI: 1
+  eenac_stateJ: 2
 EOF

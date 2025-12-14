@@ -58,13 +58,8 @@ wbse_init_control:
 
 wbse_control:
   wbse_calculation: D
-<<<<<<< HEAD
-  n_liouville_eigen: 3
-  n_liouville_times: 20
-=======
   n_liouville_eigen: 4
   n_liouville_times: 10
->>>>>>> develop
   trev_liouville: 0.00000001
   trev_liouville_rel: 0.000001
   l_pre_shift: True
@@ -72,12 +67,5 @@ wbse_control:
   l_spin_flip_kernel: True
   l_spin_flip_alda0: False
   l_forces: True
-<<<<<<< HEAD
-  forces_state: 1
-  l_eenac: True
-  eenac_stateI: 1
-  eenac_stateJ: 3
-=======
   forces_state: 4
->>>>>>> develop
 EOF

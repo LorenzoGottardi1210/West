@@ -29,9 +29,5 @@ title:
 
 description:
 	@echo
-<<<<<<< HEAD
-	@echo "NV- diamond gamma_only spin-polarized TDDFT (PBE) forces, geNACs and eeNACs"
-=======
 	@echo "O2 molecule gamma_only spin-flip TDDFT (LDA) forces"
->>>>>>> develop
 	@echo

@@ -29,9 +29,5 @@ title:
 
 description:
 	@echo
-<<<<<<< HEAD
-	@echo "Formaldehyde molecule gamma_only TDDFT (PBE0) forces and eeNACs"
-=======
 	@echo "O2 molecule gamma_only spin-flip TDDFT (PBE) forces"
->>>>>>> develop
 	@echo

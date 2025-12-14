@@ -54,12 +54,5 @@ wbse_control:
   l_spin_flip_kernel: True
   l_spin_flip_alda0: False
   l_forces: True
-<<<<<<< HEAD
-  forces_state: 1
-  l_eenac: True
-  eenac_stateI: 1
-  eenac_stateJ: 2
-=======
   forces_state: 4
->>>>>>> develop
 EOF

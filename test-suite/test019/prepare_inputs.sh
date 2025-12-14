@@ -78,16 +78,14 @@ wbse_init_control:
 
 wbse_control:
   wbse_calculation: D
-  n_liouville_eigen: 2
+  n_liouville_eigen: 3
   n_liouville_times: 20
   trev_liouville: 0.00000001
   trev_liouville_rel: 0.000001
   l_pre_shift: False
   l_forces: True
   forces_state: 1
-  l_genac: True
-  genac_state: 1
   l_eenac: True
   eenac_stateI: 1
-  eenac_stateJ: 2
+  eenac_stateJ: 3
 EOF

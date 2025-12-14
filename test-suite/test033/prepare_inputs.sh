@@ -1,7 +1,7 @@
 #!/bin/bash
 
-${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/C_ONCV_PBE-1.0.upf
-${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/N_ONCV_PBE-1.0.upf
+${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/C_ONCV_PBE-1.2.upf
+${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/N_ONCV_PBE-1.2.upf
 
 cat > pw.in << EOF
 &control
@@ -13,21 +13,20 @@ prefix       = 'test'
 /
 &system
 ibrav             = 0
-nat               = 15
 ntyp              = 2
-ecutwfc           = 25
-nosym             = .true.
+nat               = 15
 tot_charge        = -1
 nspin             = 2
-nbnd              = 40
 tot_magnetization = 2
+ecutwfc           = 25
+nbnd              = 40
 /
 &electrons
 diago_full_acc = .true.
 /
 ATOMIC_SPECIES
-C  12.0107  C_ONCV_PBE-1.0.upf
-N  14.0067  N_ONCV_PBE-1.0.upf
+C  12.0107  C_ONCV_PBE-1.2.upf
+N  14.0067  N_ONCV_PBE-1.2.upf
 ATOMIC_POSITIONS crystal
 C            -0.0011453699       -0.0011377611        0.0067006607
 C            -0.0002744852       -0.0002672037        0.5008176648
@@ -65,7 +64,7 @@ wbse_init_control:
 wbse_control:
   wbse_calculation: D
   n_liouville_eigen: 4
-  n_liouville_times: 10
+  n_liouville_times: 20
   trev_liouville: 0.00000001
   trev_liouville_rel: 0.000001
   l_pre_shift: True

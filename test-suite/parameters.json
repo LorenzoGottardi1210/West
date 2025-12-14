@@ -7,6 +7,6 @@
     "qdet": "1e-4",
     "bse": "1e-4",
     "forces": "1e-5",
-    "nacs": "1e-5"
+    "nac_vec": "1e-5"
   }
 }

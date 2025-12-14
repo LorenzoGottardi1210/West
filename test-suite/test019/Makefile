@@ -32,9 +32,5 @@ title:
 
 description:
 	@echo
-<<<<<<< HEAD
-	@echo "Formaldehyde molecule gamma_only TDDFT (PBE) forces, geNACs and eeNACs"
-=======
-	@echo "NV- diamond gamma_only spin-polarized TDDFT (DDH) forces"
->>>>>>> develop
+	@echo "NV- diamond gamma_only spin-polarized TDDFT (DDH) forces and eeNACs"
 	@echo

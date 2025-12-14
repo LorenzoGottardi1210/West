@@ -20,7 +20,7 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   USE noncollin_module,     ONLY : npol
   USE fft_base,             ONLY : dffts
   USE westcom,              ONLY : logfile,nbndval0x,n_trunc_bands,evc1_all,&
-                                   & l_genac,l_eenac,computing_eenac !!! SPV
+                                   & l_genac,l_eenac,computing_eenac 
   USE distribution_center,  ONLY : kpt_pool,band_group
   USE json_module,          ONLY : json_file
   USE mp_world,             ONLY : mpime,root
@@ -37,7 +37,7 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !
   COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc)
   COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  REAL(DP), INTENT(IN)  :: omega_JI !!! SPV
+  REAL(DP), INTENT(IN)  :: omega_JI 
   !
   ! Workspace
   !
@@ -90,7 +90,7 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
      !
      CALL wbse_calc_dvgdvg_mat_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat)
      !
-     !!! SPV for the band parallelization of rhs_zvec_part1 for the eenac I need dvgdvg_mat with aI and aJ switched
+     ! or the band parallelization of rhs_zvec_part1 for the eenac I need dvgdvg_mat with aI and aJ switched
      ! first I put the content of dvg_exc_tmp_J into evc1_all
      DO iks = 1,kpt_pool%nloc
       CALL gather_bands(dvg_exc_tmp_J(:,:,iks), evc1_all(:,:,iks), reqs(iks))
@@ -111,7 +111,6 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
 #if !defined(__GPU_MPI)
   !$acc update device(evc1_all)
 #endif
-     !!!
      !
      ! drhox2
      !
@@ -133,7 +132,6 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   CALL allocate_bse_gpu(band_group%nlocx)
 #endif
   !
-  !!! SPV
   IF (l_genac .AND. .NOT.computing_eenac) THEN 
      z_rhs_vec = dvg_exc_tmp_I
      !$acc update device(z_rhs_vec)
@@ -144,7 +142,6 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   ENDIF
   !
   CALL solve_zvector_eq_cg(z_rhs_vec, zvector)
-  !!!
   !
 #if defined(__CUDA)
   CALL deallocate_bse_gpu()
@@ -290,9 +287,7 @@ SUBROUTINE wbse_calc_drhox1_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
   INTEGER :: barra_load
   REAL(DP) :: w1, w2
   REAL(DP), ALLOCATABLE :: tmp_r(:)
-  !!! SPV
   COMPLEX(DP) , ALLOCATABLE :: psic_J(:)
-  !!! 
   TYPE(bar_type) :: barra
   INTEGER, PARAMETER :: flks(2) = [2,1]
   !
@@ -304,10 +299,8 @@ SUBROUTINE wbse_calc_drhox1_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
   ALLOCATE(tmp_r(dffts%nnr))
   !$acc enter data create(tmp_r)
   !
-  !!! SPV
   ALLOCATE(psic_J(dffts%nnr))
   !$acc enter data create(psic_J)
-  !!!
   !
   barra_load = 0
   !
@@ -371,15 +364,13 @@ SUBROUTINE wbse_calc_drhox1_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
         w2 = wg(jbnd,iks_do)/omega
         !
         CALL double_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp_I(:,lbnd,iks),dvg_exc_tmp_I(:,lbnd+1,iks),psic,'Wave')
-        !!! SPV
+        !
         CALL double_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp_J(:,lbnd,iks),dvg_exc_tmp_J(:,lbnd+1,iks),psic_J,'Wave')
-        !!!
+        !
         !$acc parallel loop present(tmp_r)
         DO ir = 1,dffts_nnr
-           !!! SPV
            tmp_r(ir) = tmp_r(ir) + w1*REAL(psic(ir),KIND=DP)*REAL(psic_J(ir),KIND=DP) &
                                & + w2*AIMAG(psic(ir))*AIMAG(psic_J(ir))
-           !!!
         ENDDO
         !$acc end parallel
         !
@@ -398,14 +389,10 @@ SUBROUTINE wbse_calc_drhox1_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
         !
         CALL single_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp_I(:,lbnd,iks),psic,'Wave')
         !
-        !!! SPV
         CALL single_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp_J(:,lbnd,iks),psic_J,'Wave')
-        !!!
         !$acc parallel loop present(tmp_r)
         DO ir = 1,dffts_nnr
-           !!! SPV
            tmp_r(ir) = tmp_r(ir) + w1*REAL(psic(ir),KIND=DP)*REAL(psic_J(ir),KIND=DP)
-           !!!
         ENDDO
         !$acc end parallel
         !
@@ -464,10 +451,8 @@ SUBROUTINE wbse_nacvec_drhox1(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, nac_vec, 
   !
   INTEGER, INTENT(IN) :: n
   COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc), drhox1(dffts%nnr, nspin)
-  !!! SPV
   COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
   REAL(DP), INTENT(IN)  :: omega_JI
-  !!!
   REAL(DP), INTENT(INOUT) :: nac_vec(n)
   !
   ! Workspace
@@ -601,7 +586,6 @@ SUBROUTINE wbse_nacvec_drhox1(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, nac_vec, 
   !
   nacveclc(:,:) = -factor*nacveclc
   !
-  !!! SPV I have to multiply by omega_JI^-1
   DO ia = 1,nat
      DO ipol = 1,3
         nacvec_drhox1(3*ia-3+ipol) = ( nacvec_drhox1(3*ia-3+ipol) + nacveclc(ipol,ia) ) / -omega_JI
@@ -667,7 +651,7 @@ SUBROUTINE wbse_calc_dvgdvg_mat_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat)
   !
   ! I/O
   !
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc) !!! SPV It's not really used
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc) !!! It's not really used
   COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
   REAL(DP), INTENT(OUT) :: dvgdvg_mat(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc)
   !
@@ -712,11 +696,10 @@ SUBROUTINE wbse_calc_dvgdvg_mat_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat)
            reduce = 0._DP
            !$acc loop reduction(+:reduce)
            DO ig = 1,npw
-              !!! SPV evc1_all contains dvg_exc_tmp_I
+              ! evc1_all contains dvg_exc_tmp_I
               reduce = reduce &
               & + REAL(evc1_all(ig,ibnd,iks),KIND=DP)*REAL(dvg_exc_tmp_J(ig,lbnd,iks),KIND=DP) &
               & + AIMAG(evc1_all(ig,ibnd,iks))*AIMAG(dvg_exc_tmp_J(ig,lbnd,iks))
-              !!!
            ENDDO
            !
            dvgdvg_mat(ibnd,lbnd,iks) = 2._DP*reduce
@@ -948,7 +931,7 @@ SUBROUTINE wbse_nacvec_drhox2(n, dvgdvg_mat, drhox2, nac_vec, omega_JI)
   REAL(DP), INTENT(IN) :: dvgdvg_mat(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc)
   COMPLEX(DP), INTENT(IN) :: drhox2(dffts%nnr, nspin)
   REAL(DP), INTENT(INOUT) :: nac_vec(n)
-  REAL(DP), INTENT(IN)  :: omega_JI !!! SPV
+  REAL(DP), INTENT(IN)  :: omega_JI 
   !
   ! Workspace
   !
@@ -1112,7 +1095,6 @@ SUBROUTINE wbse_nacvec_drhox2(n, dvgdvg_mat, drhox2, nac_vec, omega_JI)
   !
   nacveclc(:,:) = -factor*nacveclc
   !
-  !!! SPV I have to multiply by omega_JI^-1
   DO ia = 1,nat
      DO ipol = 1,3
         nacvec_drhox2(3*ia-3+ipol) = ( nacvec_drhox2(3*ia-3+ipol)+nacveclc(ipol,ia) ) / -omega_JI
@@ -1179,7 +1161,7 @@ SUBROUTINE wbse_nacvec_drhoz_nac(n, zvector, nac_vec)
   USE fft_base,             ONLY : dffts
   USE bar,                  ONLY : bar_type,start_bar_type,update_bar_type,stop_bar_type
   USE westcom,              ONLY : iuwfc,lrwfc,logfile,nbnd_occ,n_trunc_bands,l_spin_flip,&
-                                   & l_genac,l_eenac,computing_eenac !!! SPV
+                                   & l_genac,l_eenac,computing_eenac
   USE vlocal,               ONLY : vloc
   USE control_flags,        ONLY : gamma_only
   USE distribution_center,  ONLY : kpt_pool,band_group
@@ -1325,13 +1307,13 @@ SUBROUTINE wbse_nacvec_drhoz_nac(n, zvector, nac_vec)
            IF(gstart == 2) THEN
               !$acc parallel loop reduction(+:reduce) present(zvector,dvpsi) copy(reduce)
               DO lbnd = 1,nbnd_do
-                 !!! SPV c.c. was already taken care of
+                 ! c.c. was already taken care of
                  reduce = reduce - REAL(zvector(1,lbnd,iks),KIND=DP)*REAL(dvpsi(1,lbnd,ipol),KIND=DP)
               ENDDO
              !$acc end parallel
            ENDIF
            !
-           !!! SPV c.c. was already taken care of
+           ! c.c. was already taken care of
            nacvec_drhoz(3*ia-3+ipol) = nacvec_drhoz(3*ia-3+ipol) + this_wk*reduce
            !
         ENDDO
@@ -1352,7 +1334,7 @@ SUBROUTINE wbse_nacvec_drhoz_nac(n, zvector, nac_vec)
   !
   CALL wbse_calc_dens(zvector, drhoz, .FALSE.)
   !
-  !!!! SPV c.c. was already taken care of
+  ! c.c. was already taken care of
   rdrhoz(:,:) = REAL(drhoz,KIND=DP)
   !
   IF(nspin == 2) THEN

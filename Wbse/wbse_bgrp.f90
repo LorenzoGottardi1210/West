@@ -33,8 +33,7 @@ MODULE wbse_bgrp
       !
       USE pwcom,                ONLY : npwx
       USE mp_global,            ONLY : nbgrp
-      USE westcom,              ONLY : nbndval0x,n_trunc_bands,evc1_all,&
-                                       evc1J_all !!! SPV
+      USE westcom,              ONLY : nbndval0x,n_trunc_bands,evc1_all, evc1J_all 
       USE distribution_center,  ONLY : kpt_pool,band_group
       !
       IMPLICIT NONE

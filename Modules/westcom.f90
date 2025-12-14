@@ -344,13 +344,11 @@ MODULE wbse_center
   REAL(DP) :: ddvxc_fd_coeff
   INTEGER :: forces_inexact_krylov
   REAL(DP) :: forces_inexact_krylov_tr
-  !!! SPV
   LOGICAL :: l_genac
   LOGICAL :: l_eenac
   INTEGER :: genac_state
   INTEGER :: eenac_stateI
   INTEGER :: eenac_stateJ
-  !!!
   !
   ! FOR global variables
   !
@@ -364,9 +362,7 @@ MODULE wbse_center
   REAL(DP) :: sigma_c_head
   REAL(DP) :: sigma_x_head
   LOGICAL :: do_inexact_krylov
-  !!! SPV
   LOGICAL :: computing_eenac
-  !!!
   !
   ! FOR global Lanzcos diago vars
   !
@@ -384,9 +380,7 @@ MODULE wbse_center
   COMPLEX(DP), ALLOCATABLE :: u_matrix(:,:,:)
   REAL(DP),    ALLOCATABLE :: ovl_matrix(:,:,:)
   COMPLEX(DP), ALLOCATABLE :: evc1_all(:,:,:)
-  !!! SPV
   COMPLEX(DP), ALLOCATABLE :: evc1J_all(:,:,:)
-  !!!
   INTEGER,     ALLOCATABLE :: n_bse_idx(:)
   INTEGER,     ALLOCATABLE :: idx_matrix(:,:,:)
   INTEGER,     ALLOCATABLE :: tau_is_read(:,:,:)

@@ -35,12 +35,10 @@ SUBROUTINE build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, 
   ! I/O
   !
   COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  !!! SPV
   COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
   REAL(DP), INTENT(IN)  :: omega_JI
   REAL(DP), INTENT(IN) :: dvgdvg_mat(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc)
   REAL(DP), INTENT(IN) :: dvgdvg_mat_JI(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc)
-  !!!
   COMPLEX(DP), INTENT(IN) :: drhox1(dffts%nnr, nspin), drhox2(dffts%nnr, nspin)
   COMPLEX(DP), INTENT(OUT) :: z_rhs_vec(npwx*npol, band_group%nlocx, kpt_pool%nloc)
   !
@@ -60,7 +58,7 @@ SUBROUTINE build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, 
   !
   ! part2: d < a | K1e | a > / d | v >
   !
-  !!! SPV two calls because of the derivative wrt to real and complex orbitals
+  ! Two calls because of the derivative wrt to real and complex orbitals
   IF(.NOT. l_bse_triplet) CALL rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   IF(.NOT. l_bse_triplet) CALL rhs_zvector_part2_eenac( dvg_exc_tmp_J, dvg_exc_tmp_I, z_rhs_vec )
   !
@@ -110,11 +108,9 @@ SUBROUTINE build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, 
      !
   ENDDO
   !
-  !!! SPV 
   !$acc kernels present(z_rhs_vec)
   z_rhs_vec = -z_rhs_vec / omega_JI
   !$acc end kernels
-  !!!
   CALL stop_clock('build_zvec')
   !
 END SUBROUTINE
@@ -129,7 +125,7 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
   USE gvect,                ONLY : gstart
   USE westcom,              ONLY : iuwfc,lrwfc,nbnd_occ,nbndval0x,n_trunc_bands,l_bse,&
                                  & l_hybrid_tddft,l_spin_flip,evc1_all, &
-                                 & evc1J_all !!! SPV
+                                 & evc1J_all 
   USE pwcom,                ONLY : isk,lsda,nspin,current_spin,current_k,ngk,npwx,npw
   USE mp,                   ONLY : mp_bcast
   USE buffers,              ONLY : get_buffer
@@ -284,17 +280,14 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
         !
      ENDIF
      !
-     !!! SPV
      ! factor 2 from the derivative wrt real and complex orbitals
      !$acc kernels present(z_rhs_vec_part1)
      z_rhs_vec_part1 = 2._DP*z_rhs_vec_part1
      !$acc end kernels
-     !!!
      IF(l_bse) CALL errore('build_rhs_zvector_eq_eenac', 'BSE NACs not implemented', 1) 
      !
      IF(l_hybrid_tddft) THEN
         !
-        !!! SPV
         ! hybrid_kernel_term3 called once for a_I and once for a_J (derivative wrt real and complex orbitals)
         ! it uses global variable evc1_all and evc1J_all: 
         ! first time evc1_all contains a_I and evc1J_all contains a_J, second time contents are switched
@@ -328,7 +321,6 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
 #if !defined(__GPU_MPI)
         !$acc update device(evc1_all(:,:,iks),evc1J_all(:,:,iks))
 #endif        
-        !!!
         !
         IF(l_spin_flip) THEN
            iks_do = flks(iks)
@@ -336,7 +328,7 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
            iks_do = iks
         ENDIF
         !
-        !!! SPV the factor -2._DP accounts for the derivative wrt to real and complex orbitals 
+        ! called two times accounts for the derivative wrt to real and complex orbitals distributed over bgrp
         !$acc host_data use_device(evc,dvgdvg_mat,dvgdvg_mat_JI,tmp_vec)
         CALL DGEMM('N','N',2*npwx*npol,nbnd_do,nbndval-n_trunc_bands,-1._DP,evc(1,1+n_trunc_bands),&
         & 2*npwx*npol,dvgdvg_mat(:,:,iks_do),nbndval0x-n_trunc_bands,0._DP,tmp_vec(1,1,iks),2*npwx*npol)
@@ -1088,7 +1080,7 @@ SUBROUTINE rhs_zvector_part3_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      ENDIF
      !
      !$acc parallel loop collapse(2) present(z_rhs_vec,z_rhs_vec_part3)
-     !!! SPV the factor 2 is from the derivative wrt to real and complex orbitals
+     ! the factor 2 is from the derivative wrt to real and complex orbitals
      DO lbnd = 1,nbnd_do
         DO ig = 1,npw
            z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks)-2._DP*z_rhs_vec_part3(ig,lbnd,iks)
@@ -1248,7 +1240,7 @@ SUBROUTINE compute_ddvxc_5p_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc )
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE compute_ddvxc_sf_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc ) !!! TO CHECK
+SUBROUTINE compute_ddvxc_sf_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc ) 
   !-----------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP
@@ -1403,7 +1395,7 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   USE io_push,              ONLY : io_push_title
   USE gvect,                ONLY : gstart
   USE westcom,              ONLY : iuwfc,lrwfc,nbnd_occ,nbndval0x,n_trunc_bands,l_spin_flip,evc1_all,&
-                                   evc1J_all !!! SPV
+                                   evc1J_all 
   USE pwcom,                ONLY : isk,lsda,nspin,current_spin,current_k,ngk,npwx,npw
   USE mp,                   ONLY : mp_sum,mp_bcast
   USE buffers,              ONLY : get_buffer
@@ -1431,7 +1423,7 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   !
   INTEGER :: ig,lbnd,ibnd,jbnd,jbndp,iks,iks_do,nbnd_do,nbndval,flnbndval
   INTEGER :: band_group_myoffset
-  INTEGER :: req !!! SPV
+  INTEGER :: req 
   REAL(DP) :: reduce
   COMPLEX(DP), ALLOCATABLE :: dotp(:)
   COMPLEX(DP), ALLOCATABLE :: z_rhs_vec_part4(:,:,:),tmp_vec_I(:,:),tmp_vec_J(:,:)
@@ -1448,14 +1440,12 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   band_group_myoffset = band_group%myoffset
   !
   ALLOCATE(z_rhs_vec_part4(npwx*npol, band_group%nlocx, kpt_pool%nloc))
-  !!! SPV
   ALLOCATE(dv_vv_mat_I(nbndval0x-n_trunc_bands, band_group%nlocx))
   ALLOCATE(dv_vv_mat_J(nbndval0x-n_trunc_bands, band_group%nlocx))
   ALLOCATE(tmp_vec_I(npwx*npol, band_group%nlocx))
   ALLOCATE(tmp_vec_J(npwx*npol, band_group%nlocx))
   ALLOCATE(dpcpart_I(npwx*npol, nbndval0x-n_trunc_bands))
   ALLOCATE(dpcpart_J(npwx*npol, nbndval0x-n_trunc_bands))
-  !!!
   !$acc enter data create(z_rhs_vec_part4,dv_vv_mat_I,dv_vv_mat_J,tmp_vec_I,tmp_vec_J,dpcpart_I,dpcpart_J)
   !
   !$acc kernels present(z_rhs_vec_part4)
@@ -1510,7 +1500,6 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      !
      ! Compute the first part
      !
-     !!! SPV 
      ! hybrid_kernel_term4 called once for a_I and once for a_J (derivative wrt real and complex orbitals)
      ! it uses global variable evc1_all and evc1J_all: 
      ! first time evc1_all contains a_I and evc1J_all contains a_J, second time contents are switched
@@ -1544,7 +1533,6 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
 #if !defined(__GPU_MPI)
      !$acc update device(evc1J_all(:,:,iks_do),evc1_all(:,:,iks_do))
 #endif
-     !!!
      !
      ! Compute the second part: dv_vv_mat
      !
@@ -1553,7 +1541,7 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      tmp_vec_J(:,:) = (0._DP,0._DP)
      !$acc end kernels
      !
-     !!! SPV two calls because of the derivative wrt real and complex orbitals
+     ! two calls because of the derivative wrt real and complex orbitals
      CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),tmp_vec_I,l_spin_flip) 
      CALL bse_kernel_gamma(current_spin,evc1J_all(:,:,iks),tmp_vec_J,l_spin_flip) 
      !

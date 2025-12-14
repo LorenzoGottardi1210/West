@@ -32,7 +32,7 @@ SUBROUTINE wbse_davidson_diago ( )
                                  & trev_pdep_rel,l_is_wstat_converged,nbnd_occ,lrwfc,iuwfc,dvg_exc,&
                                  & dng_exc,nbndval0x,n_trunc_bands,l_preconditioning,l_pre_shift,&
                                  & l_spin_flip,l_forces,forces_state,&
-                                 & l_genac,l_eenac,genac_state,eenac_stateI,eenac_stateJ,computing_eenac !!! SPV
+                                 & l_genac,l_eenac,genac_state,eenac_stateI,eenac_stateJ,computing_eenac 
   USE plep_db,              ONLY : plep_db_write,plep_db_read
   USE davidson_restart,     ONLY : davidson_restart_write,davidson_restart_clear,&
                                  & davidson_restart_read
@@ -68,12 +68,10 @@ SUBROUTINE wbse_davidson_diago ( )
   REAL(DP), ALLOCATABLE :: ew(:)
   REAL(DP), ALLOCATABLE :: hr_distr(:,:), vr_distr(:,:)
   COMPLEX(DP), ALLOCATABLE :: dng_exc_tmp(:,:,:), dvg_exc_tmp(:,:,:)
-  !!! SPV
   REAL(DP) :: omega_JI
   COMPLEX(DP), ALLOCATABLE :: dvg_exc_tmp_J(:,:,:)
-  !!!
 #if defined(__CUDA)
-  ATTRIBUTES(PINNED) :: dng_exc_tmp, dvg_exc_tmp, dvg_exc_tmp_J !!! SPV
+  ATTRIBUTES(PINNED) :: dng_exc_tmp, dvg_exc_tmp, dvg_exc_tmp_J 
 #endif
   !
   INTEGER :: iks,il1,ig1,lbnd,ibnd,iks_do
@@ -130,14 +128,12 @@ SUBROUTINE wbse_davidson_diago ( )
      CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
   !$acc enter data create(dvg_exc_tmp)
   !
-  !!! SPV
   IF (l_eenac) THEN
      ALLOCATE( dvg_exc_tmp_J( npwx, band_group%nlocx, kpt_pool%nloc), STAT=ierr )
      IF( ierr /= 0 ) &
      CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
      !$acc enter data create(dvg_exc_tmp_J)
   ENDIF
-  !!!
   !
   ALLOCATE( dng_exc( npwx, band_group%nlocx, kpt_pool%nloc, pert%nlocx ), STAT=ierr )
   IF( ierr /= 0 ) &
@@ -561,7 +557,6 @@ SUBROUTINE wbse_davidson_diago ( )
   !
   DEALLOCATE( conv )
   DEALLOCATE( ew )
-  !!! SPV
   IF (l_eenac) THEN
      IF (eenac_stateI==eenac_stateJ) THEN
         CALL errore('chidiago','eeNAC must be computed between different states',1)
@@ -573,7 +568,6 @@ SUBROUTINE wbse_davidson_diago ( )
      omega_JI = 0._DP
      DEALLOCATE( ev )
   ENDIF
-  !!!
   !
   DEALLOCATE( hr_distr )
   DEALLOCATE( vr_distr )
@@ -582,7 +576,6 @@ SUBROUTINE wbse_davidson_diago ( )
   !
   CALL stop_clock( 'chidiago' )
   !
-  !!! SPV
   IF(l_forces .OR. l_genac .OR. l_eenac) THEN
      !
      IF(.NOT. l_is_wstat_converged) THEN
@@ -676,7 +669,6 @@ SUBROUTINE wbse_davidson_diago ( )
      DEALLOCATE( dvg_exc_tmp )
      !
   ENDIF
-  !!! 
   !
 #if defined(__CUDA)
   CALL deallocate_gpu()

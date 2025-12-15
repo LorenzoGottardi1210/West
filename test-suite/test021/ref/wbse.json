@@ -26,8 +26,7 @@
     "npool": 1,
     "nbgrp": 1,
     "nrg": 8,
-    "nproc": 8,
-    "nthreads": 1
+    "nproc": 8
   },
   "input": {
     "input_west": {
@@ -871,35 +870,35 @@
       "cpu:hum": "< 00.1s",
       "wall:sec": 0.24201869964599609E-2,
       "wall:hum": "< 00.1s",
-      "nocalls": 2
+      "nocalls": 1
     },
     "f_drhox1": {
       "cpu:sec": 0.33040000000001957E-2,
       "cpu:hum": "< 00.1s",
       "wall:sec": 0.331878662109375E-2,
       "wall:hum": "< 00.1s",
-      "nocalls": 2
+      "nocalls": 1
     },
     "dvgdvg": {
       "cpu:sec": 0.1180000000000625E-3,
       "cpu:hum": "< 00.1s",
       "wall:sec": 0.11801719665527344E-3,
       "wall:hum": "< 00.1s",
-      "nocalls": 3
+      "nocalls": 1
     },
     "drhox2": {
       "cpu:sec": 0.18371000000000137E-1,
       "cpu:hum": "< 00.1s",
       "wall:sec": 0.18429040908813477E-1,
       "wall:hum": "< 00.1s",
-      "nocalls": 2
+      "nocalls": 1
     },
     "f_drhox2": {
       "cpu:sec": 0.35870000000000068E-2,
       "cpu:hum": "< 00.1s",
       "wall:sec": 0.36170482635498047E-2,
       "wall:hum": "< 00.1s",
-      "nocalls": 2
+      "nocalls": 1
     },
     "build_zvec": {
       "cpu:sec": 0.79390999999999767E-1,
@@ -913,7 +912,7 @@
       "cpu:hum": "< 00.1s",
       "wall:sec": 0.30396938323974609E-1,
       "wall:hum": "< 00.1s",
-      "nocalls": 3
+      "nocalls": 1
     },
     "ddvxc_sf": {
       "cpu:sec": 0.2073500000000017E-1,
@@ -934,7 +933,7 @@
       "cpu:hum": "< 00.1s",
       "wall:sec": 0.46069622039794922E-2,
       "wall:hum": "< 00.1s",
-      "nocalls": 2
+      "nocalls": 1
     },
     "dv_drho": {
       "cpu:sec": 0.47720699999999905E+0,
@@ -969,20 +968,13 @@
       "cpu:hum": "< 00.1s",
       "wall:sec": 0.40047168731689453E-2,
       "wall:hum": "< 00.1s",
-      "nocalls": 27
+      "nocalls": 14
     },
     "f_drhoxz": {
       "cpu:sec": 0.34030000000000449E-2,
       "cpu:hum": "< 00.1s",
       "wall:sec": 0.34120082855224609E-2,
       "wall:hum": "< 00.1s",
-      "nocalls": 2
-    },
-    "calc_eeNAC": {
-      "cpu:sec": 0.73658100000000015E+0,
-      "cpu:hum": "00.7s",
-      "wall:sec": 0.15254859924316406E+1,
-      "wall:hum": "01.5s",
       "nocalls": 1
     }
   }

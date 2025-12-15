@@ -8,12 +8,12 @@
     <job></job>
   </general_info>
   <parallel_info>
-    <nprocs>8</nprocs>
+    <nprocs>2</nprocs>
     <nthreads>1</nthreads>
     <ntasks>1</ntasks>
     <nbgrp>1</nbgrp>
     <npool>1</npool>
-    <ndiag>8</ndiag>
+    <ndiag>2</ndiag>
   </parallel_info>
   <input>
     <control_variables>
@@ -94,7 +94,7 @@
     </electron_control>
     <k_points_IBZ>
       <nk>1</nk>
-      <k_point weight="1.00000000000000">0.000000000000000E+000  0.000000000000000E+000  0.000000000000000E+000</k_point>
+      <k_point weight="1.0000000000000000">0.000000000000000E+000  0.000000000000000E+000  0.000000000000000E+000</k_point>
     </k_points_IBZ>
     <ion_control>
       <ion_dynamics>none</ion_dynamics>
@@ -699,7 +699,7 @@
       <two_fermi_energies>-6.476182545573510E-002 -5.460701593813960E-001</two_fermi_energies>
       <starting_k_points>
         <nk>1</nk>
-        <k_point weight="1.00000000000000">0.000000000000000E+000  0.000000000000000E+000  0.000000000000000E+000</k_point>
+        <k_point weight="1.0000000000000000">0.000000000000000E+000  0.000000000000000E+000  0.000000000000000E+000</k_point>
       </starting_k_points>
       <nks>1</nks>
       <occupations_kind>fixed</occupations_kind>

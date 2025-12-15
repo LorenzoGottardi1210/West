@@ -88,10 +88,15 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !$acc update device(evc1_all)
 #endif
      !
+     ! For the band parallelization of rhs_zvec_part1 I need:
+     ! dvgdvg_mat    (computed between aI and aJ) and  
+     ! dvgdvg_mat_IJ (computed between aJ and aI)
+     !
+     ! First I compute dvgdvg_mat
      CALL wbse_calc_dvgdvg_mat_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat)
      !
-     ! For the band parallelization of rhs_zvec_part1 for the eenac I need dvgdvg_mat with aI and aJ switched
-     ! first I put the content of dvg_exc_tmp_J into evc1_all
+     ! To compute dvgdvg_mat_JI:
+     ! - first I put the content of dvg_exc_tmp_J into evc1_all
      DO iks = 1,kpt_pool%nloc
       CALL gather_bands(dvg_exc_tmp_J(:,:,iks), evc1_all(:,:,iks), reqs(iks))
      ENDDO
@@ -100,10 +105,10 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !$acc update device(evc1_all)
 #endif
      !
-     ! then I compute dvgdvg_mat_JI with the inputs dvg_exc_tmp_I and dvg_exc_tmp_J switched
+     ! - then I compute dvgdvg_mat_JI: inputs dvg_exc_tmp_I and dvg_exc_tmp_J switched
      CALL wbse_calc_dvgdvg_mat_nac(dvg_exc_tmp_J, dvg_exc_tmp_I, dvgdvg_mat_JI)
      !
-     ! finally I revert back the content of dvg_exc_tmp_I into evc1_all
+     ! - finally I revert the content of evc1_all back to dvg_exc_tmp_I
      DO iks = 1,kpt_pool%nloc
         CALL gather_bands(dvg_exc_tmp_I(:,:,iks), evc1_all(:,:,iks), reqs(iks))
      ENDDO

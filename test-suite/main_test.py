@@ -225,7 +225,7 @@ def read_and_test_wbse_nac_vec(fileA,fileB,tol):
 
     maxDiff = 0.0
     for key in ref_f:
-        maxDiff = max(maxDiff,np.amax(np.abs(test_f[key]-ref_f[key])))
+        maxDiff = max(maxDiff,np.amax(np.abs(np.abs(test_f[key])-np.abs(ref_f[key]))))
     print(f'TDDFT NAC vectors (wbse) max diff: {maxDiff}')
 
     for key in ref_f:

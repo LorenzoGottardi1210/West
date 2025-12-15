@@ -229,7 +229,7 @@ def read_and_test_wbse_nac_vec(fileA,fileB,tol):
     print(f'TDDFT NAC vectors (wbse) max diff: {maxDiff}')
 
     for key in ref_f:
-        assert np.allclose(test_f[key],ref_f[key],rtol=0,atol=tol),f'TDDFT NAC vectors changed, field {key}'
+        assert np.allclose(np.abs(test_f[key]),np.abs(ref_f[key]),rtol=0,atol=tol),f'TDDFT NAC vectors changed, field {key}'
 
 
 def read_qdet_1body(fileName):

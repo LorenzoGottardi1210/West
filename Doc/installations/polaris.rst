@@ -28,14 +28,13 @@ WEST executables can be compiled using the following script (tested on February 
 
    ./configure --with-cuda=$NVIDIA_PATH/cuda/12.9 --with-cuda-runtime=12.9 --with-cuda-cc=80 --with-cuda-mpi=yes
 
-   # Manually edit make.inc:
-
-   # MPIF90 = ftn
-   # F90 = ftn
-   # CC = cc
-   # LD = ftn
-   # BLAS_LIBS = # leave blank
-   # LAPACK_LIBS = # leave blank
+   # Edit make.inc:
+   sed -i 's/^MPIF90 *=.*/MPIF90 = ftn/' make.inc
+   sed -i 's/^F90 *=.*/F90 = ftn/' make.inc
+   sed -i 's/^CC *=.*/CC = cc/' make.inc
+   sed -i 's/^LD *=.*/LD = ftn/' make.inc
+   sed -i 's/^BLAS_LIBS *=.*/BLAS_LIBS =/' make.inc
+   sed -i 's/^LAPACK_LIBS *=.*/LAPACK_LIBS =/' make.inc
 
    make -j 8 pw
 
@@ -55,7 +54,9 @@ Running WEST Jobs
 
 The following is an example executable script `run_west.sh` to run the `wstat.x` WEST executable on two nodes of Polaris with 4 MPI ranks and 4 GPUs per node. The <project_name> must be replaced with an active project allocation.
 
-**Important**: It is recommended to run the calculation from one of the Lustre file systems (`/grand` or `/eagle` instead of `/home`).
+.. note::
+
+   It is recommended to run the calculation from one of the Lustre file systems (`/grand` or `/eagle` instead of `/home`).
 
 .. code-block:: bash
 

@@ -110,13 +110,9 @@ Running WEST Jobs
 
 The following is an example executable script `run_west.sh` to run the `wstat.x` WEST executable on two nodes of Theta with 64 MPI ranks per node. The <project_name> must be replaced with an active project allocation.
 
-**Important**: The following environment variable is needed to work around a bug in ROMIO, Cray MPICH.
+.. note::
 
-.. code-block:: bash
-
-   export ROMIO_FSTYPE_FORCE="ufs:"
-
-**Important**: It is recommended to run the calculation from one of the Lustre file systems (`/grand` or `/eagle` instead of `/home`).
+   It is recommended to run the calculation from one of the Lustre file systems (`/grand` or `/eagle` instead of `/home`).
 
 .. code-block:: bash
 

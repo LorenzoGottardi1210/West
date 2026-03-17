@@ -13,7 +13,7 @@ Perlmutter is an HPE Cray EX supercomputer located at National Energy Research S
 Building WEST (GPU)
 ~~~~~~~~~~~~~~~~~~~
 
-WEST executables can be compiled using the following script (tested on February 20, 2026):
+WEST executables can be compiled using the following script (tested on March 13, 2026):
 
 .. code-block:: bash
 
@@ -30,20 +30,19 @@ WEST executables can be compiled using the following script (tested on February 
 
    ./configure --with-cuda=$CUDA_HOME --with-cuda-runtime=12.9 --with-cuda-cc=80 --with-cuda-mpi=yes
 
-   # Manually edit make.inc:
-
-   # MPIF90 = ftn
-   # F90 = ftn
-   # CC = cc
-   # LD = ftn
-   # BLAS_LIBS = # leave blank
-   # LAPACK_LIBS = # leave blank
+   # Edit make.inc:
+   sed -i 's/^MPIF90 *=.*/MPIF90 = ftn/' make.inc
+   sed -i 's/^F90 *=.*/F90 = ftn/' make.inc
+   sed -i 's/^CC *=.*/CC = cc/' make.inc
+   sed -i 's/^LD *=.*/LD = ftn/' make.inc
+   sed -i 's/^BLAS_LIBS *=.*/BLAS_LIBS =/' make.inc
+   sed -i 's/^LAPACK_LIBS *=.*/LAPACK_LIBS =/' make.inc
 
    make -j 8 pw
 
    cd West
 
-   make conf PYT=python3 PYT_LDFLAGS="`python3-config --ldflags --embed`"
+   make conf PYT=python3 PYT_LDFLAGS="-L$PYTHON_PATH/lib/ -lpython3.11 -Wl,-rpath,$PYTHON_PATH/lib/"
    make -j 8 all
 
 To use the script do:
@@ -57,7 +56,9 @@ Running WEST Jobs (GPU)
 
 The following is an example executable script `run_west.sh` to run the `wstat.x` WEST executable on two GPU nodes of Perlmutter with 4 MPI ranks and 4 GPUs per node. The <project_name> must be replaced with an active project allocation.
 
-**Important**: It is recommended to run the calculation from the Lustre file system (`$SCRATCH` instead of `/home`).
+.. note::
+
+   It is recommended to run the calculation from the Lustre file system (`$SCRATCH` instead of `/home`).
 
 .. code-block:: bash
 
@@ -98,7 +99,7 @@ Job submission is done with the following:
 Building WEST (CPU)
 ~~~~~~~~~~~~~~~~~~~
 
-WEST executables can be compiled using the following script (tested on February 20, 2026):
+WEST executables can be compiled using the following script (tested on March 13, 2026):
 
 .. code-block:: bash
 
@@ -114,20 +115,20 @@ WEST executables can be compiled using the following script (tested on February 
    export F90=ftn
    export CC=cc
 
-   ./configure --enable-openmp --with-scalapack
+   ./configure --with-scalapack
 
-   # Manually edit make.inc:
+   # Edit make.inc:
 
-   # DFLAGS = -D__FFTW3 -D__MPI -D__MPI_MODULE -D__SCALAPACK
-   # IFLAGS = -I. -I$(TOPDIR)/include -I/opt/cray/pe/fftw/3.3.10.11/x86_milan/include
-   # BLAS_LIBS = # leave blank
-   # LAPACK_LIBS = # leave blank
+   sed -i 's/^DFLAGS *=.*/DFLAGS = -D__FFTW3 -D__MPI -D__MPI_MODULE -D__SCALAPACK/' make.inc
+   sed -i 's/^IFLAGS *=.*/IFLAGS = -I. -I\$(TOPDIR)\/include -I\/opt\/cray\/pe\/fftw\/3.3.10.11\/x86_milan\/include/' make.inc
+   sed -i 's/^BLAS_LIBS *=.*/BLAS_LIBS =/' make.inc
+   sed -i 's/^LAPACK_LIBS *=.*/LAPACK_LIBS =/' make.inc
 
    make -j 8 pw
 
    cd West
 
-   make conf PYT=python3 PYT_LDFLAGS="`python3-config --ldflags --embed`"
+   make conf PYT=python3 PYT_LDFLAGS="-L$PYTHON_PATH/lib/ -lpython3.11 -Wl,-rpath,$PYTHON_PATH/lib/"
    make -j 8 all
 
 To use the script do:
@@ -141,7 +142,9 @@ Running WEST Jobs (CPU)
 
 The following is an example executable script `run_west.sh` to run the `wstat.x` WEST executable on two CPU nodes of Perlmutter with 128 MPI ranks per node. The <project_name> must be replaced with an active project allocation.
 
-**Important**: It is recommended to run the calculation from the Lustre file system (`$SCRATCH` instead of `/home`).
+.. note::
+
+   It is recommended to run the calculation from the Lustre file system (`$SCRATCH` instead of `/home`).
 
 .. code-block:: bash
 

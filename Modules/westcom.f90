@@ -427,6 +427,21 @@ MODULE occ_center
 END MODULE
 !
 !
+MODULE wann_center
+  !
+  USE kinds, ONLY : DP
+  !
+  IMPLICIT NONE
+  !
+  REAL(DP) :: wann_b(3,3)
+  REAL(DP) :: wann_g(3,4)
+  REAL(DP) :: wann_w(4)
+  REAL(DP) :: wann_m(3,3)
+  INTEGER  :: wann_ng
+  !
+END MODULE
+!
+!
 MODULE westcom
   !
   USE scratch_area
@@ -438,5 +453,6 @@ MODULE westcom
   USE wbse_init_center
   USE wbse_center
   USE occ_center
+  USE wann_center
   !
 END MODULE

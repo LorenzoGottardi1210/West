@@ -252,7 +252,7 @@ MODULE class_coulomb
          !
          IF( try_ort_div ) THEN
             !
-            ! prod( i, j ) = (b_i)^t * b_j    (if off-diagonal prods are all zero --> the angles are all 90 deg --> cell is orthorombic)
+            ! prod( i, j ) = (b_i)^t * b_j    (if off-diagonal prods are all zero --> the angles are all 90 deg --> cell is orthorhombic)
             !
             prod = 0._DP
             DO i1 = 1, 3

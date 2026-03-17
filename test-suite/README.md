@@ -9,7 +9,7 @@
 5. SiH4 molecule, westpp output PDEP, Gamma only
 6. SiH4 molecule, GW hybrid ACE, Gamma only
 7. Si bulk, GW hybrid ACE, k-mesh 1x1x2
-8. MgO, westpp localization factor, Wannier localization, dipole moment, Gamma only
+8. SiC, westpp localization factor, Wannier localization, dipole moment, Gamma only
 9. O2 molecule, GW fractional occupation, Gamma only
 10. SiH4 molecule, GW `l_off_diagonal`, Gamma only
 11. SiH4 molecule, GW `qp_bands`, Gamma only

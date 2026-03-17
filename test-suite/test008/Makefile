@@ -29,5 +29,5 @@ title:
 
 description:
 	@echo
-	@echo "MgO gamma_only localization factor, Wannier localization, dipole moment"
+	@echo "SiC gamma_only localization factor, Wannier localization, dipole moment"
 	@echo

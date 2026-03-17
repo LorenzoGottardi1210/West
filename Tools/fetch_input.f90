@@ -28,18 +28,17 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
                              & westpp_n_pdep_eigen_to_use,westpp_r0,westpp_nr,westpp_rmax,&
                              & westpp_epsinfty,westpp_box,westpp_n_liouville_to_use,&
                              & westpp_l_spin_flip,westpp_l_compute_tdm,westpp_wannier_tr_rel,&
-                             & westpp_wann_sym,westpp_l_dipole_realspace,document,&
-                             & wbse_init_calculation,solver,bse_method,localization,wannier_tr_rel,&
-                             & wann_sym,wfc_from_qbox,bisection_info,chi_kernel,overlap_thr,&
-                             & spin_channel,n_trunc_bands,wbse_calculation,qp_correction,&
-                             & scissor_ope,n_liouville_eigen,n_liouville_times,n_liouville_maxiter,&
-                             & n_liouville_read_from_file,trev_liouville,trev_liouville_rel,&
-                             & wbse_ipol,l_dipole_realspace,wbse_epsinfty,spin_excitation,&
-                             & l_preconditioning,l_pre_shift,l_spin_flip,l_spin_flip_kernel,&
-                             & l_spin_flip_alda0,l_print_spin_flip_kernel,spin_flip_cut,l_forces,&
-                             & forces_state,forces_zeq_cg_tr,forces_zeq_n_cg_maxiter,&
-                             & ddvxc_fd_coeff,forces_inexact_krylov,forces_inexact_krylov_tr,&
-                             & main_input_file,logfile
+                             & westpp_l_dipole_realspace,document,wbse_init_calculation,solver,&
+                             & bse_method,localization,wannier_tr_rel,wfc_from_qbox,bisection_info,&
+                             & chi_kernel,overlap_thr,spin_channel,n_trunc_bands,wbse_calculation,&
+                             & qp_correction,scissor_ope,n_liouville_eigen,n_liouville_times,&
+                             & n_liouville_maxiter,n_liouville_read_from_file,trev_liouville,&
+                             & trev_liouville_rel,wbse_ipol,l_dipole_realspace,wbse_epsinfty,&
+                             & spin_excitation,l_preconditioning,l_pre_shift,l_spin_flip,&
+                             & l_spin_flip_kernel,l_spin_flip_alda0,l_print_spin_flip_kernel,&
+                             & spin_flip_cut,l_forces,forces_state,forces_zeq_cg_tr,&
+                             & forces_zeq_n_cg_maxiter,ddvxc_fd_coeff,forces_inexact_krylov,&
+                             & forces_inexact_krylov_tr,main_input_file,logfile
   USE kinds,            ONLY : DP
   USE io_files,         ONLY : tmp_dir,prefix
   USE mp,               ONLY : mp_bcast
@@ -283,7 +282,6 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
         IERR = return_dict%getitem(westpp_l_spin_flip, 'westpp_l_spin_flip')
         IERR = return_dict%getitem(westpp_l_compute_tdm, 'westpp_l_compute_tdm')
         IERR = return_dict%getitem(westpp_wannier_tr_rel, 'westpp_wannier_tr_rel')
-        IERR = return_dict%getitem(cvalue, 'westpp_wann_sym'); westpp_wann_sym = TRIM(ADJUSTL(cvalue))
         IERR = return_dict%getitem(westpp_l_dipole_realspace, 'westpp_l_dipole_realspace')
         CALL tmp_list%destroy
         CALL tmp_obj%destroy
@@ -341,7 +339,6 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
         IERR = return_dict%get(n_pdep_eigen_to_use, 'n_pdep_eigen_to_use', DUMMY_DEFAULT)
         IERR = return_dict%getitem(cvalue, 'localization'); localization = TRIM(ADJUSTL(cvalue))
         IERR = return_dict%getitem(wannier_tr_rel, 'wannier_tr_rel')
-        IERR = return_dict%getitem(cvalue, 'wann_sym'); wann_sym = TRIM(ADJUSTL(cvalue))
         IERR = return_dict%getitem(cvalue, 'wfc_from_qbox'); wfc_from_qbox = TRIM(ADJUSTL(cvalue))
         IERR = return_dict%getitem(cvalue, 'bisection_info'); bisection_info = TRIM(ADJUSTL(cvalue))
         IERR = return_dict%getitem(cvalue, 'chi_kernel'); chi_kernel = TRIM(ADJUSTL(cvalue))
@@ -564,7 +561,6 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      CALL mp_bcast(westpp_l_spin_flip,root,world_comm)
      CALL mp_bcast(westpp_l_compute_tdm,root,world_comm)
      CALL mp_bcast(westpp_wannier_tr_rel,root,world_comm)
-     CALL mp_bcast(westpp_wann_sym,root,world_comm)
      CALL mp_bcast(westpp_l_dipole_realspace,root,world_comm)
      !
      ! CHECKS
@@ -609,7 +605,6 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      CALL mp_bcast(n_pdep_eigen_to_use,root,world_comm)
      CALL mp_bcast(localization,root,world_comm)
      CALL mp_bcast(wannier_tr_rel,root,world_comm)
-     CALL mp_bcast(wann_sym,root,world_comm)
      CALL mp_bcast(wfc_from_qbox,root,world_comm)
      CALL mp_bcast(bisection_info,root,world_comm)
      CALL mp_bcast(chi_kernel,root,world_comm)

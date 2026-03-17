@@ -18,7 +18,7 @@ SUBROUTINE do_wann()
   USE constants,            ONLY : tpi
   USE cell_base,            ONLY : at,alat,bg
   USE westcom,              ONLY : iuwfc,lrwfc,westpp_range,westpp_wannier_tr_rel,wannier_tr_rel,&
-                                 & logfile,westpp_wann_sym,wann_sym,wann_b,wann_ng,wann_w,wann_m
+                                 & logfile,wann_b,wann_ng,wann_m
   USE mp_world,             ONLY : mpime,root
   USE mp,                   ONLY : mp_bcast,mp_sum
   USE mp_global,            ONLY : inter_image_comm,my_image_id,intra_bgrp_comm
@@ -78,7 +78,6 @@ SUBROUTINE do_wann()
   CALL allocate_gpu()
 #endif
   !
-  wann_sym = westpp_wann_sym
   CALL wann_init()
   !
   ALLOCATE(amat(nstate,nstate,2*wann_ng))
@@ -237,19 +236,19 @@ SUBROUTINE do_wann()
            DO il = 1,3
               DO ik = 1,3
                  wan_center(il) = wan_center(il) &
-                 &+ tmp(ik)*wann_m(ik,il)/SQRT(wann_b(1,ik)**2+wann_b(2,ik)**2+wann_b(3,ik)**2)
+                 & + tmp(ik)*wann_m(ik,il)/SQRT(wann_b(1,ik)**2+wann_b(2,ik)**2+wann_b(3,ik)**2)
               ENDDO
            ENDDO
            !
            wan_center_cry(:) = wan_center(1)*bg(1,:)/alat + wan_center(2)*bg(2,:)/alat &
-                   & + wan_center(3)*bg(3,:)/alat
+           & + wan_center(3)*bg(3,:)/alat
            !
            wan_center_cry(1) = MODULO(wan_center_cry(1),1._DP)
            wan_center_cry(2) = MODULO(wan_center_cry(2),1._DP)
            wan_center_cry(3) = MODULO(wan_center_cry(3),1._DP)
            !
            wan_center(:) = wan_center_cry(1)*at(:,1)*alat + wan_center_cry(2)*at(:,2)*alat &
-                   & + wan_center_cry(3)*at(:,3)*alat
+           & + wan_center_cry(3)*at(:,3)*alat
            !
            WRITE(label_b,'(I6)') ib
            !

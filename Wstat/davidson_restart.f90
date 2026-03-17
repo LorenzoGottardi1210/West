@@ -216,7 +216,7 @@ MODULE davidson_restart
       !
       WRITE(stdout,'(/,5x,"[I/O] -------------------------------------------------------")')
       WRITE(stdout,'(5x,"[I/O] RESTART written in ",a)') TRIM(human_readable_time(time_spent(2)-time_spent(1)))
-      WRITE(stdout,'(5x,"[I/O] In location   : ",a)') TRIM(dirname)
+      WRITE(stdout,'(5x,"[I/O] In location : ",a)') TRIM(dirname)
       WRITE(stdout,'(5x,"[I/O] -------------------------------------------------------")')
       !
     END SUBROUTINE

@@ -23,19 +23,45 @@ MODULE wann_loc_wfc
       !------------------------------------------------------------------------
       !
       USE kinds,                 ONLY : DP
-      USE constants,             ONLY : tpi
-      USE fft_base,              ONLY : dffts
-      USE scatter_mod,           ONLY : scatter_grid
+      USE io_global,             ONLY : stdout
+      USE constants,             ONLY : eps4,pi,tpi
       USE cell_base,             ONLY : at,alat
-      USE westcom,               ONLY : wann_sym,wann_b,wann_g,wann_ng,wann_w,wann_m
+      USE westcom,               ONLY : wann_b,wann_g,wann_ng,wann_w,wann_m
       !
       IMPLICIT NONE
       !
       ! Workspace
       !
-      INTEGER :: i
+      REAL(DP) :: lat_a,lat_b,lat_c,ang_ab,ang_ac,ang_bc
       REAL(DP) :: det
       REAL(DP) :: m(3,3)
+      INTEGER :: wann_sym
+      INTEGER,PARAMETER :: SYM_UNKNOWN = 0
+      INTEGER,PARAMETER :: SYM_CUBIC = 1
+      INTEGER,PARAMETER :: SYM_ORTHORHOMBIC = 2
+      INTEGER,PARAMETER :: SYM_HEXAGONAL = 3
+      !
+      wann_sym = SYM_UNKNOWN
+      !
+      lat_a = SQRT(SUM(at(:,1)**2))
+      lat_b = SQRT(SUM(at(:,2)**2))
+      lat_c = SQRT(SUM(at(:,3)**2))
+      ang_ab = ACOS(DOT_PRODUCT(at(:,1),at(:,2)) / (lat_a * lat_b)) / pi * 180._DP
+      ang_ac = ACOS(DOT_PRODUCT(at(:,1),at(:,3)) / (lat_a * lat_c)) / pi * 180._DP
+      ang_bc = ACOS(DOT_PRODUCT(at(:,2),at(:,3)) / (lat_b * lat_c)) / pi * 180._DP
+      !
+      IF(ABS(ang_ab - 90._DP) < eps4 .AND. ABS(ang_ac - 90._DP) < eps4 &
+      & .AND. ABS(ang_bc - 90._DP) < eps4) THEN
+         IF(ABS(lat_a - lat_b) < eps4 .AND. ABS(lat_a - lat_c) < eps4 &
+         & .AND. ABS(lat_b - lat_c) < eps4) THEN
+            wann_sym = SYM_CUBIC
+         ELSE
+            wann_sym = SYM_ORTHORHOMBIC
+         ENDIF
+      ELSEIF(ABS(ang_ab - 120._DP) < eps4 .AND. ABS(ang_ac - 90._DP) < eps4 &
+      & .AND. ABS(ang_bc - 90._DP) < eps4 .AND. ABS(lat_a - lat_b) < eps4) THEN
+         wann_sym = SYM_HEXAGONAL
+      ENDIF
       !
       wann_b(:,:) = 0._DP
       wann_g(:,:) = 0._DP
@@ -43,50 +69,62 @@ MODULE wann_loc_wfc
       wann_m(:,:) = 0._DP
       !
       SELECT CASE(wann_sym)
-      CASE('cubic')
-      !
-      wann_b(1,1) = tpi/alat
-      wann_b(2,2) = tpi/alat
-      wann_b(3,3) = tpi/alat
-      wann_g(:,1) = wann_b(:,1)
-      wann_g(:,2) = wann_b(:,2)
-      wann_g(:,3) = wann_b(:,3)
-      wann_ng = 3
-      wann_w(1) = 1._DP
-      wann_w(2) = 1._DP
-      wann_w(3) = 1._DP
-      !
-      CASE('orthorhombic')
-      !
-      wann_b(1,1) = tpi/alat
-      wann_b(2,2) = tpi/alat/at(2,2)
-      wann_b(3,3) = tpi/alat/at(3,3)
-      wann_g(:,1) = wann_b(:,1)
-      wann_g(:,2) = wann_b(:,2)
-      wann_g(:,3) = wann_b(:,3)
-      wann_ng = 3
-      wann_w(1) = 1._DP
-      wann_w(2) = at(2,2)**2
-      wann_w(3) = at(3,3)**2
-      !
-      CASE('hexagonal')
-      !
-      wann_b(1,1) = tpi/alat
-      wann_b(2,1) = tpi/alat/SQRT(3._DP)
-      wann_b(2,2) = tpi/alat/SQRT(3._DP)*2
-      wann_b(3,3) = tpi/alat/at(3,3)
-      wann_g(:,1) = wann_b(:,1)
-      wann_g(:,2) = wann_b(:,2)
-      wann_g(:,3) = wann_b(:,3)
-      wann_g(:,4) = wann_b(:,1) - wann_b(:,2)
-      wann_ng = 4
-      wann_w(1) = 0.5_DP
-      wann_w(2) = 0.5_DP
-      wann_w(4) = 0.5_DP
-      wann_w(3) = at(3,3)**2
-      !
+      CASE(SYM_UNKNOWN,SYM_CUBIC)
+         !
+         wann_b(1,1) = tpi/alat
+         wann_b(2,2) = tpi/alat
+         wann_b(3,3) = tpi/alat
+         wann_g(:,1) = wann_b(:,1)
+         wann_g(:,2) = wann_b(:,2)
+         wann_g(:,3) = wann_b(:,3)
+         wann_ng = 3
+         wann_w(1) = 1._DP
+         wann_w(2) = 1._DP
+         wann_w(3) = 1._DP
+         !
+         IF(wann_sym == SYM_UNKNOWN) THEN
+            WRITE(stdout,"(/,7X,'** WARNING : Crystal system not implemented')")
+         ELSE
+            WRITE(stdout,"(/,5X,'Detected crystal system : cubic')")
+         ENDIF
+         !
+      CASE(SYM_ORTHORHOMBIC)
+         !
+         wann_b(1,1) = tpi/alat
+         wann_b(2,2) = tpi/alat/at(2,2)
+         wann_b(3,3) = tpi/alat/at(3,3)
+         wann_g(:,1) = wann_b(:,1)
+         wann_g(:,2) = wann_b(:,2)
+         wann_g(:,3) = wann_b(:,3)
+         wann_ng = 3
+         wann_w(1) = 1._DP
+         wann_w(2) = at(2,2)**2
+         wann_w(3) = at(3,3)**2
+         !
+         WRITE(stdout,"(/,5X,'Detected crystal system : orthorhombic')")
+         !
+      CASE(SYM_HEXAGONAL)
+         !
+         wann_b(1,1) = tpi/alat
+         wann_b(2,1) = tpi/alat/SQRT(3._DP)
+         wann_b(2,2) = tpi/alat/SQRT(3._DP)*2
+         wann_b(3,3) = tpi/alat/at(3,3)
+         wann_g(:,1) = wann_b(:,1)
+         wann_g(:,2) = wann_b(:,2)
+         wann_g(:,3) = wann_b(:,3)
+         wann_g(:,4) = wann_b(:,1) - wann_b(:,2)
+         wann_ng = 4
+         wann_w(1) = 0.5_DP
+         wann_w(2) = 0.5_DP
+         wann_w(4) = 0.5_DP
+         wann_w(3) = at(3,3)**2
+         !
+         WRITE(stdout,"(/,5X,'Detected crystal system : hexagonal')")
+         !
       CASE DEFAULT
-         CALL errore('wann_init','Supercell symmetry not implemented',1)
+         !
+         CALL errore('wann_init','unexpected wann_sym',1)
+         !
       END SELECT
       !
       m(:,:) = 0._DP
@@ -94,9 +132,9 @@ MODULE wann_loc_wfc
       m(:,2) = wann_b(:,2) / SQRT(wann_b(1,2)**2 + wann_b(2,2)**2 + wann_b(3,2)**2)
       m(:,3) = wann_b(:,3) / SQRT(wann_b(1,3)**2 + wann_b(2,3)**2 + wann_b(3,3)**2)
       !
-      det = m(1,1)*(m(2,2)*m(3,3) - m(2,3)*m(3,2)) - &
-            m(1,2)*(m(2,1)*m(3,3) - m(2,3)*m(3,1)) + &
-            m(1,3)*(m(2,1)*m(3,2) - m(2,3)*m(3,1))
+      det = m(1,1)*(m(2,2)*m(3,3) - m(2,3)*m(3,2)) &
+      &   - m(1,2)*(m(2,1)*m(3,3) - m(2,3)*m(3,1)) &
+      &   + m(1,3)*(m(2,1)*m(3,2) - m(2,3)*m(3,1))
       !
       wann_m(1,1) = (m(2,2)*m(3,3) - m(2,3)*m(3,2)) / det
       wann_m(1,2) = -(m(1,2)*m(3,3) - m(1,3)*m(3,2)) / det
@@ -107,10 +145,6 @@ MODULE wann_loc_wfc
       wann_m(3,1) = (m(2,1)*m(3,2) - m(2,3)*m(3,1)) / det
       wann_m(3,2) = -(m(1,1)*m(3,2) - m(1,2)*m(3,1)) / det
       wann_m(3,3) = (m(1,1)*m(2,2) - m(1,2)*m(2,1)) / det
-      !
-      DO i = 1,3
-         print '(3F8.3)', wann_m(i,:)
-      ENDDO
       !
     END SUBROUTINE
     !
@@ -123,7 +157,7 @@ MODULE wann_loc_wfc
       USE fft_base,              ONLY : dffts
       USE scatter_mod,           ONLY : scatter_grid
       USE cell_base,             ONLY : at,alat
-      USE westcom,               ONLY : wann_sym,wann_b,wann_g,wann_ng,wann_w
+      USE westcom,               ONLY : wann_g,wann_ng,wann_w
       !
       IMPLICIT NONE
       !
@@ -261,8 +295,8 @@ MODULE wann_loc_wfc
       INTEGER,PARAMETER :: itermax = 100
       !
       REAL(DP) :: time_spent(2)
-      REAL(DP), EXTERNAL :: get_clock
-      CHARACTER(20), EXTERNAL :: human_readable_time
+      REAL(DP),EXTERNAL :: get_clock
+      CHARACTER(20),EXTERNAL :: human_readable_time
       !
 #if defined(__CUDA)
       CALL start_clock_gpu('jade')

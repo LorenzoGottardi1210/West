@@ -276,7 +276,6 @@ MODULE westpp_center
   LOGICAL :: westpp_l_spin_flip
   LOGICAL :: westpp_l_compute_tdm
   REAL(DP) :: westpp_wannier_tr_rel
-  CHARACTER(LEN=512) :: westpp_wann_sym
   LOGICAL :: westpp_l_dipole_realspace
   !
   ! Common workspace
@@ -434,12 +433,9 @@ MODULE wann_center
   !
   IMPLICIT NONE
   !
-  ! Common workspace
-  !
-  CHARACTER(LEN=512) :: wann_sym
   REAL(DP) :: wann_b(3,3)
   REAL(DP) :: wann_g(3,4)
-  REAL(DP) :: wann_w(3)
+  REAL(DP) :: wann_w(4)
   REAL(DP) :: wann_m(3,3)
   INTEGER  :: wann_ng
   !

@@ -24,7 +24,7 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
   USE fft_base,              ONLY : dffts
   USE types_coulomb,         ONLY : pot3D
   USE mp,                    ONLY : mp_bcast
-  USE fft_at_gamma,          ONLY : single_fwfft_gamma,double_invfft_gamma
+  USE fft_at_gamma,          ONLY : single_fwfft_gamma,single_invfft_gamma,double_invfft_gamma
   USE mp_global,             ONLY : inter_image_comm,my_image_id
   USE pwcom,                 ONLY : npw,npwx,isk,ngk
   USE westcom,               ONLY : nbnd_occ,iuwfc,lrwfc,n_trunc_bands,evc1_all
@@ -48,7 +48,7 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
   INTEGER :: current_spin_ikq, ikq, nbndval, flnbndval, nbnd_do
   INTEGER :: dffts_nnr
   COMPLEX(DP), ALLOCATABLE :: aux_hyb(:,:)
-  COMPLEX(DP), ALLOCATABLE :: caux(:), gaux(:), raux(:)
+  COMPLEX(DP), ALLOCATABLE :: psic2(:), psic3(:), caux(:), gaux(:), raux(:)
   INTEGER, PARAMETER :: flks(2) = [2,1]
   !
 #if defined(__CUDA)
@@ -68,10 +68,12 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
   dffts_nnr = dffts%nnr
   !
   ALLOCATE(aux_hyb(npwx,band_group%nloc))
+  ALLOCATE(psic2(dffts%nnr))
+  ALLOCATE(psic3(dffts%nnr))
   ALLOCATE(caux(dffts%nnr))
   ALLOCATE(gaux(npwx))
   ALLOCATE(raux(dffts%nnr))
-  !$acc enter data create(aux_hyb,caux,gaux,raux)
+  !$acc enter data create(aux_hyb,psic2,psic3,caux,gaux,raux)
   !
   DO ikq = 1,kpt_pool%nloc
      !
@@ -120,6 +122,13 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
            jbnd_end = nbndval
         ENDIF
         !
+        SELECT CASE(iterm)
+        CASE(1,2,3)
+           CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ibndp),psic,'Wave')
+        CASE(4)
+           CALL single_invfft_gamma(dffts,npw,npwx,evc1_all(:,ibnd,iks_do),psic,'Wave')
+        END SELECT
+        !
         DO jbnd = 1,jbnd_end-n_trunc_bands ! index to be summed
            !
            jbndp = jbnd+n_trunc_bands
@@ -129,26 +138,25 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
               !
               ! product of evc and evc
               !
-              CALL double_invfft_gamma(dffts,npw,npwx,evc(:,jbndp),evc(:,ibndp),psic,'Wave')
+              CALL single_invfft_gamma(dffts,npw,npwx,evc(:,jbndp),psic2,'Wave')
               !
            CASE(2,3)
               !
               ! product of evc1 and evc
               !
-              CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,jbnd,ikq),evc(:,ibndp),psic,'Wave')
+              CALL single_invfft_gamma(dffts,npw,npwx,evc1_all(:,jbnd,ikq),psic2,'Wave')
               !
            CASE(4)
               !
               ! product of evc1 and evc1
               !
-              CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,ibnd,iks_do),&
-              & evc1_all(:,jbnd,iks_do),psic,'Wave')
+              CALL single_invfft_gamma(dffts,npw,npwx,evc1_all(:,jbnd,iks_do),psic2,'Wave')
               !
            END SELECT
            !
-           !$acc parallel loop present(caux,psic)
+           !$acc parallel loop present(caux,psic,psic2)
            DO ir = 1,dffts_nnr
-              caux(ir) = CMPLX(REAL(psic(ir),KIND=DP)*AIMAG(psic(ir))/omega,KIND=DP)
+              caux(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(psic2(ir))/omega,KIND=DP)
            ENDDO
            !$acc end parallel
            !
@@ -162,22 +170,24 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
            ENDDO
            !$acc end parallel
            !
+           CALL single_invfft_gamma(dffts,npw,npwx,gaux,psic2,'Wave')
+           !
            SELECT CASE(iterm)
            CASE(1,3)
-              CALL double_invfft_gamma(dffts,npw,npwx,gaux,evc1_all(:,jbnd,ikq),caux,'Wave')
+              CALL single_invfft_gamma(dffts,npw,npwx,evc1_all(:,jbnd,ikq),psic3,'Wave')
            CASE(2,4)
-              CALL double_invfft_gamma(dffts,npw,npwx,gaux,evc(:,jbndp),caux,'Wave')
+              CALL single_invfft_gamma(dffts,npw,npwx,evc(:,jbndp),psic3,'Wave')
            END SELECT
            !
-           !$acc parallel loop present(psic,caux)
+           !$acc parallel loop present(caux,psic2,psic3)
            DO ir = 1,dffts_nnr
-              psic(ir) = CMPLX(REAL(caux(ir),KIND=DP)*AIMAG(caux(ir)),KIND=DP)
+              caux(ir) = CMPLX(REAL(psic2(ir),KIND=DP)*REAL(psic3(ir)),KIND=DP)
            ENDDO
            !$acc end parallel
            !
-           !$acc parallel loop present(raux,psic)
+           !$acc parallel loop present(raux,caux)
            DO ir = 1,dffts_nnr
-              raux(ir) = raux(ir)+psic(ir)
+              raux(ir) = raux(ir)+caux(ir)
            ENDDO
            !$acc end parallel
            !
@@ -209,8 +219,10 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
      !
   ENDDO
   !
-  !$acc exit data delete(aux_hyb,caux,gaux,raux)
+  !$acc exit data delete(aux_hyb,psic2,psic3,caux,gaux,raux)
   DEALLOCATE(aux_hyb)
+  DEALLOCATE(psic2)
+  DEALLOCATE(psic3)
   DEALLOCATE(caux)
   DEALLOCATE(gaux)
   DEALLOCATE(raux)
@@ -385,17 +397,17 @@ SUBROUTINE bse_kernel_term4(current_spin, bse_kd4, sf)
            ENDDO
            !$acc end parallel
            !
-           CALL double_invfft_gamma(dffts,npw,npwx,tau,evc(:,jbndp),caux,'Wave')
+           CALL double_invfft_gamma(dffts,npw,npwx,tau,evc(:,jbndp),psic,'Wave')
            !
-           !$acc parallel loop present(psic,caux)
+           !$acc parallel loop present(caux,psic)
            DO ir = 1,dffts_nnr
-              psic(ir) = CMPLX(REAL(caux(ir),KIND=DP)*AIMAG(caux(ir)),KIND=DP)
+              caux(ir) = CMPLX(REAL(psic(ir),KIND=DP)*AIMAG(psic(ir)),KIND=DP)
            ENDDO
            !$acc end parallel
            !
-           !$acc parallel loop present(raux,psic)
+           !$acc parallel loop present(raux,caux)
            DO ir = 1,dffts_nnr
-              raux(ir) = raux(ir)+psic(ir)
+              raux(ir) = raux(ir)+caux(ir)
            ENDDO
            !$acc end parallel
            !

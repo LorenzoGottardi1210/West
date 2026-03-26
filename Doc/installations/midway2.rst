@@ -81,4 +81,4 @@ Job submission is done with the following:
    $ sbatch run_west.sh
 
 .. seealso::
-   For more information, visit the `RCC user guide <https://rcc.uchicago.edu/docs/>`_.
+   For more information, visit the `RCC user guide <https://docs.rcc.uchicago.edu/>`_.

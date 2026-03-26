@@ -34,6 +34,15 @@ Advanced tutorials:
    tutorials/advanced/advanced_003.ipynb
    tutorials/advanced/advanced_004.ipynb
 
+The following tutorials were used in the APS 2026 short course **Computational approaches for quantum defects**:
+
+.. toctree::
+   :maxdepth: 1
+
+   tutorials/APS_Short_Course_2026/aps_001.ipynb
+   tutorials/APS_Short_Course_2026/aps_002.ipynb
+   tutorials/APS_Short_Course_2026/aps_003.ipynb
+
 The following tutorials were used in `MICCoM Workshop & Hands-on Tutorials 2022 <https://miccom-center.org/workshop-and-hands-on-tutorials2022/index.html>`_:
 
 .. toctree::

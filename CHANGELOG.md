@@ -1,6 +1,18 @@
 Change Log
 ==========
 
+v6.3.0 (2026/02/27)
+-------------------
+
+- Code updated for compatibility with Quantum ESPRESSO 7.5.
+- Release of BSE analytical forces.
+- Added output of TDDFT/BSE unrelaxed differential density to `westpp`.
+- Bug fix. Fixed `wfreq` when plotting spectral functions with `l_enable_off_diagonal: True`.
+- Bug fix. Fixed `westpp` output of TDDFT/BSE excited state linear density response (`westpp_calculation: P`) for spin-polarized systems.
+- Updated library dependency to Json-Fortran 9.2.0.
+- Updated CI/CD. Added tests to cover the new functionalities.
+- Updated documentation. Updated build instructions for ALCF/Polaris, NERSC/Perlmutter, and UChicago/RCC/Midway3. Added more tutorials. Updated manual.
+
 v6.2.1 (2025/07/31)
 -------------------
 

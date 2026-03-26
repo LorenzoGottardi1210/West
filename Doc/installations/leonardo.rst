@@ -89,4 +89,4 @@ Job submission is done with the following:
    $ sbatch run_west.sh
 
 .. seealso::
-   For more information, visit the `CINECA user guide <https://wiki.u-gov.it/confluence/display/SCAIUS/UG3.2%3A+LEONARDO+UserGuide>`_.
+   For more information, visit the `CINECA user guide <https://docs.hpc.cineca.it/hpc/leonardo.html>`_.

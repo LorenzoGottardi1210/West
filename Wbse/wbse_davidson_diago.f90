@@ -1,5 +1,5 @@
 !
-! Copyright (C) 2015-2025 M. Govoni
+! Copyright (C) 2015-2026 M. Govoni
 ! This file is distributed under the terms of the
 ! GNU General Public License. See the file `License'
 ! in the root directory of the present distribution,
@@ -511,7 +511,7 @@ SUBROUTINE wbse_davidson_diago ( )
            !
            ! ... last iteration, some roots not converged: return
            !
-           WRITE( stdout, '(5X,"WARNING : ",I5," eigenvalues not converged in chidiago")' ) notcnv
+           WRITE(stdout,'(7X,"** WARNING : ",I5," eigenvalues not converged in chidiago")') notcnv
            !
            CALL stop_clock( 'chidiago:last' )
            !

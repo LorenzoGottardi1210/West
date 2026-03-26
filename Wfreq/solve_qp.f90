@@ -1,5 +1,5 @@
 !
-! Copyright (C) 2015-2025 M. Govoni
+! Copyright (C) 2015-2026 M. Govoni
 ! This file is distributed under the terms of the
 ! GNU General Public License. See the file `License'
 ! in the root directory of the present distribution,
@@ -45,8 +45,8 @@ SUBROUTINE solve_qp_gamma(l_secant,l_generate_plot,l_QDET)
                                  & sigma_z,sigma_eqplin,sigma_eqpsec,sigma_sc_eks,sigma_sc_eqplin,&
                                  & sigma_sc_eqpsec,sigma_diff,sigma_spectralf,sigma_freq,&
                                  & l_enable_off_diagonal,ijpmap,d_body1_ifr_full,z_body_rfr_full,&
-                                 & sigma_sc_eks_full,sigma_sc_eqplin_full,sigma_corr_full,&
-                                 & l_dc2025,d_epsm1_ifr_dc,z_epsm1_rfr_dc
+                                 & sigma_sc_eks_full,sigma_sc_eqplin_full,sigma_corr_full,n_pairs,&
+                                 & pijmap,l_dc2025,d_epsm1_ifr_dc,z_epsm1_rfr_dc
   USE mp_global,            ONLY : inter_image_comm,nimage,my_image_id,inter_pool_comm,my_pool_id,&
                                  & intra_bgrp_comm
   USE mp,                   ONLY : mp_sum,mp_bcast
@@ -624,14 +624,26 @@ SUBROUTINE solve_qp_gamma(l_secant,l_generate_plot,l_QDET)
      ENDDO
      !
      DO glob_ifreq = 1, n_spectralf
-        en(:,:,:) = (ecut_spectralf(2)-ecut_spectralf(1))/REAL(n_spectralf-1,KIND=DP)*REAL(glob_ifreq-1,KIND=DP) &
-        & +ecut_spectralf(1)
-        CALL calc_corr_gamma( sc(:,:,1), en(:,:,1), .FALSE., .FALSE., .FALSE.)
-        DO iks=1,k_grid%nps
-           DO ib = 1, n_bands
-              sigma_spectralf(glob_ifreq,ib,iks) = sc(ib,iks,1)
+        en(:,:,:) = sigma_freq(glob_ifreq)
+        !
+        IF(l_enable_off_diagonal) THEN
+           CALL calc_corr_gamma(sc(:,:,1), en(:,:,1), .FALSE., .TRUE., .FALSE.)
+           DO iks = 1, k_grid%nps
+              DO ipair = 1, n_pairs
+                 ib = pijmap(1,ipair)
+                 jb = pijmap(2,ipair)
+                 IF(ib == jb) sigma_spectralf(glob_ifreq,ib,iks) = sigma_corr_full(ipair,iks)
+              ENDDO
            ENDDO
-        ENDDO
+        ELSE
+           CALL calc_corr_gamma(sc(:,:,1), en(:,:,1), .FALSE., .FALSE., .FALSE.)
+           DO iks = 1, k_grid%nps
+              DO ib = 1, n_bands
+                 sigma_spectralf(glob_ifreq,ib,iks) = sc(ib,iks,1)
+              ENDDO
+           ENDDO
+        ENDIF
+        !
         CALL update_bar_type(barra,'qplot',1)
      ENDDO
      !
@@ -1063,15 +1075,14 @@ SUBROUTINE solve_qp_k(l_secant,l_generate_plot)
      !
      DO glob_ifreq = 1, n_spectralf
         sigma_freq(glob_ifreq) = &
-        & (ecut_spectralf(2)-ecut_spectralf(1)) / REAL(n_spectralf-1,KIND=DP) * REAL(glob_ifreq-1,KIND=DP) &
-        & + ecut_spectralf(1)
+        & (ecut_spectralf(2)-ecut_spectralf(1))/REAL(n_spectralf-1,KIND=DP)*REAL(glob_ifreq-1,KIND=DP) &
+        & +ecut_spectralf(1)
      ENDDO
      !
      DO glob_ifreq = 1, n_spectralf
-        en(:,:,:) = (ecut_spectralf(2)-ecut_spectralf(1))/REAL(n_spectralf-1,KIND=DP)*REAL(glob_ifreq-1,KIND=DP) &
-        & +ecut_spectralf(1)
-        CALL calc_corr_k( sc(:,:,1), en(:,:,1), .FALSE.)
-        DO iks=1, k_grid%nps
+        en(:,:,:) = sigma_freq(glob_ifreq)
+        CALL calc_corr_k(sc(:,:,1), en(:,:,1), .FALSE.)
+        DO iks = 1, k_grid%nps
            DO ib = 1, n_bands
               sigma_spectralf(glob_ifreq,ib,iks) = sc(ib,iks,1)
            ENDDO

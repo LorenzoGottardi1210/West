@@ -1,5 +1,5 @@
 !
-! Copyright (C) 2015-2025 M. Govoni
+! Copyright (C) 2015-2026 M. Govoni
 ! This file is distributed under the terms of the
 ! GNU General Public License. See the file `License'
 ! in the root directory of the present distribution,
@@ -252,7 +252,7 @@ MODULE class_coulomb
          !
          IF( try_ort_div ) THEN
             !
-            ! prod( i, j ) = (b_i)^t * b_j    (if off-diagonal prods are all zero --> the angles are all 90 deg --> cell is orthorombic)
+            ! prod( i, j ) = (b_i)^t * b_j    (if off-diagonal prods are all zero --> the angles are all 90 deg --> cell is orthorhombic)
             !
             prod = 0._DP
             DO i1 = 1, 3

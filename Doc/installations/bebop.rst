@@ -87,4 +87,4 @@ Job submission is done with the following:
    $ sbatch run_west.sh
 
 .. seealso::
-   For more information, visit the `LCRC user guide <https://www.lcrc.anl.gov/for-users/using-lcrc/running-jobs/running-jobs-on-bebop/>`_.
+   For more information, visit the `LCRC user guide <https://docs.lcrc.anl.gov/bebop/running-jobs-bebop/>`_.

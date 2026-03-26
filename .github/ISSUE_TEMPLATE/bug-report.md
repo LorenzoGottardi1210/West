@@ -12,7 +12,7 @@ A concise description of the problem.
 
 **Code version**
  - QE: 7.5
- - WEST: 6.2.1
+ - WEST: 6.3.0
 
 **How to reproduce**
 `mpirun -n 16 wstst.x -ni 4 -i wstat.in`

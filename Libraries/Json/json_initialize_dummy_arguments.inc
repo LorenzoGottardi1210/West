@@ -23,4 +23,10 @@ null_to_real_mode,&
 non_normal_mode,&
 use_quiet_nan, &
 strict_integer_type_checking, &
-allow_trailing_comma &
+allow_trailing_comma, &
+parser_mode, &
+parser_initial_stack_size, &
+parser_max_stack_size, &
+string_to_real_mode, &
+null_to_integer_mode, &
+null_to_integer_value &

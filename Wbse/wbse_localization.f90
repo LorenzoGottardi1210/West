@@ -50,7 +50,7 @@ SUBROUTINE wbse_localization(current_spin,nbnd_s,nbnd_e,evc_loc,ovl_matrix,l_res
   INTEGER :: barra_load
   INTEGER,ALLOCATABLE :: bisec_loc(:)
   REAL(DP) :: reduce
-  REAL(DP) :: val(6)
+  REAL(DP) :: val(8)
   REAL(DP) :: ovl_val
   REAL(DP),ALLOCATABLE :: proj(:,:)
   REAL(DP),ALLOCATABLE :: u_real(:,:)

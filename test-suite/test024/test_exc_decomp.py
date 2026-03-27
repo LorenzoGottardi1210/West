@@ -33,6 +33,13 @@ def test_proj_matrix():
     ref_proj = read_proj_matrix_from_json("./test024/ref/westpp.json")
     test_proj = read_proj_matrix_from_json("./test024/test.westpp.save/westpp.json")
 
+    maxDiff = 0.0
+    for iexc in ref_proj:
+        maxDiff = max(
+            maxDiff, np.amax(np.abs(np.abs(ref_proj[iexc]) - np.abs(test_proj[iexc])))
+        )
+    print(f"BSE/TDDFT decomp (westpp) max diff: {maxDiff}")
+
     for iexc in ref_proj:
         np.testing.assert_almost_equal(
             np.abs(ref_proj[iexc]),

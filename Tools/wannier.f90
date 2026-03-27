@@ -235,6 +235,7 @@ MODULE wann_loc_wfc
                   IF(il == 6) prod_gat(ir) = ws3
                   IF(il == 7) prod_gat(ir) = wc4
                   IF(il == 8) prod_gat(ir) = ws4
+                  !
                ENDDO
                !
             ENDDO

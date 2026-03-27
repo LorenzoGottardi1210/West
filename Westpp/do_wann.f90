@@ -48,7 +48,7 @@ SUBROUTINE do_wann()
   INTEGER :: iunit
   INTEGER :: dffts_nnr
   REAL(DP) :: reduce
-  REAL(DP) :: val(6)
+  REAL(DP) :: val(8)
   REAL(DP) :: tmp(3)
   REAL(DP) :: wan_center(3),wan_center_cry(3)
   REAL(DP), ALLOCATABLE :: proj(:,:)

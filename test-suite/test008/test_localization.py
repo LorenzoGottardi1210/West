@@ -35,6 +35,9 @@ def test_localization():
     ref_loc = read_localization_from_json("./test008/ref/westpp.json")
     test_loc = read_localization_from_json("./test008/test.westpp.save/westpp.json")
 
+    maxDiff = np.amax(np.abs(ref_loc - test_loc))
+    print(f"Localization (westpp) max diff: {maxDiff}")
+
     np.testing.assert_almost_equal(
         ref_loc,
         test_loc,
@@ -52,6 +55,9 @@ def test_ipr():
 
     ref_ipr = read_ipr_from_json("./test008/ref/westpp.json")
     test_ipr = read_ipr_from_json("./test008/test.westpp.save/westpp.json")
+
+    maxDiff = np.amax(np.abs(ref_ipr - test_ipr))
+    print(f"IPR (westpp) max diff: {maxDiff}")
 
     np.testing.assert_almost_equal(
         ref_ipr,

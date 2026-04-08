@@ -35,6 +35,9 @@ def test_trans_matrix():
     ref_trans = read_trans_matrix_from_json("./test008/ref/westpp.json")
     test_trans = read_trans_matrix_from_json("./test008/test.westpp.save/westpp.json")
 
+    maxDiff = np.amax(np.abs(np.abs(ref_trans) - np.abs(test_trans)))
+    print(f"Wannier matrix (westpp) max diff: {maxDiff}")
+
     np.testing.assert_almost_equal(
         np.abs(ref_trans),
         np.abs(test_trans),
@@ -52,6 +55,9 @@ def test_wannier_center():
 
     ref_wanc = read_wannier_center_from_json("./test008/ref/westpp.json")
     test_wanc = read_wannier_center_from_json("./test008/test.westpp.save/westpp.json")
+
+    maxDiff = np.amax(np.abs(ref_wanc - test_wanc))
+    print(f"Wannier center (westpp) max diff: {maxDiff}")
 
     np.testing.assert_almost_equal(
         ref_wanc,

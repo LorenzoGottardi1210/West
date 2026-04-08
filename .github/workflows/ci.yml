@@ -11,7 +11,7 @@ jobs:
     container: miccomcenter/bot:gcc1340_0001
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         path: West
     - name: Build QE
@@ -40,7 +40,7 @@ jobs:
         cd qe/West/test-suite
         make NP=8
     - name: Archive artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       if: failure()
       with:
         name: artifacts

@@ -244,6 +244,7 @@ MODULE dfpt_module
             IF(gamma_only) THEN
                !
                ! double bands @ gamma
+               !
                DO lbnd = 1,band_group%nloc-MOD(band_group%nloc,2),2
                   !
                   ibnd = band_group%l2g(lbnd)
@@ -262,6 +263,7 @@ MODULE dfpt_module
                ENDDO
                !
                ! single band @ gamma
+               !
                IF( MOD(band_group%nloc,2) == 1 ) THEN
                   !
                   lbnd = band_group%nloc
@@ -409,6 +411,7 @@ MODULE dfpt_module
             IF(gamma_only) THEN
                !
                ! double band @ gamma
+               !
                DO lbnd = 1,band_group%nloc
                   !
                   ibnd = band_group%l2g(lbnd)

@@ -25,12 +25,12 @@ MODULE west_environment
 CONTAINS
   !-----------------------------------------------------------------------
   !
-  SUBROUTINE west_environment_start( code )
+  SUBROUTINE west_environment_start( )
     !
-    USE io_global,             ONLY : stdout, meta_ionode
-    USE io_files,              ONLY : tmp_dir, crash_file, nd_nmbr
-    USE mp_images,             ONLY : me_image, my_image_id
-    USE westcom,               ONLY : savedir, logfile, west_prefix
+    USE io_global,             ONLY : stdout,meta_ionode
+    USE io_files,              ONLY : tmp_dir,crash_file,nd_nmbr
+    USE mp_images,             ONLY : me_image,my_image_id
+    USE westcom,               ONLY : savedir,logfile,west_prefix,code
     USE base64_module,         ONLY : base64_init
     USE json_string_utilities, ONLY : lowercase_string
     USE west_version,          ONLY : start_forpy
@@ -44,12 +44,13 @@ CONTAINS
     !
     IMPLICIT NONE
     !
-    CHARACTER(LEN=*), INTENT(IN) :: code
+    ! Workspace
     !
-    LOGICAL :: exst, debug = .FALSE.
+    LOGICAL :: exst
+    LOGICAL :: debug = .FALSE.
     CHARACTER(LEN=80) :: uname
     CHARACTER(LEN=6), EXTERNAL :: int_to_char
-    INTEGER :: ios, crashunit, n_json
+    INTEGER :: ios,crashunit,n_json
     INTEGER, PARAMETER :: n_json_max = 100
     !
     CALL start_forpy()
@@ -128,7 +129,7 @@ CONTAINS
     ! Initialize base64 tables
     CALL base64_init()
     !
-    CALL west_opening_message( code )
+    CALL west_opening_message( )
 #if defined(__MPI)
     CALL report_parallel_status( )
 #else
@@ -146,13 +147,13 @@ CONTAINS
     !
   END SUBROUTINE
   !
-  SUBROUTINE west_environment_end( code )
+  SUBROUTINE west_environment_end( )
     !
-    USE io_global,             ONLY : stdout, meta_ionode
+    USE io_global,             ONLY : stdout,meta_ionode
     USE json_module,           ONLY : json_file
     USE mp_world,              ONLY : mpime,root,world_comm
     USE mp,                    ONLY : mp_barrier
-    USE westcom,               ONLY : logfile
+    USE westcom,               ONLY : logfile,code
     USE west_version,          ONLY : end_forpy
 #if defined(__HDF5)
     USE hdf5_qe,               ONLY : phdf5_end => finalize_hdf5
@@ -164,10 +165,11 @@ CONTAINS
     !
     IMPLICIT NONE
     !
-    CHARACTER(LEN=*), INTENT(IN) :: code
+    ! Workspace
+    !
     INTEGER :: iunit
     TYPE(json_file) :: json
-    CHARACTER(LEN=9) :: cdate, ctime
+    CHARACTER(LEN=9) :: cdate,ctime
     CHARACTER(LEN=80) :: time_str
     LOGICAL :: found
     !
@@ -226,27 +228,23 @@ CONTAINS
     !
   END SUBROUTINE
   !
-  SUBROUTINE west_opening_message( code )
+  SUBROUTINE west_opening_message( )
     !
     USE json_module,           ONLY : json_file
     USE io_global,             ONLY : stdout
     USE global_version,        ONLY : version_number
-    USE west_version,          ONLY : west_version_number, west_git_revision
+    USE west_version,          ONLY : west_version_number,west_git_revision
     USE mp_world,              ONLY : mpime,root
-    USE westcom,               ONLY : logfile
+    USE westcom,               ONLY : logfile,code
     USE base64_module,         ONLY : islittleendian
     !
     IMPLICIT NONE
-    !
-    ! I/O
-    !
-    CHARACTER(LEN=*), INTENT(IN) :: code
     !
     ! Workspace
     !
     TYPE(json_file) :: json
     INTEGER :: iunit
-    CHARACTER(LEN=9) :: cdate, ctime
+    CHARACTER(LEN=9) :: cdate,ctime
     !
     CALL date_and_tim( cdate, ctime )
     !
@@ -316,7 +314,7 @@ CONTAINS
      INTEGER, EXTERNAL :: omp_get_max_threads
 #endif
      !
-     INTEGER :: nth, ncores
+     INTEGER :: nth,ncores
      TYPE(json_file) :: json
      INTEGER :: iunit
      !

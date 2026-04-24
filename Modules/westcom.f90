@@ -111,6 +111,7 @@ MODULE westin
   CHARACTER(LEN=512) :: savedir         ! outdir/west_prefix.code.save
   CHARACTER(LEN=512) :: main_input_file ! input file
   CHARACTER(LEN=512) :: logfile         ! savedir/logfile.json
+  CHARACTER(LEN=9)   :: code
   !
 END MODULE
 !

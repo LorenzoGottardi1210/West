@@ -16,20 +16,28 @@ SUBROUTINE exx_ungo()
   !
   USE exx,                    ONLY : deallocate_exx
   USE xc_lib,                 ONLY : xclib_dft_is,stop_exx
-  USE command_line_options,   ONLY : command_line
+  USE westcom,                ONLY : westpp_l_compute_tdm,westpp_l_spin_flip,&
+                                   & westpp_l_dipole_realspace,code
   !
   IMPLICIT NONE
   !
   ! Workspace
   !
-  LOGICAL :: is_westpp
-  LOGICAL, EXTERNAL :: matches
+  LOGICAL :: do_stopexx
   !
-  is_westpp = matches('westpp.x',command_line)
+  IF(TRIM(code) == 'WBSE_INIT') THEN
+     do_stopexx = .FALSE.
+  ELSEIF(TRIM(code) == 'WESTPP') THEN
+     do_stopexx = .FALSE.
+     IF(westpp_l_compute_tdm .AND. (.NOT. westpp_l_spin_flip) &
+     & .AND. (.NOT. westpp_l_dipole_realspace)) do_stopexx = .TRUE.
+  ELSE
+     do_stopexx = .TRUE.
+  ENDIF
   !
-  IF(xclib_dft_is('hybrid') .AND. .NOT. is_westpp) THEN
-     CALL stop_exx
-     CALL deallocate_exx
+  IF(xclib_dft_is('hybrid') .AND. do_stopexx) THEN
+     CALL stop_exx()
+     CALL deallocate_exx()
   ENDIF
   !
 END SUBROUTINE

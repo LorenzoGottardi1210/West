@@ -19,11 +19,9 @@ PROGRAM wbse
   USE check_stop,           ONLY : check_stop_init
   USE mp_global,            ONLY : mp_startup,mp_global_end
   USE west_environment,     ONLY : west_environment_start,west_environment_end
-  USE westcom,              ONLY : l_davidson,l_lanczos
+  USE westcom,              ONLY : l_davidson,l_lanczos,code
   !
   IMPLICIT NONE
-  !
-  CHARACTER(LEN=9) :: code = 'WBSE'
   !
   ! *** START ***
   !
@@ -35,9 +33,11 @@ PROGRAM wbse
   CALL mp_startup( start_images = .TRUE. )
 #endif
   !
-  CALL west_environment_start( code )
+  code = 'WBSE'
   !
-  CALL west_readin( code )
+  CALL west_environment_start( )
+  !
+  CALL west_readin( )
   !
   CALL wbse_setup( )
   !
@@ -55,7 +55,7 @@ PROGRAM wbse
   !
   CALL west_print_clocks( )
   !
-  CALL west_environment_end( code )
+  CALL west_environment_end( )
   !
   CALL mp_global_end( )
   !

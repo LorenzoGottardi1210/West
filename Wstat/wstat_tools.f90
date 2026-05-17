@@ -372,11 +372,7 @@ MODULE wstat_tools
       INTEGER :: pert_nglob
       REAL(DP) :: reduce
       !
-#if defined(__CUDA)
-      CALL start_clock_gpu('build_hr')
-#else
       CALL start_clock('build_hr')
-#endif
       !
       pert_nglob = pert%nglob
       !
@@ -459,11 +455,7 @@ MODULE wstat_tools
       CALL mp_bcast(c_distr,0,inter_bgrp_comm)
       CALL mp_bcast(c_distr,0,inter_pool_comm)
       !
-#if defined(__CUDA)
-      CALL stop_clock_gpu('build_hr')
-#else
       CALL stop_clock('build_hr')
-#endif
       !
     END SUBROUTINE
     !
@@ -497,11 +489,7 @@ MODULE wstat_tools
       INTEGER :: pert_nglob
       COMPLEX(DP) :: reduce
       !
-#if defined(__CUDA)
-      CALL start_clock_gpu('build_hr')
-#else
       CALL start_clock('build_hr')
-#endif
       !
       pert_nglob = pert%nglob
       !
@@ -579,11 +567,7 @@ MODULE wstat_tools
       CALL mp_bcast(c_distr,0,inter_bgrp_comm)
       CALL mp_bcast(c_distr,0,inter_pool_comm)
       !
-#if defined(__CUDA)
-      CALL stop_clock_gpu('build_hr')
-#else
       CALL stop_clock('build_hr')
-#endif
       !
     END SUBROUTINE
     !
@@ -969,11 +953,7 @@ MODULE wstat_tools
       COMPLEX(DP),ALLOCATABLE :: hg(:,:)
       COMPLEX(DP),ALLOCATABLE :: hg2(:,:)
       !
-#if defined(__CUDA)
-      CALL start_clock_gpu('update_vr')
-#else
       CALL start_clock('update_vr')
-#endif
       !
       ! ag, bg only needed by pool 0 and band group 0 in the next step
       !
@@ -1083,11 +1063,7 @@ MODULE wstat_tools
          !
       ENDIF
       !
-#if defined(__CUDA)
-      CALL stop_clock_gpu('update_vr')
-#else
       CALL stop_clock('update_vr')
-#endif
       !
     END SUBROUTINE
     !
@@ -1119,11 +1095,7 @@ MODULE wstat_tools
       COMPLEX(DP),ALLOCATABLE :: hg(:,:)
       COMPLEX(DP),ALLOCATABLE :: hg2(:,:)
       !
-#if defined(__CUDA)
-      CALL start_clock_gpu('update_vr')
-#else
       CALL start_clock('update_vr')
-#endif
       !
       ! ag, bg only needed by pool 0 and band group 0 in the next step
       !
@@ -1233,11 +1205,7 @@ MODULE wstat_tools
          !
       ENDIF
       !
-#if defined(__CUDA)
-      CALL stop_clock_gpu('update_vr')
-#else
       CALL stop_clock('update_vr')
-#endif
       !
     END SUBROUTINE
     !
@@ -1268,11 +1236,7 @@ MODULE wstat_tools
       REAL(DP) :: dconst
       COMPLEX(DP),ALLOCATABLE :: hg(:,:)
       !
-#if defined(__CUDA)
-      CALL start_clock_gpu('refresh_vr')
-#else
       CALL start_clock('refresh_vr')
-#endif
       !
       pert_nloc = pert%nloc
       !
@@ -1386,11 +1350,7 @@ MODULE wstat_tools
       CALL mp_bcast(ag,0,inter_bgrp_comm)
       CALL mp_bcast(ag,0,inter_pool_comm)
       !
-#if defined(__CUDA)
-      CALL stop_clock_gpu('refresh_vr')
-#else
       CALL stop_clock('refresh_vr')
-#endif
       !
     END SUBROUTINE
     !
@@ -1421,11 +1381,7 @@ MODULE wstat_tools
       COMPLEX(DP) :: zconst
       COMPLEX(DP),ALLOCATABLE :: hg(:,:)
       !
-#if defined(__CUDA)
-      CALL start_clock_gpu('refresh_vr')
-#else
       CALL start_clock('refresh_vr')
-#endif
       !
       pert_nloc = pert%nloc
       !
@@ -1539,11 +1495,7 @@ MODULE wstat_tools
       CALL mp_bcast(ag,0,inter_bgrp_comm)
       CALL mp_bcast(ag,0,inter_pool_comm)
       !
-#if defined(__CUDA)
-      CALL stop_clock_gpu('refresh_vr')
-#else
       CALL stop_clock('refresh_vr')
-#endif
       !
     END SUBROUTINE
 END MODULE

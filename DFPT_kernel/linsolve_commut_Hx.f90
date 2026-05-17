@@ -49,11 +49,7 @@ SUBROUTINE linsolve_commut_Hx(iks,m,e,fin,fout)
 #endif
   REAL(DP),PARAMETER :: factor = 1.35_DP
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('linHx')
-#else
   CALL start_clock('linHx')
-#endif
   !
 #if !defined(__CUDA)
   ALLOCATE(ep_pol(3))
@@ -112,10 +108,6 @@ SUBROUTINE linsolve_commut_Hx(iks,m,e,fin,fout)
   !
   !$acc exit data copyout(fout)
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('linHx')
-#else
   CALL stop_clock('linHx')
-#endif
   !
 END SUBROUTINE

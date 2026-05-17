@@ -38,11 +38,7 @@ SUBROUTINE apply_sternheimerop_to_m_wfcs(nbndval, psi, hpsi, e, alpha, m)
   !
   INTEGER :: ibnd,ig
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('stern')
-#else
   CALL start_clock('stern')
-#endif
   !
   ! compute the product of the hamiltonian with the h vector
   !
@@ -75,10 +71,6 @@ SUBROUTINE apply_sternheimerop_to_m_wfcs(nbndval, psi, hpsi, e, alpha, m)
   !
   CALL apply_alpha_pv_to_m_wfcs(nbndval,m,psi,hpsi,alpha)
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('stern')
-#else
   CALL stop_clock('stern')
-#endif
   !
 END SUBROUTINE

@@ -18,12 +18,13 @@ SUBROUTINE calc_tau()
   USE pwcom,                ONLY : isk,npw,ngk
   USE wavefunctions,        ONLY : evc
   USE westcom,              ONLY : lrwfc,iuwfc,ev,dvg,n_pdep_eigen_to_use,npwqx,nbnd_occ,l_pdep,&
-                                 & spin_channel,l_bse,l_hybrid_tddft
+                                 & spin_channel,l_bse,l_hybrid_tddft,localization
   USE lsda_mod,             ONLY : nspin
   USE pdep_db,              ONLY : pdep_db_read
   USE mp,                   ONLY : mp_bcast
   USE mp_global,            ONLY : my_image_id,inter_image_comm
   USE buffers,              ONLY : get_buffer
+  USE wann_loc_wfc,         ONLY : wann_init
   USE class_idistribute,    ONLY : idistribute
   USE distribution_center,  ONLY : pert,kpt_pool
   USE qbox_interface,       ONLY : init_qbox,finalize_qbox
@@ -60,6 +61,11 @@ SUBROUTINE calc_tau()
         CALL init_qbox()
      ENDIF
   ENDIF
+  !
+  SELECT CASE(localization)
+  CASE('W','w')
+     CALL wann_init()
+  END SELECT
   !
   spin_resolve = spin_channel > 0 .AND. nspin > 1
   !

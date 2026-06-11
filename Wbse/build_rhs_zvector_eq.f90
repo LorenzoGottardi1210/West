@@ -478,7 +478,7 @@ MODULE rhs_zvector
 #endif
             !
             IF(l_hybrid_tddft) THEN
-               CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),z_rhs_vec_part1(:,:,iks),.FALSE.)
+               CALL bse_kernel(current_spin,evc1_all(:,:,iks),z_rhs_vec_part1(:,:,iks),.FALSE.)
             ELSEIF(l_bse) THEN
                CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part1(:,:,iks),.FALSE.,1)
             ENDIF
@@ -1842,7 +1842,7 @@ MODULE rhs_zvector
          dv_vv_mat(:,:) = 0._DP
          !$acc end kernels
          !
-         CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),tmp_vec,l_spin_flip)
+         CALL bse_kernel(current_spin,evc1_all(:,:,iks),tmp_vec,l_spin_flip)
          !
          CALL glbrak_gamma(evc(:,n_trunc_bands+1:nbndval),tmp_vec,dv_vv_mat,npw,npwx,&
          & nbndval-n_trunc_bands,nbnd_do,nbndval0x-n_trunc_bands,npol)
@@ -1881,7 +1881,7 @@ MODULE rhs_zvector
             dv_vv_mat(:,:) = 0._DP
             !$acc end kernels
             !
-            CALL bse_kernel_gamma(current_spin,evc1J_all(:,:,iks),tmp_vec,l_spin_flip)
+            CALL bse_kernel(current_spin,evc1J_all(:,:,iks),tmp_vec,l_spin_flip)
             !
             CALL glbrak_gamma(evc(:,n_trunc_bands+1:nbndval),tmp_vec,dv_vv_mat,npw,npwx,&
             & nbndval-n_trunc_bands,nbnd_do,nbndval0x-n_trunc_bands,npol)

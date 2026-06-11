@@ -17,6 +17,7 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
   ! Applies the linear response operator to response wavefunctions
   !
   USE kinds,                ONLY : DP
+  USE control_flags,        ONLY : gamma_only
   USE fft_base,             ONLY : dffts
   USE gvect,                ONLY : gstart
   USE uspp,                 ONLY : vkb,nkb
@@ -28,6 +29,7 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
   USE buffers,              ONLY : get_buffer
   USE fft_at_gamma,         ONLY : single_fwfft_gamma,single_invfft_gamma,double_fwfft_gamma,&
                                  & double_invfft_gamma
+  USE fft_at_k,             ONLY : single_fwfft_k,single_invfft_k
   USE westcom,              ONLY : l_bse,l_bse_triplet,l_hybrid_tddft,l_spin_flip_kernel,&
                                  & l_qp_correction,sigma_head,sigma_c_head,sigma_x_head,nbnd_occ,&
                                  & scissor_ope,n_trunc_bands,et_qp,lrwfc,iuwfc,evc1_all,&
@@ -182,42 +184,65 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
      !
      IF(do_k1e) THEN
         !
-        ! double bands @ gamma
-        !
-        DO lbnd = 1,nbnd_do-MOD(nbnd_do,2),2
+        IF(gamma_only) THEN
            !
-           ibnd = band_group%l2g(lbnd)+n_trunc_bands
-           jbnd = band_group%l2g(lbnd+1)+n_trunc_bands
+           ! double bands @ gamma
            !
-           CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),evc(:,jbnd),psic,'Wave')
-           !
-           !$acc parallel loop present(psic,dvrs)
-           DO ir = 1,dffts_nnr
-              psic(ir) = psic(ir)*CMPLX(REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
+           DO lbnd = 1,nbnd_do-MOD(nbnd_do,2),2
+              !
+              ibnd = band_group%l2g(lbnd)+n_trunc_bands
+              jbnd = band_group%l2g(lbnd+1)+n_trunc_bands
+              !
+              CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),evc(:,jbnd),psic,'Wave')
+              !
+              !$acc parallel loop present(psic,dvrs)
+              DO ir = 1,dffts_nnr
+                 psic(ir) = psic(ir)*CMPLX(REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
+              ENDDO
+              !$acc end parallel
+              !
+              CALL double_fwfft_gamma(dffts,npw,npwx,psic,evc1_new(:,lbnd,iks),evc1_new(:,lbnd+1,iks),'Wave')
+              !
            ENDDO
-           !$acc end parallel
            !
-           CALL double_fwfft_gamma(dffts,npw,npwx,psic,evc1_new(:,lbnd,iks),evc1_new(:,lbnd+1,iks),&
-           & 'Wave')
+           ! single band @ gamma
            !
-        ENDDO
-        !
-        ! single band @ gamma
-        !
-        IF(MOD(nbnd_do,2) == 1) THEN
+           IF(MOD(nbnd_do,2) == 1) THEN
+              !
+              lbnd = nbnd_do
+              ibnd = band_group%l2g(lbnd)+n_trunc_bands
+              !
+              CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),psic,'Wave')
+              !
+              !$acc parallel loop present(psic,dvrs)
+              DO ir = 1,dffts_nnr
+                 psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
+              ENDDO
+              !$acc end parallel
+              !
+              CALL single_fwfft_gamma(dffts,npw,npwx,psic,evc1_new(:,lbnd,iks),'Wave')
+              !
+           ENDIF
            !
-           lbnd = nbnd_do
-           ibnd = band_group%l2g(lbnd)+n_trunc_bands
+        ELSE
            !
-           CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),psic,'Wave')
+           ! only single bands
            !
-           !$acc parallel loop present(psic,dvrs)
-           DO ir = 1,dffts_nnr
-              psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
+           DO lbnd = 1,nbnd_do
+              !
+              ibnd = band_group%l2g(lbnd)+n_trunc_bands
+              !
+              CALL single_invfft_k(dffts,npw,npwx,evc(:,ibnd),psic,'Wave',igk_k(:,current_k))
+              !
+              !$acc parallel loop present(psic,dvrs)
+              DO ir = 1,dffts_nnr
+                 psic(ir) = psic(ir)*dvrs(ir,current_spin)
+              ENDDO
+              !$acc end parallel
+              !
+              CALL single_fwfft_k(dffts,npw,npwx,psic,evc1_new(:,lbnd,iks),'Wave',igk_k(:,current_k))
+              !
            ENDDO
-           !$acc end parallel
-           !
-           CALL single_fwfft_gamma(dffts,npw,npwx,psic,evc1_new(:,lbnd,iks),'Wave')
            !
         ENDIF
         !
@@ -313,16 +338,16 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
 #endif
         IF(do_forces) THEN
            IF(l_hybrid_tddft) THEN
-              CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),evc1_new(:,:,iks),sf)
+              CALL bse_kernel(current_spin,evc1_all(:,:,iks),evc1_new(:,:,iks),sf)
            ELSEIF(l_bse .AND. xclib_dft_is('hybrid')) THEN
               CALL hybrid_kernel_term1234(current_spin,evc1_new(:,:,iks),sf,1)
            ENDIF
         ELSE
-           CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),evc1_new(:,:,iks),sf)
+           CALL bse_kernel(current_spin,evc1_all(:,:,iks),evc1_new(:,:,iks),sf)
         ENDIF
      ENDIF
      !
-     IF(gstart == 2) THEN
+     IF(gamma_only .AND. gstart == 2) THEN
         !$acc parallel loop present(evc1_new)
         DO lbnd = 1,nbnd_do
            evc1_new(1,lbnd,iks) = CMPLX(REAL(evc1_new(1,lbnd,iks),KIND=DP),KIND=DP)

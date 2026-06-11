@@ -585,6 +585,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      IF(westpp_box(1) > westpp_box(2) .OR. westpp_box(3) > westpp_box(4) .OR. westpp_box(5) > westpp_box(6)) &
      & CALL errore('fetch_input','Err: invalid westpp_box',1)
      IF(westpp_n_liouville_to_use == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch westpp_n_liouville_to_use',1)
+     IF(westpp_l_dipole_realspace .AND. .NOT. gamma_only) CALL errore('fetch_input','Err: dipole real space requires gamma_only',1)
      !
   ENDIF
   !
@@ -622,7 +623,6 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      !
      ! CHECKS
      !
-     IF(.NOT. gamma_only) CALL errore('fetch_input','Err: TDDFT/BSE requires gamma_only',1)
      IF(n_pdep_eigen_to_use < 1) CALL errore('fetch_input','Err: n_pdep_eigen_to_use<1',1)
      IF(n_trunc_bands < 0) CALL errore('fetch_input','Err: n_trunc_bands<0',1)
      IF(n_pdep_eigen_to_use == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_pdep_eigen_to_use',1)
@@ -699,8 +699,6 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      !
      ! CHECKS
      !
-     IF(.NOT. gamma_only) CALL errore('fetch_input','Err: TDDFT/BSE requires gamma_only',1)
-     !
      SELECT CASE(wbse_calculation)
      CASE('D','d')
         IF(n_liouville_times < 2) CALL errore('fetch_input','Err: n_liouville_times<2',1)
@@ -713,15 +711,16 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
         & CALL errore('fetch_input','Err: n_liouville_read_from_file>n_liouville_eigen',1)
         IF(trev_liouville <= 0._DP) CALL errore('fetch_input','Err: trev_liouville<0.',1)
         IF(trev_liouville_rel <= 0._DP) CALL errore('fetch_input','Err: trev_liouville_rel<0.',1)
+        IF(l_forces .AND. .NOT. gamma_only) CALL errore('fetch_input','Err: forces calculation requires gamma_only',1)
         IF(forces_zeq_n_cg_maxiter < 1) CALL errore('fetch_input','Err: forces_zeq_n_cg_maxiter<1',1)
         IF(forces_inexact_krylov < 0 .OR. forces_inexact_krylov > 5) &
         & CALL errore('fetch_input','Err: invalid forces_inexact_krylov',1)
         IF(n_liouville_eigen == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_liouville_eigen',1)
         IF(n_liouville_times == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_liouville_times',1)
         IF(n_liouville_maxiter == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_liouville_maxiter',1)
-        IF(n_liouville_read_from_file == DUMMY_DEFAULT) &
-        & CALL errore('fetch_input','Err: cannot fetch n_liouville_read_from_file',1)
+        IF(n_liouville_read_from_file == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_liouville_read_from_file',1)
         IF(forces_state == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch forces_state',1)
+        IF((l_genac .OR. l_eenac) .AND. .NOT. gamma_only) CALL errore('fetch_input','Err: NAC calculation requires gamma_only',1)
         IF(genac_state == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch genac_state',1)
         IF(eenac_stateI == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch eenac_stateI',1)
         IF(eenac_stateJ == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch eenac_stateJ',1)
@@ -729,10 +728,8 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
         IF(eenac_stateI < 1) CALL errore('fetch_input','Err: eenac_stateI<1',1)
         IF(eenac_stateJ < 1) CALL errore('fetch_input','Err: eenac_stateJ<1',1)
         IF(eenac_stateI == eenac_stateJ) CALL errore('fetch_input','Err: eenac_state I and J must be different',1)
-        IF(forces_zeq_n_cg_maxiter == DUMMY_DEFAULT) &
-        & CALL errore('fetch_input','Err: cannot fetch forces_zeq_n_cg_maxiter',1)
-        IF(forces_inexact_krylov == DUMMY_DEFAULT) &
-        & CALL errore('fetch_input','Err: cannot fetch forces_inexact_krylov',1)
+        IF(forces_zeq_n_cg_maxiter == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch forces_zeq_n_cg_maxiter',1)
+        IF(forces_inexact_krylov == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch forces_inexact_krylov',1)
      CASE('L','l')
         IF(l_spin_flip) CALL errore('fetch_input','Err: spin flip must use Davidson',1)
         IF(n_lanczos < 1) CALL errore('fetch_input','Err: n_lanczos<1',1)
@@ -753,6 +750,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      IF(n_steps_write_restart == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_steps_write_restart',1)
      IF(wbse_epsinfty < 1._DP) CALL errore('fetch_input','Err: wbse_epsinfty<1.',1)
      IF(n_exx_lowrank == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_exx_lowrank',1)
+     IF(l_dipole_realspace .AND. .NOT. gamma_only) CALL errore('fetch_input','Err: dipole real space requires gamma_only',1)
      !
   ENDIF
   !

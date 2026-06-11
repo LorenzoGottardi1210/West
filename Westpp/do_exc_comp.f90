@@ -49,9 +49,10 @@ SUBROUTINE do_exc_comp()
   INTEGER :: nbndval,flnbndval
   INTEGER :: barra_load
   CHARACTER(6) :: label_exc,label_k
-  REAL(DP) :: reduce
-  REAL(DP), ALLOCATABLE :: projection_matrix(:,:,:,:),transition_dipole(:,:)
-  REAL(DP), ALLOCATABLE :: aux(:)
+  REAL(DP) :: reduce_r
+  REAL(DP), ALLOCATABLE :: proj_mat_r(:,:,:,:),trans_dip_r(:,:),aux(:)
+  COMPLEX(DP) :: reduce_c
+  COMPLEX(DP), ALLOCATABLE :: proj_mat_c(:,:,:,:),trans_dip_c(:,:)
   TYPE(bar_type) :: barra
   TYPE(json_file) :: json
   INTEGER, PARAMETER :: flks(2) = [2,1]
@@ -63,9 +64,9 @@ SUBROUTINE do_exc_comp()
   !
   IF(westpp_n_liouville_to_use < 1) CALL errore('do_exc_comp','westpp_n_liouville_to_use < 1',1)
   IF(westpp_range(2) > westpp_n_liouville_to_use) &
-     CALL errore('do_exc_comp','westpp_range(2) > westpp_n_liouville_to_use',1)
-  IF(nbndx_emp < 1) CALL errore('do_exc_comp','no empty states found, rerun pwscf with nbnd > nbnd_occ',1)
-  IF(.NOT. gamma_only) CALL errore('do_exc_comp','exciton decomposition requires gamma_only',1)
+  & CALL errore('do_exc_comp','westpp_range(2) > westpp_n_liouville_to_use',1)
+  IF(nbndx_emp < 1) &
+  & CALL errore('do_exc_comp','no empty states found, rerun pwscf with nbnd > nbnd_occ',1)
   !
   ! ... DISTRIBUTE
   !
@@ -79,6 +80,8 @@ SUBROUTINE do_exc_comp()
   ! READ EIGENVALUES AND VECTORS FROM OUTPUT
   !
   CALL plep_db_read(westpp_n_liouville_to_use)
+  !
+  !$acc enter data copyin(dvg_exc)
   !
 #if defined(__CUDA)
   CALL allocate_gpu()
@@ -102,17 +105,31 @@ SUBROUTINE do_exc_comp()
      !
      CALL solve_e_psi()
      !
-     ALLOCATE(transition_dipole(3,westpp_range(1):westpp_range(2)))
-     transition_dipole(:,:) = 0._DP
+     IF(gamma_only) THEN
+        ALLOCATE(trans_dip_r(3,westpp_range(1):westpp_range(2)))
+        trans_dip_r(:,:) = 0._DP
+     ELSE
+        ALLOCATE(trans_dip_c(3,westpp_range(1):westpp_range(2)))
+        trans_dip_c(:,:) = (0._DP,0._DP)
+     ENDIF
      !
   ENDIF
   !
-  ALLOCATE(projection_matrix(nbndx_emp,nbndx_occ,nks,westpp_range(1):westpp_range(2)))
-  !$acc enter data create(projection_matrix) copyin(dvg_exc)
-  !
-  !$acc kernels present(projection_matrix)
-  projection_matrix(:,:,:,:) = 0._DP
-  !$acc end kernels
+  IF(gamma_only) THEN
+     ALLOCATE(proj_mat_r(nbndx_emp,nbndx_occ,nks,westpp_range(1):westpp_range(2)))
+     !$acc enter data create(proj_mat_r)
+     !
+     !$acc kernels present(proj_mat_r)
+     proj_mat_r(:,:,:,:) = 0._DP
+     !$acc end kernels
+  ELSE
+     ALLOCATE(proj_mat_c(nbndx_emp,nbndx_occ,nks,westpp_range(1):westpp_range(2)))
+     !$acc enter data create(proj_mat_c)
+     !
+     !$acc kernels present(proj_mat_c)
+     proj_mat_c(:,:,:,:) = (0._DP,0._DP)
+     !$acc end kernels
+  ENDIF
   !
   CALL io_push_title('BSE/TDDFT Excited State De(C)omposition')
   !
@@ -131,7 +148,7 @@ SUBROUTINE do_exc_comp()
      !
      iexc = pert%l2g(lexc)
      !
-     DO iks = 1, k_grid%nps  ! KPOINT-SPIN LOOP
+     DO iks = 1,k_grid%nps  ! KPOINT-SPIN LOOP
         !
         ! ... Set k-point, spin, kinetic energy, needed by Hpsi
         !
@@ -159,8 +176,13 @@ SUBROUTINE do_exc_comp()
         nbndval = nbnd_occ(iks)
         flnbndval = nbnd_occ(iks_do)
         !
-        CALL glbrak_gamma(evc(:,nbndval+1:nbnd),dvg_exc(:,:,iks,lexc),projection_matrix(:,:,iks,iexc),npw,&
-        & npwx,nbnd-nbndval,flnbndval,nbndx_emp,npol)
+        IF(gamma_only) THEN
+           CALL glbrak_gamma(evc(:,nbndval+1:nbnd),dvg_exc(:,:,iks,lexc),proj_mat_r(:,:,iks,iexc),&
+           & npw,npwx,nbnd-nbndval,flnbndval,nbndx_emp,npol)
+        ELSE
+           CALL glbrak_k(evc(:,nbndval+1:nbnd),dvg_exc(:,:,iks,lexc),proj_mat_c(:,:,iks,iexc),npw,&
+           & npwx,nbnd-nbndval,flnbndval,nbndx_emp,npol)
+        ENDIF
         !
         CALL update_bar_type(barra,'westpp',1)
         !
@@ -168,10 +190,17 @@ SUBROUTINE do_exc_comp()
      !
   ENDDO
   !
-  !$acc update host(projection_matrix)
-  !
-  CALL mp_sum(projection_matrix,intra_bgrp_comm)
-  CALL mp_sum(projection_matrix,inter_image_comm)
+  IF(gamma_only) THEN
+     !$acc update host(proj_mat_r)
+     !
+     CALL mp_sum(proj_mat_r,intra_bgrp_comm)
+     CALL mp_sum(proj_mat_r,inter_image_comm)
+  ELSE
+     !$acc update host(proj_mat_c)
+     !
+     CALL mp_sum(proj_mat_c,intra_bgrp_comm)
+     CALL mp_sum(proj_mat_c,inter_image_comm)
+  ENDIF
   !
   CALL stop_bar_type(barra,'westpp')
   !
@@ -187,66 +216,111 @@ SUBROUTINE do_exc_comp()
         !
         IF(iexc < westpp_range(1) .OR. iexc > westpp_range(2)) CYCLE
         !
-        DO ipol = 1, 3
+        DO ipol = 1,3
            !
-           reduce = 0._DP
-           !
-           DO iks = 1, k_grid%nps  ! KPOINT-SPIN LOOP
+           IF(gamma_only) THEN
               !
-              ! ... Set k-point, spin, kinetic energy, needed by Hpsi
+              reduce_r = 0._DP
               !
-              current_k = iks
-              npw = ngk(iks)
-              !
-              IF(westpp_l_spin_flip) THEN
-                 iks_do = flks(iks)
-              ELSE
-                 iks_do = iks
-              ENDIF
-              !
-              nbndval = nbnd_occ(iks)
-              flnbndval = nbnd_occ(iks_do)
-              !
-              !$acc parallel loop collapse(2) reduction(+:reduce) present(dvg_exc,d0psi) copy(reduce)
-              DO iocc = 1, flnbndval
-                 DO ig = 1, npw
-                    reduce = reduce + 2._DP*REAL(dvg_exc(ig,iocc,iks,lexc),KIND=DP)*REAL(d0psi(ig,iocc,iks_do,ipol),KIND=DP) &
-                    &               + 2._DP*AIMAG(dvg_exc(ig,iocc,iks,lexc))*AIMAG(d0psi(ig,iocc,iks_do,ipol))
-                 ENDDO
-              ENDDO
-              !$acc end parallel
-              !
-              IF(gstart == 2) THEN
-                 !$acc parallel loop reduction(+:reduce) present(dvg_exc,d0psi) copy(reduce)
-                 DO iocc = 1, flnbndval
-                    reduce = reduce - REAL(dvg_exc(1,iocc,iks,lexc),KIND=DP)*REAL(d0psi(1,iocc,iks_do,ipol),KIND=DP)
+              DO iks = 1,k_grid%nps  ! KPOINT-SPIN LOOP
+                 !
+                 ! ... Set k-point, spin, kinetic energy, needed by Hpsi
+                 !
+                 current_k = iks
+                 npw = ngk(iks)
+                 !
+                 IF(westpp_l_spin_flip) THEN
+                    iks_do = flks(iks)
+                 ELSE
+                    iks_do = iks
+                 ENDIF
+                 !
+                 nbndval = nbnd_occ(iks)
+                 flnbndval = nbnd_occ(iks_do)
+                 !
+                 !$acc parallel loop collapse(2) reduction(+:reduce_r) present(dvg_exc,d0psi) copy(reduce_r)
+                 DO iocc = 1,flnbndval
+                    DO ig = 1,npw
+                       reduce_r = reduce_r &
+                       & + 2._DP*REAL(dvg_exc(ig,iocc,iks,lexc),KIND=DP)*REAL(d0psi(ig,iocc,iks_do,ipol),KIND=DP) &
+                       & + 2._DP*AIMAG(dvg_exc(ig,iocc,iks,lexc))*AIMAG(d0psi(ig,iocc,iks_do,ipol))
+                    ENDDO
                  ENDDO
                  !$acc end parallel
-              ENDIF
+                 !
+                 IF(gstart == 2) THEN
+                    !$acc parallel loop reduction(+:reduce_r) present(dvg_exc,d0psi) copy(reduce_r)
+                    DO iocc = 1,flnbndval
+                       reduce_r = reduce_r &
+                       & - REAL(dvg_exc(1,iocc,iks,lexc),KIND=DP)*REAL(d0psi(1,iocc,iks_do,ipol),KIND=DP)
+                    ENDDO
+                    !$acc end parallel
+                 ENDIF
+                 !
+              ENDDO
               !
-           ENDDO
-           !
-           transition_dipole(ipol,iexc) = reduce
+              trans_dip_r(ipol,iexc) = reduce_r
+              !
+           ELSE
+              !
+              reduce_c = (0._DP,0._DP)
+              !
+              DO iks = 1,k_grid%nps  ! KPOINT-SPIN LOOP
+                 !
+                 ! ... Set k-point, spin, kinetic energy, needed by Hpsi
+                 !
+                 current_k = iks
+                 npw = ngk(iks)
+                 !
+                 IF(westpp_l_spin_flip) THEN
+                    iks_do = flks(iks)
+                 ELSE
+                    iks_do = iks
+                 ENDIF
+                 !
+                 nbndval = nbnd_occ(iks)
+                 flnbndval = nbnd_occ(iks_do)
+                 !
+                 !$acc parallel loop collapse(2) reduction(+:reduce_c) present(dvg_exc,d0psi) copy(reduce_c)
+                 DO iocc = 1,flnbndval
+                    DO ig = 1,npw
+                       reduce_c = reduce_c + CONJG(dvg_exc(ig,iocc,iks,lexc))*d0psi(ig,iocc,iks_do,ipol)
+                    ENDDO
+                 ENDDO
+                 !$acc end parallel
+                 !
+              ENDDO
+              !
+              trans_dip_c(ipol,iexc) = reduce_c
+              !
+           ENDIF
            !
         ENDDO
         !
      ENDDO
      !
-     CALL mp_sum(transition_dipole,intra_bgrp_comm)
-     CALL mp_sum(transition_dipole,inter_image_comm)
-     !
-     IF(nks == 1) transition_dipole(:,:) = SQRT(2._DP) * transition_dipole
+     IF(gamma_only) THEN
+        CALL mp_sum(trans_dip_r,intra_bgrp_comm)
+        CALL mp_sum(trans_dip_r,inter_image_comm)
+        !
+        IF(nks == 1) trans_dip_r(:,:) = SQRT(2._DP) * trans_dip_r
+     ELSE
+        CALL mp_sum(trans_dip_c,intra_bgrp_comm)
+        CALL mp_sum(trans_dip_c,inter_image_comm)
+        !
+        IF(nks == 1) trans_dip_c(:,:) = SQRT(2._DP) * trans_dip_c
+     ENDIF
      !
   ENDIF
   !
   ! ... Print out results
   !
-  WRITE(stdout, "(/,5x,'*-------------* THE PRINCIPLE PROJECTED COMPONENTS *-------------*')")
+  WRITE(stdout,"(/,5x,'*-------------* THE PRINCIPLE PROJECTED COMPONENTS *-------------*')")
   !
   DO iexc = westpp_range(1),westpp_range(2)
      !
-     WRITE(stdout, "(/, 5x, '#     Exciton :   ', i8,' |','   ','Excitation energy :   ', f12.6)") iexc, ev(iexc)
-     WRITE(stdout, "(   5x, '#     Transition_from      |   Transition_to       |    Coefficient')")
+     WRITE(stdout,"(/,5x,'#     Exciton :',i11,' |   Excitation energy :    ',f12.6)") iexc,ev(iexc)
+     WRITE(stdout,"(5x,'#     From spin band       |   To spin band         |   Coefficient')")
      !
      DO iks = 1,nks
         !
@@ -258,9 +332,17 @@ SUBROUTINE do_exc_comp()
         !
         DO iocc = 1,nbnd_occ(iks_do)
            DO iemp = 1,(nbnd - nbnd_occ(iks))
-              IF(ABS(projection_matrix(iemp,iocc,iks,iexc)) >= 0.1_DP) THEN
-                 WRITE(stdout, "(4x, i8, 4x, i8, 8x, '|', i4, 4x, i8, 7x, '|', f13.6)") &
-                 & iks_do,iocc,iks,iemp+nbnd_occ(iks),projection_matrix(iemp,iocc,iks,iexc)
+              IF(gamma_only) THEN
+                 IF(ABS(proj_mat_r(iemp,iocc,iks,iexc)) >= 0.1_DP) THEN
+                    WRITE(stdout,"(8x,i4,6x,i6,8x,'|',i4,6x,i6,8x,'| ',f12.6)") &
+                    & iks_do,iocc,iks,iemp+nbnd_occ(iks),proj_mat_r(iemp,iocc,iks,iexc)
+                 ENDIF
+              ELSE
+                 IF(ABS(proj_mat_c(iemp,iocc,iks,iexc)) >= 0.1_DP) THEN
+                    WRITE(stdout,"(8x,i4,6x,i6,8x,'|',i4,6x,i6,8x,'| ',f12.6)") &
+                    & iks_do,iocc,iks,iemp+nbnd_occ(iks),REAL(proj_mat_c(iemp,iocc,iks,iexc),KIND=DP)
+                    WRITE(stdout,"(sp,32x,'|',24x,'| ',f12.6,' i')") AIMAG(proj_mat_c(iemp,iocc,iks,iexc))
+                 ENDIF
               ENDIF
            ENDDO
         ENDDO
@@ -268,25 +350,38 @@ SUBROUTINE do_exc_comp()
      ENDDO
      !
      IF((.NOT. westpp_l_spin_flip) .AND. westpp_l_compute_tdm) THEN
-        WRITE(stdout, "(5x, '#     TDM_x                |   TDM_y               |    TDM_z')")
-        WRITE(stdout, "(9x, f18.9, 5x, '|', f17.9, 6x, '|', f16.9)") &
-        & transition_dipole(1,iexc),transition_dipole(2,iexc),transition_dipole(3,iexc)
+        WRITE(stdout,"(5x,'#     TDM_x                |   TDM_y                |   TDM_z')")
+        IF(gamma_only) THEN
+           WRITE(stdout,"(9x,f12.6,11x,'| ',f12.6,11x,'| ',f12.6)") &
+           & trans_dip_r(1,iexc),trans_dip_r(2,iexc),trans_dip_r(3,iexc)
+        ELSE
+           WRITE(stdout,"(9x,f12.6,11x,'| ',f12.6,11x,'| ',f12.6)") &
+           & REAL(trans_dip_c(1,iexc),KIND=DP),REAL(trans_dip_c(2,iexc),KIND=DP),REAL(trans_dip_c(3,iexc),KIND=DP)
+           WRITE(stdout,"(sp,9x,f12.6,' i',9x,'| ',f12.6,' i',9x,'| ',f12.6,' i')") &
+           & AIMAG(trans_dip_c(1,iexc)),AIMAG(trans_dip_c(2,iexc)),AIMAG(trans_dip_c(3,iexc))
+        ENDIF
      ENDIF
      !
   ENDDO
   !
-  ! ... Write the results in the json file
+  ! ... Write results to JSON
   !
   IF(mpime == root) THEN
      !
      DO iexc = westpp_range(1),westpp_range(2)
         !
-        WRITE(label_exc,'(I6.6)') iexc
+        WRITE(label_exc,'(i6.6)') iexc
         !
         CALL json%add('output.E'//label_exc//'.excitation_energy',ev(iexc))
         !
-        IF((.NOT. westpp_l_spin_flip) .AND. westpp_l_compute_tdm) &
-        & CALL json%add('output.E'//label_exc//'.transition_dipole_moment',transition_dipole(:,iexc))
+        IF((.NOT. westpp_l_spin_flip) .AND. westpp_l_compute_tdm) THEN
+           IF(gamma_only) THEN
+              CALL json%add('output.E'//label_exc//'.transition_dipole_moment',trans_dip_r(:,iexc))
+           ELSE
+              CALL json%add('output.E'//label_exc//'.transition_dipole_moment.re',REAL(trans_dip_c(:,iexc),KIND=DP))
+              CALL json%add('output.E'//label_exc//'.transition_dipole_moment.im',AIMAG(trans_dip_c(:,iexc)))
+           ENDIF
+        ENDIF
         !
         DO iks = 1,nks
            !
@@ -296,7 +391,7 @@ SUBROUTINE do_exc_comp()
               iks_do = iks
            ENDIF
            !
-           WRITE(label_k,'(I6.6)') iks
+           WRITE(label_k,'(i6.6)') iks
            !
            CALL json%add('output.E'//label_exc//'.K'//label_k//'.projection.from_spin',iks_do)
            CALL json%add('output.E'//label_exc//'.K'//label_k//'.projection.to_spin',iks)
@@ -316,19 +411,39 @@ SUBROUTINE do_exc_comp()
            naux = (from_bands(2)-from_bands(1)+1) * (to_bands(2)-to_bands(1)+1)
            ALLOCATE(aux(naux))
            !
-           ! Pack
+           ! Pack and output
            !
-           iaux = 0
-           DO iocc = 1,nbnd_occ(iks_do)
-              DO iemp = 1,nbnd - nbnd_occ(iks)
-                 iaux = iaux+1
-                 aux(iaux) = projection_matrix(iemp,iocc,iks,iexc)
+           IF(gamma_only) THEN
+              iaux = 0
+              DO iocc = 1,nbnd_occ(iks_do)
+                 DO iemp = 1,nbnd - nbnd_occ(iks)
+                    iaux = iaux+1
+                    aux(iaux) = proj_mat_r(iemp,iocc,iks,iexc)
+                 ENDDO
               ENDDO
-           ENDDO
-           !
-           ! Output
-           !
-           CALL json%add('output.E'//label_exc//'.K'//label_k//'.projection.vals',aux)
+              !
+              CALL json%add('output.E'//label_exc//'.K'//label_k//'.projection.vals',aux)
+           ELSE
+              iaux = 0
+              DO iocc = 1,nbnd_occ(iks_do)
+                 DO iemp = 1,nbnd - nbnd_occ(iks)
+                    iaux = iaux+1
+                    aux(iaux) = REAL(proj_mat_c(iemp,iocc,iks,iexc),KIND=DP)
+                 ENDDO
+              ENDDO
+              !
+              CALL json%add('output.E'//label_exc//'.K'//label_k//'.projection.vals.re',aux)
+              !
+              iaux = 0
+              DO iocc = 1,nbnd_occ(iks_do)
+                 DO iemp = 1,nbnd - nbnd_occ(iks)
+                    iaux = iaux+1
+                    aux(iaux) = AIMAG(proj_mat_c(iemp,iocc,iks,iexc))
+                 ENDDO
+              ENDDO
+              !
+              CALL json%add('output.E'//label_exc//'.K'//label_k//'.projection.vals.im',aux)
+           ENDIF
            !
            DEALLOCATE(aux)
            !
@@ -342,13 +457,21 @@ SUBROUTINE do_exc_comp()
   CALL deallocate_gpu()
 #endif
   !
-  !$acc exit data delete(projection_matrix,dvg_exc)
-  DEALLOCATE(projection_matrix)
-  IF((.NOT. westpp_l_spin_flip) .AND. westpp_l_compute_tdm) THEN
+  !$acc exit data delete(dvg_exc)
+  IF(ALLOCATED(proj_mat_r)) THEN
+     !$acc exit data delete(proj_mat_r)
+     DEALLOCATE(proj_mat_r)
+  ENDIF
+  IF(ALLOCATED(proj_mat_c)) THEN
+     !$acc exit data delete(proj_mat_c)
+     DEALLOCATE(proj_mat_c)
+  ENDIF
+  IF(ALLOCATED(d0psi)) THEN
      !$acc exit data delete(d0psi)
      DEALLOCATE(d0psi)
-     DEALLOCATE(transition_dipole)
   ENDIF
+  IF(ALLOCATED(trans_dip_r)) DEALLOCATE(trans_dip_r)
+  IF(ALLOCATED(trans_dip_c)) DEALLOCATE(trans_dip_c)
   !
   IF(mpime == root) THEN
      OPEN(NEWUNIT=iunit,FILE=TRIM(logfile))

@@ -251,11 +251,13 @@ MODULE wbse_dv
     ENDIF
 #endif
     !
-    !$acc parallel loop present(dvhart,dfftp,dfftp%nlm,dfftp%nl)
-    DO ig = 1, ngm
-       dvhart(dfftp%nlm(ig)) = CONJG(dvhart(dfftp%nl(ig)))
-    ENDDO
-    !$acc end parallel
+    IF(dfftp%lgamma) THEN
+       !$acc parallel loop present(dvhart,dfftp,dfftp%nlm,dfftp%nl)
+       DO ig = 1, ngm
+          dvhart(dfftp%nlm(ig)) = CONJG(dvhart(dfftp%nl(ig)))
+       ENDDO
+       !$acc end parallel
+    ENDIF
     !
     ! Transformed back to real space
     !

@@ -15,7 +15,7 @@ SUBROUTINE calc_tau()
   !-----------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP
-  USE pwcom,                ONLY : isk,npw,ngk
+  USE pwcom,                ONLY : isk,current_spin,current_k,npw,ngk
   USE wavefunctions,        ONLY : evc
   USE westcom,              ONLY : lrwfc,iuwfc,ev,dvg,n_pdep_eigen_to_use,npwqx,nbnd_occ,l_pdep,&
                                  & spin_channel,l_bse,l_hybrid_tddft,localization
@@ -38,7 +38,7 @@ SUBROUTINE calc_tau()
   !
   ! Workspace
   !
-  INTEGER :: iks,current_spin
+  INTEGER :: iks
   INTEGER :: nbndval
   LOGICAL :: spin_resolve
   !
@@ -102,6 +102,9 @@ SUBROUTINE calc_tau()
   !
   DO iks = 1,kpt_pool%nloc
      !
+     ! ... Set k-point and spin
+     !
+     current_k = iks
      current_spin = isk(iks)
      npw = ngk(iks)
      nbndval = nbnd_occ(iks)
@@ -113,7 +116,7 @@ SUBROUTINE calc_tau()
      ENDIF
      !
      IF((.NOT. spin_resolve) .OR. (spin_resolve .AND. current_spin == spin_channel)) THEN
-        CALL calc_tau_single_q(current_spin,nbndval)
+        CALL calc_tau_single_q(nbndval)
      ENDIF
      !
   ENDDO
@@ -141,7 +144,7 @@ SUBROUTINE calc_tau()
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE calc_tau_single_q(current_spin,nbndval)
+SUBROUTINE calc_tau_single_q(nbndval)
   !-----------------------------------------------------------------------
   !
   ! Compute and store screened exchange integrals tau in case of BSE, or unscreened exchange
@@ -149,12 +152,13 @@ SUBROUTINE calc_tau_single_q(current_spin,nbndval)
   !
   USE kinds,                ONLY : DP
   USE cell_base,            ONLY : omega
+  USE control_flags,        ONLY : gamma_only
   USE io_push,              ONLY : io_push_title
   USE westcom,              ONLY : ev,dvg,wbse_init_calculation,wbse_init_save_dir,l_bse,l_pdep,&
                                  & chi_kernel,l_local_repr,overlap_thr,n_trunc_bands
   USE fft_base,             ONLY : dffts
   USE noncollin_module,     ONLY : npol
-  USE pwcom,                ONLY : npw,npwx,lsda
+  USE pwcom,                ONLY : current_spin,current_k,igk_k,npw,npwx,lsda
   USE pdep_io,              ONLY : pdep_merge_and_write_G
   USE class_idistribute,    ONLY : idistribute
   USE distribution_center,  ONLY : bandpair
@@ -162,6 +166,7 @@ SUBROUTINE calc_tau_single_q(current_spin,nbndval)
   USE mp,                   ONLY : mp_barrier,mp_sum
   USE lsda_mod,             ONLY : nspin
   USE fft_at_gamma,         ONLY : single_fwfft_gamma,single_invfft_gamma,double_invfft_gamma
+  USE fft_at_k,             ONLY : single_fwfft_k,single_invfft_k
   USE mp_global,            ONLY : intra_image_comm,my_image_id,inter_bgrp_comm,nbgrp,&
                                  & intra_bgrp_comm,me_bgrp
   USE conversions,          ONLY : itoa
@@ -176,7 +181,7 @@ SUBROUTINE calc_tau_single_q(current_spin,nbndval)
   !
   ! I/O
   !
-  INTEGER, INTENT(IN) :: current_spin,nbndval
+  INTEGER, INTENT(IN) :: nbndval
   !
   ! Workspace
   !
@@ -196,6 +201,7 @@ SUBROUTINE calc_tau_single_q(current_spin,nbndval)
   REAL(DP), ALLOCATABLE :: aux_rr(:)
   COMPLEX(DP), ALLOCATABLE :: aux_r(:),aux1_r(:,:),aux1_g(:)
   REAL(DP), ALLOCATABLE :: frspin(:,:)
+  COMPLEX(DP), ALLOCATABLE :: psic2(:)
   !
   CHARACTER(LEN=:), ALLOCATABLE :: lockfile
   CHARACTER(LEN=:), ALLOCATABLE :: fname
@@ -259,7 +265,7 @@ SUBROUTINE calc_tau_single_q(current_spin,nbndval)
         ovl_value = ovl_matrix(ibnd,jbnd)
         !
         IF(.NOT. l_local_repr .OR. ovl_value >= overlap_thr) THEN
-           IF(jbnd >= ibnd) THEN
+           IF(.NOT. gamma_only .OR. jbnd >= ibnd) THEN
               do_idx = do_idx+1
               !
               idx_matrix(do_idx,1) = ibnd+n_trunc_bands
@@ -284,6 +290,10 @@ SUBROUTINE calc_tau_single_q(current_spin,nbndval)
   IF(l_pdep) THEN
      ALLOCATE(dotp(pert%nloc))
      !$acc enter data create(dotp)
+  ENDIF
+  IF(.NOT. gamma_only) THEN
+     ALLOCATE(psic2(dffts%nnr))
+     !$acc enter data create(psic2)
   ENDIF
   !
   IF(l_pdep) THEN
@@ -311,21 +321,40 @@ SUBROUTINE calc_tau_single_q(current_spin,nbndval)
      !
      IF(.NOT. l_skip) THEN
         !
-        IF(l_local_repr) THEN
-           CALL double_invfft_gamma(dffts,npw,npwx,evc_loc(:,ibnd),evc_loc(:,jbnd),psic,'Wave')
+        IF(gamma_only) THEN
+           !
+           IF(l_local_repr) THEN
+              CALL double_invfft_gamma(dffts,npw,npwx,evc_loc(:,ibnd),evc_loc(:,jbnd),psic,'Wave')
+           ELSE
+              CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd_g),evc(:,jbnd_g),psic,'Wave')
+           ENDIF
+           !
+           !$acc parallel loop present(aux_r,psic)
+           DO ir = 1,dffts_nnr
+              aux_r(ir) = CMPLX(REAL(psic(ir),KIND=DP)*AIMAG(psic(ir))/omega,KIND=DP)
+           ENDDO
+           !$acc end parallel
+           !
+           ! aux_r -> aux1_g
+           !
+           CALL single_fwfft_gamma(dffts,npw,npwx,aux_r,aux1_g,'Wave')
+           !
         ELSE
-           CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd_g),evc(:,jbnd_g),psic,'Wave')
+           !
+           CALL single_invfft_k(dffts,npw,npwx,evc(:,ibnd_g),psic,'Wave',igk_k(:,current_k))
+           CALL single_invfft_k(dffts,npw,npwx,evc(:,jbnd_g),psic2,'Wave',igk_k(:,current_k))
+           !
+           !$acc parallel loop present(aux_r,psic,psic2)
+           DO ir = 1,dffts_nnr
+              aux_r(ir) = psic(ir)*CONJG(psic2(ir))/omega
+           ENDDO
+           !$acc end parallel
+           !
+           ! aux_r -> aux1_g
+           !
+           CALL single_fwfft_k(dffts,npw,npwx,aux_r,aux1_g,'Wave',igk_k(:,current_k))
+           !
         ENDIF
-        !
-        !$acc parallel loop present(aux_r,psic)
-        DO ir = 1,dffts_nnr
-           aux_r(ir) = CMPLX(REAL(psic(ir),KIND=DP)*AIMAG(psic(ir))/omega,KIND=DP)
-        ENDDO
-        !$acc end parallel
-        !
-        ! aux_r -> aux1_g
-        !
-        CALL single_fwfft_gamma(dffts,npw,npwx,aux_r,aux1_g,'Wave')
         !
         ! vc in fock like term
         !
@@ -536,6 +565,10 @@ SUBROUTINE calc_tau_single_q(current_spin,nbndval)
   IF(l_pdep) THEN
      !$acc exit data delete(dotp)
      DEALLOCATE(dotp)
+  ENDIF
+  IF(.NOT. gamma_only) THEN
+     !$acc exit data delete(psic2)
+     DEALLOCATE(psic2)
   ENDIF
   !
   DEALLOCATE(idx_matrix)

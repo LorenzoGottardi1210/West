@@ -43,7 +43,7 @@ SUBROUTINE do_exc_resp()
   INTEGER :: barra_load
   REAL(DP) :: w1
   REAL(DP), ALLOCATABLE :: rho(:)
-  COMPLEX(DP), ALLOCATABLE :: psic_aux(:)
+  COMPLEX(DP), ALLOCATABLE :: psic2(:)
   CHARACTER(LEN=512) :: fname
   TYPE(bar_type) :: barra
   !
@@ -71,8 +71,8 @@ SUBROUTINE do_exc_resp()
   ALLOCATE(rho(dffts%nnr))
   !$acc enter data create(rho) copyin(dvg_exc)
   IF(.NOT. gamma_only) THEN
-     !$acc enter data create(psic_aux)
-     ALLOCATE(psic_aux(dffts%nnr))
+     !$acc enter data create(psic2)
+     ALLOCATE(psic2(dffts%nnr))
   ENDIF
   !
   dffts_nnr = dffts%nnr
@@ -135,11 +135,11 @@ SUBROUTINE do_exc_resp()
            ELSE
               !
               CALL single_invfft_k(dffts,npw,npwx,evc(:,ibnd),psic,'Wave',igk_k(:,current_k))
-              CALL single_invfft_k(dffts,npw,npwx,dvg_exc(:,ibnd,iks,lexc),psic_aux,'Wave',igk_k(:,current_k))
+              CALL single_invfft_k(dffts,npw,npwx,dvg_exc(:,ibnd,iks,lexc),psic2,'Wave',igk_k(:,current_k))
               !
-              !$acc parallel loop present(rho,psic,psic_aux)
+              !$acc parallel loop present(rho,psic,psic2)
               DO ir = 1, dffts_nnr
-                 rho(ir) = rho(ir) + w1 * CONJG(psic(ir))*psic_aux(ir)
+                 rho(ir) = rho(ir) + w1 * CONJG(psic(ir))*psic2(ir)
               ENDDO
               !$acc end parallel
               !
@@ -162,8 +162,8 @@ SUBROUTINE do_exc_resp()
   !$acc exit data delete(rho,dvg_exc)
   DEALLOCATE(rho)
   IF(.NOT. gamma_only) THEN
-     !$acc exit data delete(psic_aux)
-     DEALLOCATE(psic_aux)
+     !$acc exit data delete(psic2)
+     DEALLOCATE(psic2)
   ENDIF
   !
 #if defined(__CUDA)

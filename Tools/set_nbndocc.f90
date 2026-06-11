@@ -21,7 +21,8 @@ SUBROUTINE set_nbndocc()
                                    & tfixed_occ
   USE constants,              ONLY : degspin
   USE noncollin_module,       ONLY : noncolin
-  USE westcom,                ONLY : nbndval0x,nbnd_occ,l_frac_occ,occupation,nbnd_occ_full,docc_thr
+  USE westcom,                ONLY : nbndval0x,nbnd_occ,l_frac_occ,occupation,nbnd_occ_full,&
+                                   & docc_thr,code
   USE control_flags,          ONLY : gamma_only
   USE mp_global,              ONLY : inter_pool_comm
   USE mp,                     ONLY : mp_max
@@ -31,15 +32,23 @@ SUBROUTINE set_nbndocc()
   INTEGER :: spin,iks,ibnd
   !
   !
-  IF(ltetra) CALL errore("set_nbndocc", "tetrahedral occupation not implemented", 1)
+  IF(ltetra) CALL errore("set_nbndocc","tetrahedral occupation not implemented",1)
   !
   ! Determine if occupations are fractional
   !
   l_frac_occ = tfixed_occ .OR. lgauss
   !
-  IF(l_frac_occ .AND. .NOT. gamma_only) THEN
-     CALL errore("set_nbndocc", "fraction occupation only implemented for gamma-only case", 1)
-  ENDIF
+  SELECT CASE(TRIM(code))
+  CASE('WSTAT','WFREQ')
+     IF(l_frac_occ .AND. .NOT. gamma_only) &
+     & CALL errore("set_nbndocc","fractional occupation only implemented for gamma case",1)
+  CASE('WESTPP')
+  CASE('WBSE_INIT','WBSE')
+     IF(l_frac_occ) &
+     & CALL errore("set_nbndocc","fractional occupation not implemented for "//TRIM(code),1)
+  CASE DEFAULT
+     CALL errore('set_nbndocc','unknown code',1)
+  END SELECT
   !
   IF(ALLOCATED(occupation)) DEALLOCATE(occupation)
   IF(ALLOCATED(nbnd_occ)) DEALLOCATE(nbnd_occ)
@@ -112,7 +121,7 @@ SUBROUTINE set_nbndocc()
      !
   ENDIF
   !
-  IF(MAXVAL(nbnd_occ) == 0) CALL errore("set_nbndocc", "nbnd_occ was not set", 1)
+  IF(MAXVAL(nbnd_occ) == 0) CALL errore("set_nbndocc","nbnd_occ was not set",1)
   !
   nbndval0x = MAXVAL(nbnd_occ)
   !

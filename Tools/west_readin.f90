@@ -11,7 +11,7 @@
 ! Marco Govoni
 !
 !-----------------------------------------------------------------------
-SUBROUTINE west_readin(code)
+SUBROUTINE west_readin()
   !-----------------------------------------------------------------------
   !
   USE gvecs,            ONLY : doublegrid
@@ -20,13 +20,10 @@ SUBROUTINE west_readin(code)
   USE pwcom,            ONLY : nkstot,lsda
   USE symm_base,        ONLY : nosym
   USE control_flags,    ONLY : noinv
-  USE westcom,          ONLY : l_spin_flip
+  USE westcom,          ONLY : code,l_spin_flip
+  USE xc_lib,           ONLY : xclib_dft_is
   !
   IMPLICIT NONE
-  !
-  ! I/O
-  !
-  CHARACTER(*),INTENT(IN) :: code
   !
   ! Workspace
   !
@@ -69,6 +66,7 @@ SUBROUTINE west_readin(code)
      nkpt = nkstot
   ENDIF
   !
+  IF(xclib_dft_is('meta')) CALL errore('west_readin','metaGGA not implemented',1)
   IF(okvan) CALL errore('west_readin','ultrasoft pseudopotential not implemented',1)
   IF(doublegrid) CALL errore('west_readin','double grid not implemented',1)
   IF(nkpt > 1) THEN
@@ -81,8 +79,8 @@ SUBROUTINE west_readin(code)
   !
   SELECT CASE(TRIM(code))
   CASE('WESTPP')
-     IF(nbgrp > 1) CALL errore('west_readin','band groups not implemented for westpp',1)
-     IF(npool > 1) CALL errore('west_readin','pools not implemented for westpp',1)
+     IF(nbgrp > 1) CALL errore('west_readin','band groups not implemented for WESTPP',1)
+     IF(npool > 1) CALL errore('west_readin','pools not implemented for WESTPP',1)
   CASE('WBSE_INIT','WBSE')
      IF(npool > 1 .AND. l_spin_flip) CALL errore('west_readin','pools not implemented for spin flip',1)
   END SELECT

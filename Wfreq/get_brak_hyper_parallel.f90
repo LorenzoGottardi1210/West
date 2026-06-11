@@ -47,11 +47,7 @@ SUBROUTINE get_brak_hyper_parallel(dvpsi,NRHS,NLSTEPS,x,brak,idistr)
   COMPLEX(DP), ALLOCATABLE :: dvpsi2(:,:)
 #endif
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('brak')
-#else
   CALL start_clock('brak')
-#endif
   !
 #if !defined(__CUDA)
   ALLOCATE(tmp(idistr%nlocx,NRHS,NLSTEPS))
@@ -133,11 +129,7 @@ SUBROUTINE get_brak_hyper_parallel(dvpsi,NRHS,NLSTEPS,x,brak,idistr)
   DEALLOCATE(dvpsi2)
 #endif
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('brak')
-#else
   CALL stop_clock('brak')
-#endif
   !
 END SUBROUTINE
 !
@@ -178,11 +170,7 @@ SUBROUTINE get_brak_hyper_parallel_complex(dvpsi,NRHS,NLSTEPS,x,brak,idistr)
   COMPLEX(DP), ALLOCATABLE :: dvpsi2(:,:)
 #endif
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('brak')
-#else
   CALL start_clock('brak')
-#endif
   !
 #if !defined(__CUDA)
   ALLOCATE(tmp(idistr%nlocx,NRHS,NLSTEPS))
@@ -264,10 +252,6 @@ SUBROUTINE get_brak_hyper_parallel_complex(dvpsi,NRHS,NLSTEPS,x,brak,idistr)
   DEALLOCATE(dvpsi2)
 #endif
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('brak')
-#else
   CALL stop_clock('brak')
-#endif
   !
 END SUBROUTINE

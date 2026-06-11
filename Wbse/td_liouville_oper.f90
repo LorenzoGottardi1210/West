@@ -66,11 +66,7 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
 #endif
   INTEGER, PARAMETER :: flks(2) = [2,1]
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('liouv')
-#else
   CALL start_clock('liouv')
-#endif
   !
   dffts_nnr = dffts%nnr
   band_group_myoffset = band_group%myoffset
@@ -357,11 +353,7 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
   DEALLOCATE(hevc1)
 #endif
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('liouv')
-#else
   CALL stop_clock('liouv')
-#endif
   !
 END SUBROUTINE
 !
@@ -413,11 +405,7 @@ SUBROUTINE west_apply_liouvillian_btda(evc1,evc1_new,sf)
   COMPLEX(DP), ALLOCATABLE :: evc2_new(:,:)
 #endif
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('liouv_btda')
-#else
   CALL start_clock('liouv_btda')
-#endif
   !
   dffts_nnr = dffts%nnr
   !
@@ -602,10 +590,6 @@ SUBROUTINE west_apply_liouvillian_btda(evc1,evc1_new,sf)
   DEALLOCATE(evc2_new)
 #endif
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('liouv_btda')
-#else
   CALL stop_clock('liouv_btda')
-#endif
   !
 END SUBROUTINE

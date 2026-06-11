@@ -51,11 +51,7 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
   COMPLEX(DP), ALLOCATABLE :: psic2(:), caux(:), gaux(:), gaux2(:), raux(:)
   INTEGER, PARAMETER :: flks(2) = [2,1]
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('hyb_k1234')
-#else
   CALL start_clock('hyb_k1234')
-#endif
   !
   SELECT CASE(iterm)
   CASE(1,2)
@@ -269,11 +265,7 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
   DEALLOCATE(gaux2)
   DEALLOCATE(raux)
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('hyb_k1234')
-#else
   CALL stop_clock('hyb_k1234')
-#endif
   !
 END SUBROUTINE
 !
@@ -317,11 +309,7 @@ SUBROUTINE bse_kernel_term4(current_spin, bse_kd4, sf)
   REAL(DP), ALLOCATABLE :: dotp(:)
   INTEGER, PARAMETER :: flks(2) = [2,1]
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('bse_k4')
-#else
   CALL start_clock('bse_k4')
-#endif
   !
   dffts_nnr = dffts%nnr
   !
@@ -477,10 +465,6 @@ SUBROUTINE bse_kernel_term4(current_spin, bse_kd4, sf)
   DEALLOCATE(dotp)
   DEALLOCATE(raux)
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('bse_k4')
-#else
   CALL stop_clock('bse_k4')
-#endif
   !
 END SUBROUTINE

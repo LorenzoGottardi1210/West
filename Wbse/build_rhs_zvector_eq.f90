@@ -1006,11 +1006,7 @@ SUBROUTINE compute_ddvxc_5p(dvg_exc_tmp,ddvxc)
   TYPE(scf_type) :: a_rho
   COMPLEX(DP), ALLOCATABLE :: dvrs(:,:)
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('ddvxc_5p')
-#else
   CALL start_clock('ddvxc_5p')
-#endif
   !
   CALL create_scf_type(a_rho)
   !
@@ -1077,11 +1073,7 @@ SUBROUTINE compute_ddvxc_5p(dvg_exc_tmp,ddvxc)
   !
   CALL destroy_scf_type(a_rho)
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('ddvxc_5p')
-#else
   CALL stop_clock('ddvxc_5p')
-#endif
   !
 END SUBROUTINE
 !
@@ -1120,11 +1112,7 @@ SUBROUTINE compute_ddvxc_sf(dvg_exc_tmp,ddvxc)
   COMPLEX(DP), ALLOCATABLE :: drho_sf(:,:),drho_sf_copy(:,:)
   CHARACTER(LEN=:), ALLOCATABLE :: fname
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('ddvxc_sf')
-#else
   CALL start_clock('ddvxc_sf')
-#endif
   !
   IF(nlcc_any) CALL errore('compute_ddvxc_sf','nlcc_any not supported',1)
   !
@@ -1214,11 +1202,7 @@ SUBROUTINE compute_ddvxc_sf(dvg_exc_tmp,ddvxc)
   DEALLOCATE(drho_sf)
   DEALLOCATE(drho_sf_copy)
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('ddvxc_sf')
-#else
   CALL stop_clock('ddvxc_sf')
-#endif
   !
 END SUBROUTINE
 !

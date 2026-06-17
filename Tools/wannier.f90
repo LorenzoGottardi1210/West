@@ -235,6 +235,7 @@ MODULE wann_loc_wfc
                   IF(il == 6) prod_gat(ir) = ws3
                   IF(il == 7) prod_gat(ir) = wc4
                   IF(il == 8) prod_gat(ir) = ws4
+                  !
                ENDDO
                !
             ENDDO
@@ -298,11 +299,7 @@ MODULE wann_loc_wfc
       REAL(DP),EXTERNAL :: get_clock
       CHARACTER(20),EXTERNAL :: human_readable_time
       !
-#if defined(__CUDA)
-      CALL start_clock_gpu('jade')
-#else
       CALL start_clock('jade')
-#endif
       !
       CALL io_push_title('Wannier (JADE)')
       !
@@ -512,11 +509,7 @@ MODULE wann_loc_wfc
       !
       IF(.NOT. conv) WRITE(stdout,'(7X,"** WARNING : JADE not converged in ",I5," steps")') itermax
       !
-#if defined(__CUDA)
-      CALL stop_clock_gpu('jade')
-#else
       CALL stop_clock('jade')
-#endif
       !
     END SUBROUTINE
     !

@@ -51,11 +51,7 @@ SUBROUTINE wbse_calc_dens(devc, drho, sf)
 #endif
   INTEGER, PARAMETER :: flks(2) = [2,1]
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('calc_dens')
-#else
   CALL start_clock('calc_dens')
-#endif
   !
   dffts_nnr = dffts%nnr
   !
@@ -133,10 +129,6 @@ SUBROUTINE wbse_calc_dens(devc, drho, sf)
   DEALLOCATE(tmp_r)
 #endif
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('calc_dens')
-#else
   CALL stop_clock('calc_dens')
-#endif
   !
 END SUBROUTINE

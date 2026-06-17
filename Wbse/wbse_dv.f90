@@ -139,11 +139,7 @@ MODULE wbse_dv
     ! dvhart: response Hartree potential
     ! dvaux_mt: auxiliary array for Martyna-Tuckerman correction
     !
-#if defined(__CUDA)
-    CALL start_clock_gpu('dv_drho')
-#else
     CALL start_clock('dv_drho')
-#endif
     !
     dfftp_nnr = dfftp%nnr
     !
@@ -290,11 +286,7 @@ MODULE wbse_dv
     DEALLOCATE(dvhart)
 #endif
     !
-#if defined(__CUDA)
-    CALL stop_clock_gpu('dv_drho')
-#else
     CALL stop_clock('dv_drho')
-#endif
     !
   END SUBROUTINE
   !
@@ -438,11 +430,7 @@ MODULE wbse_dv
     !
     INTEGER :: is, ir, dfftp_nnr
     !
-#if defined(__CUDA)
-    CALL start_clock_gpu('dv_drho_sf')
-#else
     CALL start_clock('dv_drho_sf')
-#endif
     !
     IF(nlcc_any) CALL errore('wbse_dv_of_drho_sf', 'nlcc_any not supported', 1)
     IF(do_comp_mt) CALL errore('wbse_dv_of_drho_sf', 'do_comp_mt not supported', 1)
@@ -457,11 +445,7 @@ MODULE wbse_dv
     ENDDO
     !$acc end parallel
     !
-#if defined(__CUDA)
-    CALL stop_clock_gpu('dv_drho_sf')
-#else
     CALL stop_clock('dv_drho_sf')
-#endif
     !
   END SUBROUTINE
   !

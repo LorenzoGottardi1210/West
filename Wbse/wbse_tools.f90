@@ -72,11 +72,7 @@ MODULE wbse_tools
       INTEGER,ALLOCATABLE :: nbnd_loc(:)
       INTEGER,PARAMETER :: flks(2) = [2,1]
       !
-#if defined(__CUDA)
-      CALL start_clock_gpu('build_hr')
-#else
       CALL start_clock('build_hr')
-#endif
       !
       pert_nglob = pert%nglob
       kpt_pool_nloc = kpt_pool%nloc
@@ -200,11 +196,7 @@ MODULE wbse_tools
       !$acc exit data delete(nbnd_loc)
       DEALLOCATE(nbnd_loc)
       !
-#if defined(__CUDA)
-      CALL stop_clock_gpu('build_hr')
-#else
       CALL stop_clock('build_hr')
-#endif
       !
     END SUBROUTINE
     !
@@ -240,11 +232,7 @@ MODULE wbse_tools
       COMPLEX(DP),ALLOCATABLE :: hg(:,:,:,:)
       INTEGER,PARAMETER :: flks(2) = [2,1]
       !
-#if defined(__CUDA)
-      CALL start_clock_gpu('update_vr')
-#else
       CALL start_clock('update_vr')
-#endif
       !
       kpt_pool_nloc = kpt_pool%nloc
       !
@@ -486,11 +474,7 @@ MODULE wbse_tools
       DEALLOCATE(hg)
       DEALLOCATE(nbnd_loc)
       !
-#if defined(__CUDA)
-      CALL stop_clock_gpu('update_vr')
-#else
       CALL stop_clock('update_vr')
-#endif
       !
     END SUBROUTINE
     !
@@ -524,11 +508,7 @@ MODULE wbse_tools
       COMPLEX(DP),ALLOCATABLE :: hg(:,:,:,:)
       INTEGER,PARAMETER :: flks(2) = [2,1]
       !
-#if defined(__CUDA)
-      CALL start_clock_gpu('refresh_vr')
-#else
       CALL start_clock('refresh_vr')
-#endif
       !
       pert_nloc = pert%nloc
       kpt_pool_nloc = kpt_pool%nloc
@@ -707,11 +687,7 @@ MODULE wbse_tools
       DEALLOCATE(hg)
       DEALLOCATE(nbnd_loc)
       !
-#if defined(__CUDA)
-      CALL stop_clock_gpu('refresh_vr')
-#else
       CALL stop_clock('refresh_vr')
-#endif
       !
     END SUBROUTINE
     !
@@ -745,11 +721,7 @@ MODULE wbse_tools
       INTEGER,PARAMETER :: flks(2) = [2,1]
       REAL(DP),PARAMETER :: minimum = 1._DP
       !
-#if defined(__CUDA)
-      CALL start_clock_gpu('precd_ag')
-#else
       CALL start_clock('precd_ag')
-#endif
       !
       kpt_pool_nloc = kpt_pool%nloc
       band_group_myoffset = band_group%myoffset
@@ -848,11 +820,7 @@ MODULE wbse_tools
          !
       ENDIF
       !
-#if defined(__CUDA)
-      CALL stop_clock_gpu('precd_ag')
-#else
       CALL stop_clock('precd_ag')
-#endif
       !
     END SUBROUTINE
     !

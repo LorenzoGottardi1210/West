@@ -47,11 +47,7 @@ SUBROUTINE apply_hqp_to_m_wfcs(iks,m,f,g)
   COMPLEX(DP), ALLOCATABLE :: ps_c(:,:)
 #endif
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('hqp')
-#else
   CALL start_clock('hqp')
-#endif
   !
   delta = delta_qp(iks)
   !
@@ -121,10 +117,6 @@ SUBROUTINE apply_hqp_to_m_wfcs(iks,m,f,g)
   ENDDO
   !$acc end parallel
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('hqp')
-#else
   CALL stop_clock('hqp')
-#endif
   !
 END SUBROUTINE

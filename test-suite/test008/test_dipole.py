@@ -28,6 +28,11 @@ def test_dipole():
     ref_dip = read_dipole_from_json("./test008/ref/westpp.json")
     test_dip = read_dipole_from_json("./test008/test.westpp.save/westpp.json")
 
+    maxDiff = 0.0
+    for key in ref_dip:
+        maxDiff = max(maxDiff, np.amax(np.abs(np.abs(ref_dip[key]) - np.abs(test_dip[key]))))
+    print(f"Dipole (westpp) max diff: {maxDiff}")
+
     for key in ref_dip:
         np.testing.assert_almost_equal(
             np.abs(ref_dip[key]),

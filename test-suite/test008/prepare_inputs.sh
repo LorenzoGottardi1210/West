@@ -74,5 +74,7 @@ input_west:
 westpp_control:
   westpp_calculation: LBD
   westpp_range: [61,70]
-  westpp_box: [0, 4, 0, 4, 0, 4]
+  westpp_format: S
+  westpp_r0: [0,0,0]
+  westpp_rmax: 3
 EOF

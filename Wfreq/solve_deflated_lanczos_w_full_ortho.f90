@@ -66,11 +66,7 @@ SUBROUTINE solve_deflated_lanczos_w_full_ortho(nbnd_to_deflate, NRHS, NLSTEPS, b
   r(:,:) = b
   !$acc end kernels
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu("lan_H")
-#else
   CALL start_clock( "lan_H" )
-#endif
   !
   ! FROM R TO Q & BETA
   !
@@ -348,10 +344,6 @@ SUBROUTINE solve_deflated_lanczos_w_full_ortho(nbnd_to_deflate, NRHS, NLSTEPS, b
   IF(.NOT. gamma_only) DEALLOCATE(tmp_c)
 #endif
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu("lan_H")
-#else
   CALL stop_clock("lan_H")
-#endif
   !
 END SUBROUTINE

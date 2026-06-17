@@ -313,7 +313,7 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
         !
         CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part1(:,:,iks),l_spin_flip,3) 
         !
-        ! the contents of evc1_all and evc1J_all are reverted back (probably not necessary)
+        ! the contents of evc1_all and evc1J_all are reverted back (may be unnecessary)
         CALL gather_bands(dvg_exc_tmp_I(:,:,iks),evc1_all(:,:,iks),req)
         CALL west_mp_wait(req)
         CALL gather_bands(dvg_exc_tmp_J(:,:,iks),evc1J_all(:,:,iks),req)

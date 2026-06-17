@@ -720,11 +720,7 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
   COMPLEX(DP),PARAMETER :: mone = (-1._DP,0._DP)
   INTEGER,PARAMETER :: flks(2) = [2,1]
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('paramgs')
-#else
   CALL start_clock('paramgs')
-#endif
   !
   ! 1) Run some checks
   !
@@ -916,11 +912,7 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
   DEALLOCATE(vec)
   DEALLOCATE(zbraket)
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('paramgs')
-#else
   CALL stop_clock('paramgs')
-#endif
   !
 END SUBROUTINE
 !

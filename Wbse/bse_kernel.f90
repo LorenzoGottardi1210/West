@@ -55,11 +55,7 @@ SUBROUTINE bse_kernel_gamma(current_spin,evc1,bse_k1d,sf)
   COMPLEX(DP), PARAMETER :: one = (1._DP,0._DP)
   INTEGER, PARAMETER :: flks(2) = [2,1]
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('bse_kernel')
-#else
   CALL start_clock('bse_kernel')
-#endif
   !
   nbnd_do = nbndval0x-n_trunc_bands
   dffts_nnr = dffts%nnr
@@ -245,10 +241,6 @@ SUBROUTINE bse_kernel_gamma(current_spin,evc1,bse_k1d,sf)
   DEALLOCATE(gaux)
 #endif
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('bse_kernel')
-#else
   CALL stop_clock('bse_kernel')
-#endif
   !
 END SUBROUTINE

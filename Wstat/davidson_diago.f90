@@ -949,11 +949,7 @@ SUBROUTINE do_mgs(amat,m_global_start,m_global_end)
   COMPLEX(DP),ALLOCATABLE :: vec(:)
   COMPLEX(DP),PARAMETER :: mone = (-1._DP,0._DP)
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('paramgs')
-#else
   CALL start_clock('paramgs')
-#endif
   !
   ! 1) Run some checks
   !
@@ -1112,11 +1108,7 @@ SUBROUTINE do_mgs(amat,m_global_start,m_global_end)
   CALL mp_bcast(amat,0,inter_bgrp_comm)
   CALL mp_bcast(amat,0,inter_pool_comm)
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('paramgs')
-#else
   CALL stop_clock('paramgs')
-#endif
   !
 END SUBROUTINE
 !

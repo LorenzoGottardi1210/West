@@ -17,13 +17,12 @@ PROGRAM wfreq
   ! This is the main program that calculates the GW.
   !
   USE check_stop,           ONLY : check_stop_init
-  USE mp_global,            ONLY : mp_startup, mp_global_end
-  USE west_environment,     ONLY : west_environment_start, west_environment_end
-  USE westcom,              ONLY : wfreq_calculation
+  USE mp_global,            ONLY : mp_startup,mp_global_end
+  USE west_environment,     ONLY : west_environment_start,west_environment_end
+  USE westcom,              ONLY : wfreq_calculation,code
   !
   IMPLICIT NONE
   !
-  CHARACTER(LEN=9) :: code = 'WFREQ'
   LOGICAL :: lgate(9)
   INTEGER :: i
   !
@@ -37,9 +36,11 @@ PROGRAM wfreq
   CALL mp_startup ( start_images = .TRUE. )
 #endif
   !
-  CALL west_environment_start( code )
+  code = 'WFREQ'
   !
-  CALL west_readin( code )
+  CALL west_environment_start( )
+  !
+  CALL west_readin( )
   !
   CALL wfreq_setup( )
   !
@@ -95,7 +96,7 @@ PROGRAM wfreq
   !
   CALL west_print_clocks( )
   !
-  CALL west_environment_end( code )
+  CALL west_environment_end( )
   !
   CALL mp_global_end( )
   !

@@ -40,11 +40,7 @@ SUBROUTINE k_psi(lda,n,m,psi,hpsi)
   !
   INTEGER :: ibnd,ig
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('k_psi')
-#else
   CALL start_clock('k_psi')
-#endif
   !
   ! ... Here we apply the kinetic energy (k+G)^2 psi
   !
@@ -76,10 +72,6 @@ SUBROUTINE k_psi(lda,n,m,psi,hpsi)
      !$acc end parallel
   ENDIF
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('k_psi')
-#else
   CALL stop_clock('k_psi')
-#endif
   !
 END SUBROUTINE

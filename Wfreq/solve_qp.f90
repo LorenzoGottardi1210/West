@@ -96,11 +96,7 @@ SUBROUTINE solve_qp_gamma(l_secant,l_generate_plot,l_QDET)
   INTEGER :: pert_nloc,ifr_nloc,rfr_nloc
   INTEGER,ALLOCATABLE :: l2g(:)
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('solve_qp')
-#else
   CALL start_clock('solve_qp')
-#endif
   !
   CALL io_push_title('Collecting results from W and G')
   !
@@ -658,11 +654,7 @@ SUBROUTINE solve_qp_gamma(l_secant,l_generate_plot,l_QDET)
   !
   CALL wfreq_db_write( )
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('solve_qp')
-#else
   CALL stop_clock( 'solve_qp' )
-#endif
   !
 END SUBROUTINE
 !
@@ -725,11 +717,7 @@ SUBROUTINE solve_qp_k(l_secant,l_generate_plot)
   INTEGER :: pert_nloc,ifr_nloc,rfr_nloc
   INTEGER,ALLOCATABLE :: l2g(:)
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('solve_qp')
-#else
   CALL start_clock('solve_qp')
-#endif
   !
   CALL io_push_title('Collecting results from W and G')
   !
@@ -1101,11 +1089,7 @@ SUBROUTINE solve_qp_k(l_secant,l_generate_plot)
   !
   CALL wfreq_db_write( )
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('solve_qp')
-#else
   CALL stop_clock( 'solve_qp' )
-#endif
   !
 END SUBROUTINE
 !

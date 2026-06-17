@@ -29,13 +29,12 @@ SUBROUTINE init_pw_arrays(ncalbec)
   USE uspp,                   ONLY : nkb
   USE noncollin_module,       ONLY : npol
   USE buffers,                ONLY : open_buffer,close_buffer,save_buffer
-  USE westcom,                ONLY : n_exx_lowrank,iuwfc,lrwfc
+  USE westcom,                ONLY : n_exx_lowrank,iuwfc,lrwfc,code
   USE gvecs,                  ONLY : doublegrid
   USE pw_restart_new,         ONLY : read_collected_wfc
   USE lsda_mod,               ONLY : nspin
   USE wvfct,                  ONLY : nbnd,npwx
   USE kinds,                  ONLY : i8b
-  USE command_line_options,   ONLY : command_line
   !
   IMPLICIT NONE
   !
@@ -49,11 +48,9 @@ SUBROUTINE init_pw_arrays(ncalbec)
   LOGICAL :: exst
   LOGICAL :: exst_mem
   LOGICAL :: l_open_buffer
-  LOGICAL :: is_wbse_init
   INTEGER(i8b) :: lrwfc_int8
   INTEGER(i8b) :: recl_int8
   INTEGER(i8b),PARAMETER :: max_int4 = 2147483647
-  LOGICAL,EXTERNAL :: matches
   !
   CALL start_clock('init_pw_ar')
   !
@@ -82,8 +79,7 @@ SUBROUTINE init_pw_arrays(ncalbec)
   l_open_buffer = .FALSE.
   IF(.NOT. gamma_only) l_open_buffer = .TRUE.
   IF(nks > 1) l_open_buffer = .TRUE.
-  is_wbse_init = matches('wbse_init.x',command_line)
-  IF(.NOT. is_wbse_init) THEN
+  IF(TRIM(code) /= 'WBSE_INIT') THEN
      IF(xclib_dft_is('hybrid') .AND. n_exx_lowrank < 1) l_open_buffer = .TRUE.
   ENDIF
   !

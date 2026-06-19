@@ -126,13 +126,6 @@ SUBROUTINE wbse_davidson_diago ( )
      CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
   !$acc enter data create(dvg_exc_tmp)
   !
-  IF (l_eenac) THEN
-     ALLOCATE( dvg_exc_tmp_J( npwx, band_group%nlocx, kpt_pool%nloc), STAT=ierr )
-     IF( ierr /= 0 ) &
-     CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
-     !$acc enter data create(dvg_exc_tmp_J)
-  ENDIF
-  !
   ALLOCATE( dng_exc( npwx, band_group%nlocx, kpt_pool%nloc, pert%nlocx ), STAT=ierr )
   IF( ierr /= 0 ) &
      CALL errore( 'chidiago',' cannot allocate dng ', ABS(ierr) )
@@ -556,11 +549,7 @@ SUBROUTINE wbse_davidson_diago ( )
   DEALLOCATE( conv )
   DEALLOCATE( ew )
   IF (l_eenac) THEN
-     IF (eenac_stateI==eenac_stateJ) THEN
-        CALL errore('chidiago','eeNAC must be computed between different states',1)
-     ELSE
-        omega_JI = ev(eenac_stateJ) - ev(eenac_stateI)
-     ENDIF
+     omega_JI = ev(eenac_stateJ) - ev(eenac_stateI)
      DEALLOCATE( ev )
   ELSE
      omega_JI = 0._DP
@@ -621,7 +610,7 @@ SUBROUTINE wbse_davidson_diago ( )
         ! root image computes geNAC
         !
         computing_eenac = .FALSE.
-        CALL wbse_calc_nac( dvg_exc_tmp, dvg_exc_tmp, omega_JI )
+        CALL wbse_calc_nac( dvg_exc_tmp )
         !
         IF (.NOT.l_eenac) THEN
            !$acc exit data delete(dvg_exc_tmp)
@@ -631,6 +620,17 @@ SUBROUTINE wbse_davidson_diago ( )
      ENDIF
      !
      IF (l_eenac) THEN 
+        IF (eenac_stateI==eenac_stateJ) THEN
+           CALL errore('chidiago','eeNAC must be computed between different states',1)
+        ENDIF
+        IF (ABS(omega_JI) <= 1.0E-8_DP) THEN
+           CALL errore('wbse_calc_nac', &
+                       'omega_JI is zero or too small for eeNAC calculation', 1)
+        ENDIF
+        ALLOCATE( dvg_exc_tmp_J( npwx, band_group%nlocx, kpt_pool%nloc), STAT=ierr )
+        IF( ierr /= 0 ) &
+        CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
+        !$acc enter data create(dvg_exc_tmp_J)      
         !
         ! send eenac_stateI to root image
         !
@@ -648,25 +648,25 @@ SUBROUTINE wbse_davidson_diago ( )
         !
         !$acc update device(dvg_exc_tmp_J)
         !
-        DEALLOCATE( dvg_exc )
+        DEALLOCATE(dvg_exc)
         !
         ! root image computes eeNAC
         !
         computing_eenac = .TRUE.
-        CALL wbse_calc_nac( dvg_exc_tmp, dvg_exc_tmp_J, omega_JI )
+        CALL wbse_calc_nac( dvg_exc_tmp,dvg_exc_tmp_J,omega_JI)
         !
         !$acc exit data delete(dvg_exc_tmp_J)
-        DEALLOCATE( dvg_exc_tmp_J )
+        DEALLOCATE(dvg_exc_tmp_J)
         !$acc exit data delete(dvg_exc_tmp)
-        DEALLOCATE( dvg_exc_tmp )
+        DEALLOCATE(dvg_exc_tmp)
         !
      ENDIF
      !
   ELSE
      !
-     DEALLOCATE( dvg_exc )
+     DEALLOCATE(dvg_exc)
      !$acc exit data delete(dvg_exc_tmp)
-     DEALLOCATE( dvg_exc_tmp )
+     DEALLOCATE(dvg_exc_tmp)
      !
   ENDIF
   !

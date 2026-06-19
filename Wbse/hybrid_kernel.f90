@@ -196,18 +196,20 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
               CALL double_invfft_gamma(dffts,npw,npwx,gaux,gaux2,caux,'Wave')
               !
               IF(iterm == 3) THEN
-                 !$acc parallel loop present(raux,psic2,caux)
                  IF (l_forces .AND. .NOT.computing_eenac) THEN
+                    !$acc parallel loop present(raux,psic2,caux)
                     DO ir = 1,dffts_nnr
                        raux(ir) = raux(ir)+REAL(psic2(ir),KIND=DP)*caux(ir)
                     ENDDO
+                    !$acc end parallel
                  ENDIF
                  IF (l_eenac .AND. computing_eenac) THEN
+                    !$acc parallel loop present(raux,psic2,caux)
                     DO ir = 1,dffts_nnr
                        raux(ir) = raux(ir)+AIMAG(psic2(ir))*caux(ir)
                     ENDDO
+                    !$acc end parallel
                  ENDIF
-                 !$acc end parallel
               ELSE
                  !$acc parallel loop present(raux,psic2,caux)
                  DO ir = 1,dffts_nnr
@@ -237,18 +239,20 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
               CALL single_invfft_gamma(dffts,npw,npwx,gaux,caux,'Wave')
               !
               IF(iterm == 3) THEN
-                 !$acc parallel loop present(raux,psic2,caux)
                  IF (l_forces .AND. .NOT.computing_eenac) THEN
+                    !$acc parallel loop present(raux,psic2,caux)
                     DO ir = 1,dffts_nnr
                        raux(ir) = raux(ir)+REAL(psic2(ir),KIND=DP)*REAL(caux(ir),KIND=DP)
                     ENDDO
+                    !$acc end parallel
                  ENDIF
                  IF (l_eenac .AND. computing_eenac) THEN
+                    !$acc parallel loop present(raux,psic2,caux)
                     DO ir = 1,dffts_nnr
                        raux(ir) = raux(ir)+AIMAG(psic2(ir))*REAL(caux(ir),KIND=DP)
                     ENDDO
+                    !$acc end parallel
                  ENDIF
-                 !$acc end parallel
               ELSE
                  !$acc parallel loop present(raux,psic2,caux)
                  DO ir = 1,dffts_nnr

@@ -8,6 +8,7 @@
 ! This file is part of WEST.
 !
 ! Contributors to this file:
+! Stefano Paolo Villani
 ! 
 !-----------------------------------------------------------------------
 SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
@@ -36,8 +37,8 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   ! I/O
   !
   COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  REAL(DP), INTENT(IN)  :: omega_JI 
+  COMPLEX(DP), INTENT(IN), OPTIONAL :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
+  REAL(DP), INTENT(IN), OPTIONAL :: omega_JI 
   !
   ! Workspace
   !
@@ -64,6 +65,10 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   nac_vec(:) = 0._DP
   !
   IF (l_eenac .AND. computing_eenac) THEN
+     IF (.NOT. PRESENT(dvg_exc_tmp_J) ) &
+           &CALL errore('wbse_calc_nac','eeNAC requested without state J',1)
+     IF (.NOT. PRESENT(omega_JI)) &
+           &CALL errore('wbse_calc_nac','eeNAC requested without energy difference',1)
      ALLOCATE(reqs(kpt_pool%nloc))
      ALLOCATE(dvgdvg_mat(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc))
      ALLOCATE(dvgdvg_mat_JI(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc))
@@ -76,12 +81,11 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
      !
      ! drhox1
      !
-     IF (omega_JI==0._DP) CALL errore('chidiago','energy difference too small to compute eeNAC',1)
      CALL wbse_calc_drhox1_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
      !
      CALL wbse_nacvec_drhox1(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, nac_vec, omega_JI)
      !
-     ! < dvg | dvg >
+     ! < dvgI | dvgJ >
      !
      CALL mp_waitall(reqs)
 #if !defined(__GPU_MPI)

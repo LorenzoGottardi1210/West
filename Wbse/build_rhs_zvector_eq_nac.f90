@@ -8,7 +8,7 @@
 ! This file is part of WEST.
 !
 ! Contributors to this file:
-! Yu Jin, Victor Yu
+! Stefano Paolo Villani
 !
 !-----------------------------------------------------------------------
 SUBROUTINE build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dvgdvg_mat_JI, drhox1, drhox2, z_rhs_vec, omega_JI)
@@ -124,8 +124,7 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
   USE io_push,              ONLY : io_push_title
   USE gvect,                ONLY : gstart
   USE westcom,              ONLY : iuwfc,lrwfc,nbnd_occ,nbndval0x,n_trunc_bands,l_bse,&
-                                 & l_hybrid_tddft,l_spin_flip,evc1_all, &
-                                 & evc1J_all 
+                                 & l_hybrid_tddft,l_spin_flip,evc1_all,evc1J_all 
   USE pwcom,                ONLY : isk,lsda,nspin,current_spin,current_k,ngk,npwx,npw
   USE mp,                   ONLY : mp_bcast
   USE buffers,              ONLY : get_buffer
@@ -1525,7 +1524,7 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      !
      CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part4(:,:,iks),l_spin_flip,4) 
      !
-     ! the contents of evc1_all and evc1J_all is reverted back (probably not necessary)
+     ! the contents of evc1_all and evc1J_all is reverted back (may be unnecessary)
      CALL gather_bands(dvg_exc_tmp_I(:,:,iks_do),evc1_all(:,:,iks_do),req)
      CALL west_mp_wait(req)
      CALL gather_bands(dvg_exc_tmp_J(:,:,iks_do),evc1J_all(:,:,iks_do),req)

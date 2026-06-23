@@ -21,8 +21,7 @@ SUBROUTINE wbse_memory_report()
   USE mp_global,           ONLY : nbgrp
   USE mp_world,            ONLY : mpime,root
   USE westcom,             ONLY : l_bse,l_hybrid_tddft,l_forces,l_local_repr,l_lanczos,nbndval0x,&
-                                & n_trunc_bands,n_pdep_basis,npwqx,logfile,&
-                                & l_genac, l_eenac 
+                                & n_trunc_bands,n_pdep_basis,npwqx,logfile,l_genac,l_eenac
   USE distribution_center, ONLY : pert,kpt_pool
   USE noncollin_module,    ONLY : npol
   USE json_module,         ONLY : json_file
@@ -163,7 +162,6 @@ SUBROUTINE wbse_memory_report()
      mem_tot = mem_tot + mem_partial
   ENDIF
   !
-  ! Not sure if this is a correct estimate
   IF( l_genac .OR. l_eenac ) THEN
      nbndall = nbndloc*4
      IF( l_bse .OR. l_hybrid_tddft ) THEN

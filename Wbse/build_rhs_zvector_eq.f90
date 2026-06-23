@@ -285,6 +285,7 @@ SUBROUTINE rhs_zvector_part1(dvg_exc_tmp,dvgdvg_mat,drhox1,drhox2,z_rhs_vec)
 #if !defined(__GPU_MPI)
         !$acc update device(evc1_all(:,:,iks))
 #endif
+        !
         IF(l_hybrid_tddft) THEN
            CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),z_rhs_vec_part1(:,:,iks),.FALSE.)
         ELSEIF(l_bse) THEN
@@ -325,7 +326,7 @@ SUBROUTINE rhs_zvector_part1(dvg_exc_tmp,dvgdvg_mat,drhox1,drhox2,z_rhs_vec)
   DEALLOCATE(dotp)
   !$acc exit data delete(z_rhs_vec_part1)
   DEALLOCATE(z_rhs_vec_part1)
-  IF(xclib_dft_is('hybrid')) THEN
+  IF(ALLOCATED(tmp_vec)) THEN
      !$acc exit data delete(tmp_vec)
      DEALLOCATE(tmp_vec)
   ENDIF

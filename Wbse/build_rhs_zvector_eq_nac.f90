@@ -1,5 +1,5 @@
 !
-! Copyright (C) 2015-2025 M. Govoni
+! Copyright (C) 2015-2026 M. Govoni
 ! This file is distributed under the terms of the
 ! GNU General Public License. See the file `License'
 ! in the root directory of the present distribution,
@@ -11,7 +11,7 @@
 ! Stefano Paolo Villani
 !
 !-----------------------------------------------------------------------
-SUBROUTINE build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dvgdvg_mat_JI, drhox1, drhox2, z_rhs_vec, omega_JI)
+SUBROUTINE build_rhs_zvector_eq_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,dvgdvg_mat,dvgdvg_mat_JI,drhox1,drhox2,z_rhs_vec,omega_JI)
   !-----------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP
@@ -34,17 +34,17 @@ SUBROUTINE build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, 
   !
   ! I/O
   !
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  REAL(DP), INTENT(IN)  :: omega_JI
-  REAL(DP), INTENT(IN) :: dvgdvg_mat(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc)
-  REAL(DP), INTENT(IN) :: dvgdvg_mat_JI(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc)
-  COMPLEX(DP), INTENT(IN) :: drhox1(dffts%nnr, nspin), drhox2(dffts%nnr, nspin)
-  COMPLEX(DP), INTENT(OUT) :: z_rhs_vec(npwx*npol, band_group%nlocx, kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol,band_group%nlocx,kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol,band_group%nlocx,kpt_pool%nloc)
+  REAL(DP), INTENT(IN) :: omega_JI
+  REAL(DP), INTENT(IN) :: dvgdvg_mat(nbndval0x-n_trunc_bands,band_group%nlocx,kpt_pool%nloc)
+  REAL(DP), INTENT(IN) :: dvgdvg_mat_JI(nbndval0x-n_trunc_bands,band_group%nlocx,kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: drhox1(dffts%nnr,nspin),drhox2(dffts%nnr,nspin)
+  COMPLEX(DP), INTENT(OUT) :: z_rhs_vec(npwx*npol,band_group%nlocx,kpt_pool%nloc)
   !
   ! Workspace
   !
-  INTEGER :: iks,ig,lbnd,ibnd,nbndval,nbnd_do
+  INTEGER :: iks,lbnd,ibnd,nbndval,nbnd_do
   !
   CALL start_clock('build_zvec')
   !
@@ -58,25 +58,29 @@ SUBROUTINE build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, 
   !
   ! part2: d < a | K1e | a > / d | v >
   !
-  ! Two calls because of the derivative wrt to real and complex orbitals
-  IF(.NOT. l_bse_triplet) CALL rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
-  IF(.NOT. l_bse_triplet) CALL rhs_zvector_part2_eenac( dvg_exc_tmp_J, dvg_exc_tmp_I, z_rhs_vec )
+  IF(.NOT. l_bse_triplet) THEN
+     !
+     ! Two calls because of the derivative wrt to real and complex orbitals
+     !
+     CALL rhs_zvector_part2_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
+     CALL rhs_zvector_part2_eenac(dvg_exc_tmp_J,dvg_exc_tmp_I,z_rhs_vec)
+  ENDIF
   !
   ! part3: d^2 vxc / d rho^2 contribution to d < a | K1e | a > / d | v >
   !
-  IF((.NOT. l_bse) .AND. (.NOT. l_bse_triplet)) CALL rhs_zvector_part3_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
+  IF((.NOT. l_bse) .AND. (.NOT. l_bse_triplet)) CALL rhs_zvector_part3_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
   !
   ! part4: d < a | K1d | a > / d | v >
   !
   IF(l_hybrid_tddft) THEN
-     CALL rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
+     CALL rhs_zvector_part4_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
   ELSEIF(l_bse) THEN
-     CALL errore('build_rhs_zvector_eq_eenac', 'BSE NACs not implemented', 1) 
+     CALL errore('build_rhs_zvector_eq_eenac','BSE NACs not implemented',1)
   ENDIF
   !
   ! part1: d < a | D | a > / d | v >
   !
-  CALL rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dvgdvg_mat_JI, drhox1, drhox2, z_rhs_vec )
+  CALL rhs_zvector_part1_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,dvgdvg_mat,dvgdvg_mat_JI,drhox1,drhox2,z_rhs_vec)
   !
   DO iks = 1,kpt_pool%nloc
      !
@@ -109,14 +113,15 @@ SUBROUTINE build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, 
   ENDDO
   !
   !$acc kernels present(z_rhs_vec)
-  z_rhs_vec = -z_rhs_vec / omega_JI
+  z_rhs_vec(:,:,:) = -z_rhs_vec / omega_JI
   !$acc end kernels
+  !
   CALL stop_clock('build_zvec')
   !
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dvgdvg_mat_JI, drhox1, drhox2, z_rhs_vec )
+SUBROUTINE rhs_zvector_part1_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,dvgdvg_mat,dvgdvg_mat_JI,drhox1,drhox2,z_rhs_vec)
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -124,7 +129,7 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
   USE io_push,              ONLY : io_push_title
   USE gvect,                ONLY : gstart
   USE westcom,              ONLY : iuwfc,lrwfc,nbnd_occ,nbndval0x,n_trunc_bands,l_bse,&
-                                 & l_hybrid_tddft,l_spin_flip,evc1_all,evc1J_all 
+                                 & l_hybrid_tddft,l_spin_flip,evc1_all,evc1J_all
   USE pwcom,                ONLY : isk,lsda,nspin,current_spin,current_k,ngk,npwx,npw
   USE mp,                   ONLY : mp_bcast
   USE buffers,              ONLY : get_buffer
@@ -147,12 +152,12 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
   !
   ! I/O
   !
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  REAL(DP), INTENT(IN) :: dvgdvg_mat(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc)
-  REAL(DP), INTENT(IN) :: dvgdvg_mat_JI(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc)
-  COMPLEX(DP), INTENT(IN) :: drhox1(dffts%nnr, nspin), drhox2(dffts%nnr, nspin)
-  COMPLEX(DP), INTENT(INOUT) :: z_rhs_vec(npwx*npol, band_group%nlocx, kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol,band_group%nlocx,kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol,band_group%nlocx,kpt_pool%nloc)
+  REAL(DP), INTENT(IN) :: dvgdvg_mat(nbndval0x-n_trunc_bands,band_group%nlocx,kpt_pool%nloc)
+  REAL(DP), INTENT(IN) :: dvgdvg_mat_JI(nbndval0x-n_trunc_bands,band_group%nlocx,kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: drhox1(dffts%nnr,nspin),drhox2(dffts%nnr,nspin)
+  COMPLEX(DP), INTENT(INOUT) :: z_rhs_vec(npwx*npol,band_group%nlocx,kpt_pool%nloc)
   !
   ! Workspace
   !
@@ -170,7 +175,7 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
   !
   dffts_nnr = dffts%nnr
   !
-  ALLOCATE(z_rhs_vec_part1(npwx*npol, band_group%nlocx, kpt_pool%nloc))
+  ALLOCATE(z_rhs_vec_part1(npwx*npol,band_group%nlocx,kpt_pool%nloc))
   !$acc enter data create(z_rhs_vec_part1)
   !
   !$acc kernels present(z_rhs_vec_part1)
@@ -179,7 +184,7 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
   !
   IF(l_bse .OR. l_hybrid_tddft) THEN
      !
-     ALLOCATE(tmp_vec(npwx*npol, band_group%nlocx, kpt_pool%nloc))
+     ALLOCATE(tmp_vec(npwx*npol,band_group%nlocx,kpt_pool%nloc))
      !$acc enter data create(tmp_vec)
      !
      !$acc kernels present(tmp_vec)
@@ -190,7 +195,7 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
   !
   ! Compute drhox
   !
-  ALLOCATE(drhox(dffts%nnr, nspin))
+  ALLOCATE(drhox(dffts%nnr,nspin))
   !
   DO iks = 1,nspin
      !
@@ -243,14 +248,14 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
      !
      ! double bands @ gamma
      !
-     DO lbnd = 1, nbnd_do-MOD(nbnd_do,2), 2
+     DO lbnd = 1,nbnd_do-MOD(nbnd_do,2),2
         !
         ibnd = band_group%l2g(lbnd)+n_trunc_bands
         jbnd = band_group%l2g(lbnd+1)+n_trunc_bands
         !
         CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),evc(:,jbnd),psic,'Wave')
         !
-        !$acc parallel loop present(drhox)
+        !$acc parallel loop present(psic,drhox)
         DO ir = 1,dffts_nnr
            psic(ir) = psic(ir)*CMPLX(REAL(drhox(ir,current_spin),KIND=DP),KIND=DP)
         ENDDO
@@ -269,7 +274,7 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
         !
         CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),psic,'Wave')
         !
-        !$acc parallel loop present(drhox)
+        !$acc parallel loop present(psic,drhox)
         DO ir = 1,dffts_nnr
            psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(drhox(ir,current_spin),KIND=DP),KIND=DP)
         ENDDO
@@ -279,16 +284,17 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
         !
      ENDIF
      !
-     ! factor 2 from the derivative wrt real and complex orbitals
+     ! Factor of 2 from the derivative wrt real and complex orbitals
+     !
      !$acc kernels present(z_rhs_vec_part1)
-     z_rhs_vec_part1 = 2._DP*z_rhs_vec_part1
+     z_rhs_vec_part1(:,:,:) = 2._DP*z_rhs_vec_part1
      !$acc end kernels
-     IF(l_bse) CALL errore('build_rhs_zvector_eq_eenac', 'BSE NACs not implemented', 1) 
+     IF(l_bse) CALL errore('build_rhs_zvector_eq_eenac','BSE NACs not implemented',1)
      !
      IF(l_hybrid_tddft) THEN
         !
         ! hybrid_kernel_term3 called once for a_I and once for a_J (derivative wrt real and complex orbitals)
-        ! it uses global variable evc1_all and evc1J_all: 
+        ! it uses global variable evc1_all and evc1J_all:
         ! first time evc1_all contains a_I and evc1J_all contains a_J, second time contents are switched
         !
         CALL gather_bands(dvg_exc_tmp_I(:,:,iks),evc1_all(:,:,iks),req)
@@ -297,29 +303,31 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
         CALL west_mp_wait(req)
 #if !defined(__GPU_MPI)
         !$acc update device(evc1_all(:,:,iks),evc1J_all(:,:,iks))
-#endif    
+#endif
         !
-        CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part1(:,:,iks),l_spin_flip,3) 
+        CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part1(:,:,iks),l_spin_flip,3)
         !
-        ! switch the contents of evc1_all and evc1J_all  
+        ! switch the contents of evc1_all and evc1J_all
+        !
         CALL gather_bands(dvg_exc_tmp_J(:,:,iks),evc1_all(:,:,iks),req)
         CALL west_mp_wait(req)
         CALL gather_bands(dvg_exc_tmp_I(:,:,iks),evc1J_all(:,:,iks),req)
         CALL west_mp_wait(req)
 #if !defined(__GPU_MPI)
         !$acc update device(evc1_all(:,:,iks),evc1J_all(:,:,iks))
-#endif    
+#endif
         !
-        CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part1(:,:,iks),l_spin_flip,3) 
+        CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part1(:,:,iks),l_spin_flip,3)
         !
         ! the contents of evc1_all and evc1J_all are reverted back (may be unnecessary)
+        !
         CALL gather_bands(dvg_exc_tmp_I(:,:,iks),evc1_all(:,:,iks),req)
         CALL west_mp_wait(req)
         CALL gather_bands(dvg_exc_tmp_J(:,:,iks),evc1J_all(:,:,iks),req)
         CALL west_mp_wait(req)
 #if !defined(__GPU_MPI)
         !$acc update device(evc1_all(:,:,iks),evc1J_all(:,:,iks))
-#endif        
+#endif
         !
         IF(l_spin_flip) THEN
            iks_do = flks(iks)
@@ -327,13 +335,14 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
            iks_do = iks
         ENDIF
         !
-        ! called two times accounts for the derivative wrt to real and complex orbitals distributed over bgrp
+        ! Two calls because of the derivative wrt to real and complex orbitals
+        !
         !$acc host_data use_device(evc,dvgdvg_mat,dvgdvg_mat_JI,tmp_vec)
         CALL DGEMM('N','N',2*npwx*npol,nbnd_do,nbndval-n_trunc_bands,-1._DP,evc(1,1+n_trunc_bands),&
-        & 2*npwx*npol,dvgdvg_mat(:,:,iks_do),nbndval0x-n_trunc_bands,0._DP,tmp_vec(1,1,iks),2*npwx*npol)
+        & 2*npwx*npol,dvgdvg_mat(1,1,iks_do),nbndval0x-n_trunc_bands,0._DP,tmp_vec(1,1,iks),2*npwx*npol)
         !
         CALL DGEMM('N','N',2*npwx*npol,nbnd_do,nbndval-n_trunc_bands,-1._DP,evc(1,1+n_trunc_bands),&
-        & 2*npwx*npol,dvgdvg_mat_JI(:,:,iks_do),nbndval0x-n_trunc_bands,1._DP,tmp_vec(1,1,iks),2*npwx*npol)
+        & 2*npwx*npol,dvgdvg_mat_JI(1,1,iks_do),nbndval0x-n_trunc_bands,1._DP,tmp_vec(1,1,iks),2*npwx*npol)
         !$acc end host_data
         !
         CALL gather_bands(tmp_vec(:,:,iks),evc1_all(:,:,iks),req)
@@ -378,7 +387,7 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
   DEALLOCATE(dotp)
   !$acc exit data delete(z_rhs_vec_part1)
   DEALLOCATE(z_rhs_vec_part1)
-  IF(l_bse .OR. l_hybrid_tddft) THEN
+  IF(ALLOCATED(tmp_vec)) THEN
      !$acc exit data delete(tmp_vec)
      DEALLOCATE(tmp_vec)
   ENDIF
@@ -388,7 +397,7 @@ SUBROUTINE rhs_zvector_part1_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dv
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) 
+SUBROUTINE rhs_zvector_part2_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -417,9 +426,9 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   !
   ! I/O
   !
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  COMPLEX(DP), INTENT(INOUT) :: z_rhs_vec(npwx*npol, band_group%nlocx, kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol,band_group%nlocx,kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol,band_group%nlocx,kpt_pool%nloc)
+  COMPLEX(DP), INTENT(INOUT) :: z_rhs_vec(npwx*npol,band_group%nlocx,kpt_pool%nloc)
   !
   ! Workspace
   !
@@ -432,9 +441,6 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   COMPLEX(DP), ALLOCATABLE :: dvrs(:,:)
   COMPLEX(DP), ALLOCATABLE :: dpcpart(:,:)
   REAL(DP), ALLOCATABLE :: dv_vv_mat(:,:)
-#if defined(__CUDA)
-  ATTRIBUTES(PINNED) :: dpcpart,dv_vv_mat
-#endif
   TYPE(bar_type) :: barra
   INTEGER, PARAMETER :: flks(2) = [2,1]
   !
@@ -443,10 +449,10 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   dffts_nnr = dffts%nnr
   band_group_myoffset = band_group%myoffset
   !
-  ALLOCATE(z_rhs_vec_part2(npwx*npol, band_group%nlocx, kpt_pool%nloc))
+  ALLOCATE(z_rhs_vec_part2(npwx*npol,band_group%nlocx,kpt_pool%nloc))
   ALLOCATE(aux_g(npwx*npol,2))
-  ALLOCATE(dv_vv_mat(nbndval0x-n_trunc_bands, band_group%nlocx))
-  ALLOCATE(dpcpart(npwx*npol, nbndval0x-n_trunc_bands))
+  ALLOCATE(dv_vv_mat(nbndval0x-n_trunc_bands,band_group%nlocx))
+  ALLOCATE(dpcpart(npwx*npol,nbndval0x-n_trunc_bands))
   ALLOCATE(dvrs(dffts%nnr,nspin))
   !$acc enter data create(z_rhs_vec_part2,aux_g,dv_vv_mat,dpcpart,dvrs)
   !
@@ -527,7 +533,7 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
            !
            CALL single_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp_J(:,lbnd,iks),psic,'Wave')
            !
-           !$acc parallel loop present(dvrs)
+           !$acc parallel loop present(psic,dvrs)
            DO ir = 1,dffts_nnr
               psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
            ENDDO
@@ -565,7 +571,7 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
               reduce = 0._DP
               reduce2 = 0._DP
               !$acc parallel loop reduction(+:reduce,reduce2) present(evc,aux_g) copy(reduce,reduce2)
-              DO ig = 1, npw
+              DO ig = 1,npw
                  reduce = reduce + REAL(evc(ig,ibndp),KIND=DP) * REAL(aux_g(ig,1),KIND=DP) &
                  &               + AIMAG(evc(ig,ibndp)) * AIMAG(aux_g(ig,1))
                  reduce2 = reduce2 + REAL(evc(ig,ibndp),KIND=DP) * REAL(aux_g(ig,2),KIND=DP) &
@@ -603,7 +609,7 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
               !
               reduce = 0._DP
               !$acc parallel loop reduction(+:reduce) present(evc,aux_g) copy(reduce)
-              DO ig = 1, npw
+              DO ig = 1,npw
                  reduce = reduce + REAL(evc(ig,ibndp),KIND=DP) * REAL(aux_g(ig,1),KIND=DP) &
                  &               + AIMAG(evc(ig,ibndp)) * AIMAG(aux_g(ig,1))
               ENDDO
@@ -629,9 +635,9 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
         & 2*npwx*npol,dv_vv_mat,nbndval0x-n_trunc_bands,0._DP,dpcpart,2*npwx*npol)
         !$acc end host_data
         !
-        !$acc update host(dpcpart)
+        !$acc host_data use_device(dpcpart)
         CALL mp_sum(dpcpart,inter_bgrp_comm)
-        !$acc update device(dpcpart)
+        !$acc end host_data
         !
         !$acc parallel loop collapse(2) present(z_rhs_vec_part2,dpcpart)
         DO lbnd = 1,nbnd_do
@@ -667,11 +673,13 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
         !
      ENDDO
      !
+     CALL stop_bar_type(barra,'zvec2')
+     !
   ELSE
      !
      IF(l_spin_flip_kernel) THEN
         !
-        ALLOCATE(evc_copy(npwx, nbndval0x-n_trunc_bands))
+        ALLOCATE(evc_copy(npwx,nbndval0x-n_trunc_bands))
         !$acc enter data create(evc_copy)
         !
         ! Calculation of the charge density response
@@ -722,7 +730,7 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
               !
               CALL double_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp_J(:,lbnd,iks_do),dvg_exc_tmp_J(:,lbnd+1,iks_do),psic,'Wave')
               !
-              !$acc parallel loop present(dvrs)
+              !$acc parallel loop present(psic,dvrs)
               DO ir = 1,dffts_nnr
                  psic(ir) = psic(ir)*CMPLX(REAL(dvrs(ir,iks_do),KIND=DP),KIND=DP)
               ENDDO
@@ -740,7 +748,7 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
               !
               CALL single_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp_J(:,lbnd,iks_do),psic,'Wave')
               !
-              !$acc parallel loop present(dvrs)
+              !$acc parallel loop present(psic,dvrs)
               DO ir = 1,dffts_nnr
                  psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(dvrs(ir,iks_do),KIND=DP),KIND=DP)
               ENDDO
@@ -803,7 +811,7 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
                  reduce = 0._DP
                  reduce2 = 0._DP
                  !$acc parallel loop reduction(+:reduce,reduce2) present(evc,aux_g) copy(reduce,reduce2)
-                 DO ig = 1, npw
+                 DO ig = 1,npw
                     reduce = reduce + REAL(evc(ig,ibndp),KIND=DP) * REAL(aux_g(ig,1),KIND=DP) &
                     &               + AIMAG(evc(ig,ibndp)) * AIMAG(aux_g(ig,1))
                     reduce2 = reduce2 + REAL(evc(ig,ibndp),KIND=DP) * REAL(aux_g(ig,2),KIND=DP) &
@@ -841,7 +849,7 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
                  !
                  reduce = 0._DP
                  !$acc parallel loop reduction(+:reduce) present(evc,aux_g) copy(reduce)
-                 DO ig = 1, npw
+                 DO ig = 1,npw
                     reduce = reduce + REAL(evc(ig,ibndp),KIND=DP) * REAL(aux_g(ig,1),KIND=DP) &
                     &               + AIMAG(evc(ig,ibndp)) * AIMAG(aux_g(ig,1))
                  ENDDO
@@ -867,9 +875,9 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
            & 2*npwx*npol,dv_vv_mat,nbndval0x-n_trunc_bands,0._DP,dpcpart,2*npwx*npol)
            !$acc end host_data
            !
-           !$acc update host(dpcpart)
+           !$acc host_data use_device(dpcpart)
            CALL mp_sum(dpcpart,inter_bgrp_comm)
-           !$acc update device(dpcpart)
+           !$acc end host_data
            !
            ! recompute nbnd_do for the current spin channel
            !
@@ -913,14 +921,14 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
            !
         ENDDO
         !
+        CALL stop_bar_type(barra,'zvec2')
+        !
         !$acc exit data delete(evc_copy)
         DEALLOCATE(evc_copy)
         !
      ENDIF
      !
   ENDIF
-  !
-  CALL stop_bar_type(barra,'zvec2')
   !
   ALLOCATE(dotp(nspin))
   !
@@ -940,7 +948,7 @@ SUBROUTINE rhs_zvector_part2_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE rhs_zvector_part3_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) 
+SUBROUTINE rhs_zvector_part3_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
@@ -967,9 +975,9 @@ SUBROUTINE rhs_zvector_part3_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   !
   ! I/O
   !
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  COMPLEX(DP), INTENT(INOUT) :: z_rhs_vec(npwx*npol, band_group%nlocx, kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol,band_group%nlocx,kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol,band_group%nlocx,kpt_pool%nloc)
+  COMPLEX(DP), INTENT(INOUT) :: z_rhs_vec(npwx*npol,band_group%nlocx,kpt_pool%nloc)
   !
   ! Workspace
   !
@@ -994,9 +1002,9 @@ SUBROUTINE rhs_zvector_part3_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   ALLOCATE(ddvxc(dffts%nnr,nspin))
   !
   IF(.NOT. l_spin_flip) THEN
-     CALL compute_ddvxc_5p_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc)
+     CALL compute_ddvxc_5p_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,ddvxc)
   ELSE
-     CALL compute_ddvxc_sf_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc) 
+     CALL compute_ddvxc_sf_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,ddvxc)
   ENDIF
   !
   !$acc enter data copyin(ddvxc)
@@ -1041,7 +1049,7 @@ SUBROUTINE rhs_zvector_part3_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
         !
         CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),evc(:,jbnd),psic,'Wave')
         !
-        !$acc parallel loop present(ddvxc)
+        !$acc parallel loop present(psic,ddvxc)
         DO ir = 1,dffts_nnr
            psic(ir) = psic(ir)*CMPLX(REAL(ddvxc(ir,current_spin),KIND=DP),KIND=DP)
         ENDDO
@@ -1060,7 +1068,7 @@ SUBROUTINE rhs_zvector_part3_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
         !
         CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),psic,'Wave')
         !
-        !$acc parallel loop present(ddvxc)
+        !$acc parallel loop present(psic,ddvxc)
         DO ir = 1,dffts_nnr
            psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(ddvxc(ir,current_spin),KIND=DP),KIND=DP)
         ENDDO
@@ -1078,8 +1086,9 @@ SUBROUTINE rhs_zvector_part3_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
         !$acc end parallel
      ENDIF
      !
+     ! Factor of 2 from the derivative wrt real and complex orbitals
+     !
      !$acc parallel loop collapse(2) present(z_rhs_vec,z_rhs_vec_part3)
-     ! the factor 2 is from the derivative wrt to real and complex orbitals
      DO lbnd = 1,nbnd_do
         DO ig = 1,npw
            z_rhs_vec(ig,lbnd,iks) = z_rhs_vec(ig,lbnd,iks)-2._DP*z_rhs_vec_part3(ig,lbnd,iks)
@@ -1108,7 +1117,7 @@ SUBROUTINE rhs_zvector_part3_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE compute_ddvxc_5p_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc )
+SUBROUTINE compute_ddvxc_5p_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,ddvxc)
   !-----------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP
@@ -1126,39 +1135,35 @@ SUBROUTINE compute_ddvxc_5p_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc )
   !
   ! I/O
   !
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  COMPLEX(DP), INTENT(OUT) :: ddvxc(dffts%nnr, nspin)
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol,band_group%nlocx,kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol,band_group%nlocx,kpt_pool%nloc)
+  COMPLEX(DP), INTENT(OUT) :: ddvxc(dffts%nnr,nspin)
   !
   ! Workspace
   !
   INTEGER :: iks,ir,indk
-  REAL(DP), ALLOCATABLE :: aux_vxc(:,:,:), vxc(:,:), rdvrs(:,:), rdvrs_I(:,:),  rdvrs_J(:,:)
+  REAL(DP), ALLOCATABLE :: aux_vxc(:,:,:),vxc(:,:),rdvrs(:,:),rdvrs_I(:,:),rdvrs_J(:,:)
   REAL(DP) :: etxc,vtxc
-  TYPE (scf_type) :: a_rho
+  TYPE(scf_type) :: a_rho
   COMPLEX(DP), ALLOCATABLE :: dvrs_I(:,:)
   COMPLEX(DP), ALLOCATABLE :: dvrs_J(:,:)
   INTEGER :: isgn
-  INTEGER, DIMENSION(2) :: signs = [-1, 1]
+  INTEGER, DIMENSION(2) :: signs = [-1,1]
   COMPLEX(DP), ALLOCATABLE :: ddvxc_tmp(:,:,:)
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('ddvxc_5p')
-#else
   CALL start_clock('ddvxc_5p')
-#endif
   !
   CALL create_scf_type(a_rho)
   !
-  ALLOCATE(aux_vxc(dffts%nnr, nspin, 5))
-  ALLOCATE(vxc(dffts%nnr, nspin))
+  ALLOCATE(aux_vxc(dffts%nnr,nspin,5))
+  ALLOCATE(vxc(dffts%nnr,nspin))
   ALLOCATE(dvrs_I(dffts%nnr,nspin))
   ALLOCATE(dvrs_J(dffts%nnr,nspin))
-  ALLOCATE(ddvxc_tmp(dffts%nnr, nspin, 2))
+  ALLOCATE(ddvxc_tmp(dffts%nnr,nspin,2))
   !$acc enter data create(dvrs_I,dvrs_J)
-  ALLOCATE(rdvrs(dffts%nnr, nspin))
-  ALLOCATE(rdvrs_I(dffts%nnr, nspin))
-  ALLOCATE(rdvrs_J(dffts%nnr, nspin))
+  ALLOCATE(rdvrs(dffts%nnr,nspin))
+  ALLOCATE(rdvrs_I(dffts%nnr,nspin))
+  ALLOCATE(rdvrs_J(dffts%nnr,nspin))
   !
   ! Calculation of the charge density response
   !
@@ -1180,44 +1185,44 @@ SUBROUTINE compute_ddvxc_5p_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc )
      !
   ELSEIF(nspin == 4) THEN
      !
-     CALL errore('compute_ddvxc_5p_eenac', 'nspin == 4 not supported', 1)
+     CALL errore('compute_ddvxc_5p_eenac','nspin == 4 not supported',1)
      !
   ENDIF
   !
-  DO isgn = 1, 2 ! signs=[-1,+1]
-    DO indk = 1, 5
-       !
-       vxc(:,:) = 0._DP
-       !
-       rdvrs = rdvrs_I + signs(isgn)*rdvrs_J
-       a_rho%of_r(:,:) = rho%of_r + REAL((indk-3),KIND=DP) * ddvxc_fd_coeff * rdvrs
-       !
-       DO iks = 1, nspin
-          !
-          psic(:) = a_rho%of_r(:,iks)
-          CALL fwfft ('Rho', psic, dffts)
-          a_rho%of_g(:,iks) = psic(dffts%nl)
-          !
-       ENDDO
-       !
-       CALL v_xc(a_rho, rho_core, rhog_core, etxc, vtxc, vxc)
-       !
-       aux_vxc(:,:,indk) = vxc
-       !
-    ENDDO
-    !
-    ! compute ddvxc 
-    !
-    DO iks = 1,nspin
-       DO ir = 1,dffts%nnr
-          ddvxc_tmp(ir,iks,isgn) = CMPLX( (-1._DP*aux_vxc(ir,iks,1)+16._DP*aux_vxc(ir,iks,2) &
-          &                       -30._DP*aux_vxc(ir,iks,3)+16._DP*aux_vxc(ir,iks,4) &
-          &                       -1._DP*aux_vxc(ir,iks,5)), KIND=DP ) / (12._DP*ddvxc_fd_coeff**2)
-       ENDDO
-    ENDDO
+  DO isgn = 1,2 ! signs=[-1,+1]
+     DO indk = 1,5
+        !
+        vxc(:,:) = 0._DP
+        !
+        rdvrs = rdvrs_I + signs(isgn)*rdvrs_J
+        a_rho%of_r(:,:) = rho%of_r + REAL((indk-3),KIND=DP) * ddvxc_fd_coeff * rdvrs
+        !
+        DO iks = 1,nspin
+           !
+           psic(:) = a_rho%of_r(:,iks)
+           CALL fwfft ('Rho',psic,dffts)
+           a_rho%of_g(:,iks) = psic(dffts%nl)
+           !
+        ENDDO
+        !
+        CALL v_xc(a_rho,rho_core,rhog_core,etxc,vtxc,vxc)
+        !
+        aux_vxc(:,:,indk) = vxc
+        !
+     ENDDO
+     !
+     ! compute ddvxc
+     !
+     DO iks = 1,nspin
+        DO ir = 1,dffts%nnr
+           ddvxc_tmp(ir,iks,isgn) = CMPLX( (-1._DP*aux_vxc(ir,iks,1)+16._DP*aux_vxc(ir,iks,2) &
+           &                       -30._DP*aux_vxc(ir,iks,3)+16._DP*aux_vxc(ir,iks,4) &
+           &                       -1._DP*aux_vxc(ir,iks,5)),KIND=DP ) / (12._DP*ddvxc_fd_coeff**2)
+        ENDDO
+     ENDDO
   ENDDO
   !
-  ddvxc(:,:) = 0.25D0 * ( ddvxc_tmp(:,:,2) - ddvxc_tmp(:,:,1) ) 
+  ddvxc(:,:) = 0.25_DP * (ddvxc_tmp(:,:,2) - ddvxc_tmp(:,:,1))
   !
   DEALLOCATE(aux_vxc)
   DEALLOCATE(vxc)
@@ -1230,16 +1235,12 @@ SUBROUTINE compute_ddvxc_5p_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc )
   !
   CALL destroy_scf_type(a_rho)
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('ddvxc_5p')
-#else
   CALL stop_clock('ddvxc_5p')
-#endif
   !
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE compute_ddvxc_sf_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc ) 
+SUBROUTINE compute_ddvxc_sf_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,ddvxc)
   !-----------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP
@@ -1252,35 +1253,28 @@ SUBROUTINE compute_ddvxc_sf_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc )
   USE scf,                  ONLY : rho
   USE uspp,                 ONLY : nlcc_any
   USE distribution_center,  ONLY : kpt_pool,band_group
-  USE westcom,              ONLY : wbse_save_dir,sf_kernel,l_spin_flip_kernel,l_spin_flip_alda0,&
-                                 & spin_flip_cut,l_print_spin_flip_kernel
+  USE westcom,              ONLY : sf_kernel,l_spin_flip_kernel,l_spin_flip_alda0,spin_flip_cut
   USE qpoint,               ONLY : xq
   USE gc_lr,                ONLY : grho,dvxc_rr,dvxc_sr,dvxc_ss,dvxc_s
   USE eqv,                  ONLY : dmuxc
-  USE cubefile,             ONLY : write_wfc_cube_r
   !
   IMPLICIT NONE
   !
   ! I/O
   !
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  COMPLEX(DP), INTENT(OUT) :: ddvxc(dffts%nnr, nspin)
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol,band_group%nlocx,kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol,band_group%nlocx,kpt_pool%nloc)
+  COMPLEX(DP), INTENT(OUT) :: ddvxc(dffts%nnr,nspin)
   !
   ! Workspace
   !
   INTEGER :: ir,is,is1
   REAL(DP) :: tmp1,tmp2
   COMPLEX(DP), ALLOCATABLE :: drho_sf_I(:,:),drho_sf_J(:,:),drho_sf_copy(:,:)
-  CHARACTER(LEN=:), ALLOCATABLE :: fname
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('ddvxc_sf')
-#else
   CALL start_clock('ddvxc_sf')
-#endif
   !
-  IF(nlcc_any) CALL errore('compute_ddvxc_sf_eenac', 'nlcc_any not supported', 1)
+  IF(nlcc_any) CALL errore('compute_ddvxc_sf_eenac','nlcc_any not supported',1)
   !
   ALLOCATE(drho_sf_I(dffts%nnr,2))
   ALLOCATE(drho_sf_J(dffts%nnr,2))
@@ -1323,8 +1317,8 @@ SUBROUTINE compute_ddvxc_sf_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc )
      !
      IF(.NOT. l_spin_flip_alda0) THEN
         IF(xclib_dft_is('gradient')) THEN
-           CALL dgradcorr(dffts, rho%of_r, grho, dvxc_rr, dvxc_sr, dvxc_ss, dvxc_s, xq, &
-                & drho_sf_copy, nspin, nspin_gga, g, ddvxc)
+           CALL dgradcorr(dffts,rho%of_r,grho,dvxc_rr,dvxc_sr,dvxc_ss,dvxc_s,xq,drho_sf_copy,nspin,&
+           & nspin_gga,g,ddvxc)
         ENDIF
      ENDIF
      !
@@ -1339,62 +1333,25 @@ SUBROUTINE compute_ddvxc_sf_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, ddvxc )
      !
   ENDIF
   !
-  ! print spin flip kernel (keep it for now)
-  !
-  IF(l_print_spin_flip_kernel) THEN
-     !
-     fname=TRIM(wbse_save_dir)//'/rho_diff.cube'
-     CALL write_wfc_cube_r(dffts, fname, rho%of_r(ir,2))
-     !
-     fname=TRIM(wbse_save_dir)//'/drhoI_sf_up.cube'
-     CALL write_wfc_cube_r(dffts, fname, REAL(drho_sf_I(:,1),KIND=DP))
-     !
-     fname=TRIM(wbse_save_dir)//'/drhoI_sf_down.cube'
-     CALL write_wfc_cube_r(dffts, fname, REAL(drho_sf_I(:,2),KIND=DP))
-     !
-     fname=TRIM(wbse_save_dir)//'/drhoJ_sf_up.cube'
-     CALL write_wfc_cube_r(dffts, fname, REAL(drho_sf_J(:,1),KIND=DP))
-     !
-     fname=TRIM(wbse_save_dir)//'/drhoJ_sf_down.cube'
-     CALL write_wfc_cube_r(dffts, fname, REAL(drho_sf_J(:,2),KIND=DP))
-     !
-     fname=TRIM(wbse_save_dir)//'/drho_sq_rho_diff_up.cube'
-     CALL write_wfc_cube_r(dffts, fname, REAL(drho_sf_copy(:,1),KIND=DP))
-     !
-     fname=TRIM(wbse_save_dir)//'/drho_sq_rho_diff_down.cube'
-     CALL write_wfc_cube_r(dffts, fname, REAL(drho_sf_copy(:,2),KIND=DP))
-     !
-     fname=TRIM(wbse_save_dir)//'/ddvxc_up.cube'
-     CALL write_wfc_cube_r(dffts, fname, REAL(ddvxc(:,1),KIND=DP))
-     !
-     fname=TRIM(wbse_save_dir)//'/ddvxc_down.cube'
-     CALL write_wfc_cube_r(dffts, fname, REAL(ddvxc(:,2),KIND=DP))
-     !
-  ENDIF
-  !
   !$acc exit data delete(drho_sf_I,drho_sf_J)
   DEALLOCATE(drho_sf_I)
   DEALLOCATE(drho_sf_J)
   DEALLOCATE(drho_sf_copy)
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('ddvxc_sf')
-#else
   CALL stop_clock('ddvxc_sf')
-#endif
   !
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
-SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec ) 
+SUBROUTINE rhs_zvector_part4_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
   !-----------------------------------------------------------------------
   !
   USE io_global,            ONLY : stdout
   USE kinds,                ONLY : DP
   USE io_push,              ONLY : io_push_title
   USE gvect,                ONLY : gstart
-  USE westcom,              ONLY : iuwfc,lrwfc,nbnd_occ,nbndval0x,n_trunc_bands,l_spin_flip,evc1_all,&
-                                   evc1J_all 
+  USE westcom,              ONLY : iuwfc,lrwfc,nbnd_occ,nbndval0x,n_trunc_bands,l_spin_flip,&
+                                 & evc1_all,evc1J_all
   USE pwcom,                ONLY : isk,lsda,nspin,current_spin,current_k,ngk,npwx,npw
   USE mp,                   ONLY : mp_sum,mp_bcast
   USE buffers,              ONLY : get_buffer
@@ -1405,7 +1362,6 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   USE wavefunctions,        ONLY : evc
   USE wbse_bgrp,            ONLY : gather_bands
   USE west_mp,              ONLY : west_mp_wait
-
 #if defined(__CUDA)
   USE cublas
 #endif
@@ -1414,23 +1370,20 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   !
   ! I/O
   !
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  COMPLEX(DP), INTENT(INOUT) :: z_rhs_vec(npwx*npol, band_group%nlocx, kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol,band_group%nlocx,kpt_pool%nloc)
+  COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_J(npwx*npol,band_group%nlocx,kpt_pool%nloc)
+  COMPLEX(DP), INTENT(INOUT) :: z_rhs_vec(npwx*npol,band_group%nlocx,kpt_pool%nloc)
   !
   ! Workspace
   !
   INTEGER :: ig,lbnd,ibnd,jbnd,jbndp,iks,iks_do,nbnd_do,nbndval,flnbndval
   INTEGER :: band_group_myoffset
-  INTEGER :: req 
+  INTEGER :: req
   REAL(DP) :: reduce
   COMPLEX(DP), ALLOCATABLE :: dotp(:)
   COMPLEX(DP), ALLOCATABLE :: z_rhs_vec_part4(:,:,:),tmp_vec_I(:,:),tmp_vec_J(:,:)
-  REAL(DP), ALLOCATABLE :: dv_vv_mat_I(:,:), dv_vv_mat_J(:,:)
-  COMPLEX(DP), ALLOCATABLE :: dpcpart_I(:,:), dpcpart_J(:,:)
-#if defined(__CUDA)
-  ATTRIBUTES(PINNED) :: dpcpart_I, dpcpart_J
-#endif
+  REAL(DP), ALLOCATABLE :: dv_vv_mat_I(:,:),dv_vv_mat_J(:,:)
+  COMPLEX(DP), ALLOCATABLE :: dpcpart_I(:,:),dpcpart_J(:,:)
   TYPE(bar_type) :: barra
   INTEGER, PARAMETER :: flks(2) = [2,1]
   !
@@ -1438,13 +1391,13 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
   !
   band_group_myoffset = band_group%myoffset
   !
-  ALLOCATE(z_rhs_vec_part4(npwx*npol, band_group%nlocx, kpt_pool%nloc))
-  ALLOCATE(dv_vv_mat_I(nbndval0x-n_trunc_bands, band_group%nlocx))
-  ALLOCATE(dv_vv_mat_J(nbndval0x-n_trunc_bands, band_group%nlocx))
-  ALLOCATE(tmp_vec_I(npwx*npol, band_group%nlocx))
-  ALLOCATE(tmp_vec_J(npwx*npol, band_group%nlocx))
-  ALLOCATE(dpcpart_I(npwx*npol, nbndval0x-n_trunc_bands))
-  ALLOCATE(dpcpart_J(npwx*npol, nbndval0x-n_trunc_bands))
+  ALLOCATE(z_rhs_vec_part4(npwx*npol,band_group%nlocx,kpt_pool%nloc))
+  ALLOCATE(dv_vv_mat_I(nbndval0x-n_trunc_bands,band_group%nlocx))
+  ALLOCATE(dv_vv_mat_J(nbndval0x-n_trunc_bands,band_group%nlocx))
+  ALLOCATE(tmp_vec_I(npwx*npol,band_group%nlocx))
+  ALLOCATE(tmp_vec_J(npwx*npol,band_group%nlocx))
+  ALLOCATE(dpcpart_I(npwx*npol,nbndval0x-n_trunc_bands))
+  ALLOCATE(dpcpart_J(npwx*npol,nbndval0x-n_trunc_bands))
   !$acc enter data create(z_rhs_vec_part4,dv_vv_mat_I,dv_vv_mat_J,tmp_vec_I,tmp_vec_J,dpcpart_I,dpcpart_J)
   !
   !$acc kernels present(z_rhs_vec_part4)
@@ -1500,7 +1453,7 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      ! Compute the first part
      !
      ! hybrid_kernel_term4 called once for a_I and once for a_J (derivative wrt real and complex orbitals)
-     ! it uses global variable evc1_all and evc1J_all: 
+     ! it uses global variable evc1_all and evc1J_all:
      ! first time evc1_all contains a_I and evc1J_all contains a_J, second time contents are switched
      !
      CALL gather_bands(dvg_exc_tmp_I(:,:,iks_do),evc1_all(:,:,iks_do),req)
@@ -1510,10 +1463,11 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
 #if !defined(__GPU_MPI)
      !$acc update device(evc1J_all(:,:,iks_do),evc1_all(:,:,iks_do))
 #endif
-     ! 
-     CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part4(:,:,iks),l_spin_flip,4) 
      !
-     ! switch the contents of evc1_all and evc1J_all  
+     CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part4(:,:,iks),l_spin_flip,4)
+     !
+     ! switch the contents of evc1_all and evc1J_all
+     !
      CALL gather_bands(dvg_exc_tmp_I(:,:,iks_do),evc1J_all(:,:,iks_do),req)
      CALL west_mp_wait(req)
      CALL gather_bands(dvg_exc_tmp_J(:,:,iks_do),evc1_all(:,:,iks_do),req)
@@ -1522,9 +1476,10 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      !$acc update device(evc1J_all(:,:,iks_do),evc1_all(:,:,iks_do))
 #endif
      !
-     CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part4(:,:,iks),l_spin_flip,4) 
+     CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part4(:,:,iks),l_spin_flip,4)
      !
-     ! the contents of evc1_all and evc1J_all is reverted back (may be unnecessary)
+     ! the contents of evc1_all and evc1J_all are reverted back (may be unnecessary)
+     !
      CALL gather_bands(dvg_exc_tmp_I(:,:,iks_do),evc1_all(:,:,iks_do),req)
      CALL west_mp_wait(req)
      CALL gather_bands(dvg_exc_tmp_J(:,:,iks_do),evc1J_all(:,:,iks_do),req)
@@ -1541,19 +1496,19 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      !$acc end kernels
      !
      ! two calls because of the derivative wrt real and complex orbitals
-     CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),tmp_vec_I,l_spin_flip) 
-     CALL bse_kernel_gamma(current_spin,evc1J_all(:,:,iks),tmp_vec_J,l_spin_flip) 
+     CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),tmp_vec_I,l_spin_flip)
+     CALL bse_kernel_gamma(current_spin,evc1J_all(:,:,iks),tmp_vec_J,l_spin_flip)
      !
      !$acc parallel vector_length(1024) present(evc,tmp_vec_I,tmp_vec_J,dv_vv_mat_I,dv_vv_mat_J)
      !$acc loop collapse(2)
-     DO jbnd = 1, nbndval - n_trunc_bands
-        DO lbnd = 1, nbnd_do
+     DO jbnd = 1,nbndval - n_trunc_bands
+        DO lbnd = 1,nbnd_do
            !
            jbndp = jbnd + n_trunc_bands
            !
            reduce = 0._DP
            !$acc loop reduction(+:reduce)
-           DO ig = 1, npw
+           DO ig = 1,npw
               reduce = reduce + REAL(evc(ig,jbndp),KIND=DP) * REAL(tmp_vec_I(ig,lbnd),KIND=DP) &
               &               + AIMAG(evc(ig,jbndp)) * AIMAG(tmp_vec_I(ig,lbnd))
            ENDDO
@@ -1570,14 +1525,14 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      !
      !$acc parallel vector_length(1024) present(evc,tmp_vec_I,tmp_vec_J,dv_vv_mat_I,dv_vv_mat_J)
      !$acc loop collapse(2)
-     DO jbnd = 1, nbndval - n_trunc_bands
-        DO lbnd = 1, nbnd_do
+     DO jbnd = 1,nbndval - n_trunc_bands
+        DO lbnd = 1,nbnd_do
            !
            jbndp = jbnd + n_trunc_bands
            !
            reduce = 0._DP
            !$acc loop reduction(+:reduce)
-           DO ig = 1, npw
+           DO ig = 1,npw
               reduce = reduce + REAL(evc(ig,jbndp),KIND=DP) * REAL(tmp_vec_J(ig,lbnd),KIND=DP) &
               &               + AIMAG(evc(ig,jbndp)) * AIMAG(tmp_vec_J(ig,lbnd))
            ENDDO
@@ -1607,10 +1562,10 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
      & 2*npwx*npol,dv_vv_mat_J,nbndval0x-n_trunc_bands,0._DP,dpcpart_J,2*npwx*npol)
      !$acc end host_data
      !
-     !$acc update host(dpcpart_I,dpcpart_J)
+     !$acc host_data use_device(dpcpart_I,dpcpart_J)
      CALL mp_sum(dpcpart_I,inter_bgrp_comm)
      CALL mp_sum(dpcpart_J,inter_bgrp_comm)
-     !$acc update device(dpcpart_I,dpcpart_J)
+     !$acc end host_data
      !
      ! compute nbnd_do for the current spin channel
      !
@@ -1628,8 +1583,7 @@ SUBROUTINE rhs_zvector_part4_eenac( dvg_exc_tmp_I, dvg_exc_tmp_J, z_rhs_vec )
            !
            ibnd = band_group_myoffset+lbnd
            !
-           z_rhs_vec_part4(ig,lbnd,iks) = z_rhs_vec_part4(ig,lbnd,iks)+dpcpart_I(ig,ibnd)&
-                                                                     &+dpcpart_J(ig,ibnd)
+           z_rhs_vec_part4(ig,lbnd,iks) = z_rhs_vec_part4(ig,lbnd,iks)+dpcpart_I(ig,ibnd)+dpcpart_J(ig,ibnd)
            !
         ENDDO
      ENDDO

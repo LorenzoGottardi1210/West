@@ -33,7 +33,7 @@ MODULE wbse_bgrp
       !
       USE pwcom,                ONLY : npwx
       USE mp_global,            ONLY : nbgrp
-      USE westcom,              ONLY : nbndval0x,n_trunc_bands,evc1_all,evc1J_all,l_eenac 
+      USE westcom,              ONLY : nbndval0x,n_trunc_bands,evc1_all,evc1J_all,l_eenac
       USE distribution_center,  ONLY : kpt_pool,band_group
       !
       IMPLICIT NONE
@@ -61,9 +61,9 @@ MODULE wbse_bgrp
       !
       ALLOCATE(evc1_all(npwx,nbnd_do,kpt_pool%nloc))
       !$acc enter data create(evc1_all)
-      IF (l_eenac) THEN
-        ALLOCATE(evc1J_all(npwx,nbnd_do,kpt_pool%nloc))
-        !$acc enter data create(evc1J_all)
+      IF(l_eenac) THEN
+         ALLOCATE(evc1J_all(npwx,nbnd_do,kpt_pool%nloc))
+         !$acc enter data create(evc1J_all)
       ENDIF
       !
     END SUBROUTINE

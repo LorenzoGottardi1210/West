@@ -1,5 +1,5 @@
 !
-! Copyright (C) 2015-2025 M. Govoni
+! Copyright (C) 2015-2026 M. Govoni
 ! This file is distributed under the terms of the
 ! GNU General Public License. See the file `License'
 ! in the root directory of the present distribution,
@@ -9,7 +9,13 @@
 !
 ! Contributors to this file:
 ! Stefano Paolo Villani
-! 
+!
+MODULE wbse_nac
+!
+IMPLICIT NONE
+!
+CONTAINS
+!
 !-----------------------------------------------------------------------
 SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !-----------------------------------------------------------------------
@@ -20,8 +26,7 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   USE pwcom,                ONLY : nspin,npwx
   USE noncollin_module,     ONLY : npol
   USE fft_base,             ONLY : dffts
-  USE westcom,              ONLY : logfile,nbndval0x,n_trunc_bands,evc1_all,&
-                                   & l_genac,l_eenac,computing_eenac 
+  USE westcom,              ONLY : logfile,nbndval0x,n_trunc_bands,evc1_all,l_genac,l_eenac,do_eenac
   USE distribution_center,  ONLY : kpt_pool,band_group
   USE json_module,          ONLY : json_file
   USE mp_world,             ONLY : mpime,root
@@ -38,7 +43,7 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   !
   COMPLEX(DP), INTENT(IN) :: dvg_exc_tmp_I(npwx*npol, band_group%nlocx, kpt_pool%nloc)
   COMPLEX(DP), INTENT(IN), OPTIONAL :: dvg_exc_tmp_J(npwx*npol, band_group%nlocx, kpt_pool%nloc)
-  REAL(DP), INTENT(IN), OPTIONAL :: omega_JI 
+  REAL(DP), INTENT(IN), OPTIONAL :: omega_JI
   !
   ! Workspace
   !
@@ -49,26 +54,27 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   COMPLEX(DP), ALLOCATABLE :: z_rhs_vec(:,:,:), zvector(:,:,:), drhox1(:,:), drhox2(:,:)
   TYPE(json_file) :: json
   INTEGER :: iunit
+  CHARACTER(LEN=5) :: label
   !
-  IF (l_genac .AND. .NOT.computing_eenac) THEN
-     CALL start_clock('calc_geNAC')
-     CALL io_push_title('Compute geNAC')
+  IF(l_genac .AND. .NOT. do_eenac) THEN
+     label = 'genac'
+  ELSEIF(l_eenac .AND. do_eenac) THEN
+     label = 'eenac'
+  ELSE
+     CALL errore('wbse_calc_nac','unexpected error',1)
   ENDIF
-  IF (l_eenac .AND. computing_eenac) THEN 
-     CALL start_clock('calc_eeNAC')
-     CALL io_push_title('Compute eeNAC')
-  ENDIF
+  !
+  CALL start_clock('calc_'//label)
+  !
+  CALL io_push_title('Compute '//label)
   !
   n = 3 * nat
   !
   ALLOCATE(nac_vec(n))
   nac_vec(:) = 0._DP
   !
-  IF (l_eenac .AND. computing_eenac) THEN
-     IF (.NOT. PRESENT(dvg_exc_tmp_J) ) &
-           &CALL errore('wbse_calc_nac','eeNAC requested without state J',1)
-     IF (.NOT. PRESENT(omega_JI)) &
-           &CALL errore('wbse_calc_nac','eeNAC requested without energy difference',1)
+  IF(l_eenac .AND. do_eenac) THEN
+     !
      ALLOCATE(reqs(kpt_pool%nloc))
      ALLOCATE(dvgdvg_mat(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc))
      ALLOCATE(dvgdvg_mat_JI(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc))
@@ -89,36 +95,38 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
      !
      CALL mp_waitall(reqs)
 #if !defined(__GPU_MPI)
-  !$acc update device(evc1_all)
+     !$acc update device(evc1_all)
 #endif
      !
-     ! For the band parallelization of rhs_zvec_part1 I need:
-     ! dvgdvg_mat    (computed between aI and aJ) and  
+     ! For the band parallelization of rhs_zvec_part1:
+     ! dvgdvg_mat    (computed between aI and aJ) and
      ! dvgdvg_mat_IJ (computed between aJ and aI)
      !
-     ! First I compute dvgdvg_mat
      CALL wbse_calc_dvgdvg_mat_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat)
      !
      ! To compute dvgdvg_mat_JI:
-     ! - first I put the content of dvg_exc_tmp_J into evc1_all
+     ! put the content of dvg_exc_tmp_J into evc1_all
+     !
      DO iks = 1,kpt_pool%nloc
-      CALL gather_bands(dvg_exc_tmp_J(:,:,iks), evc1_all(:,:,iks), reqs(iks))
+        CALL gather_bands(dvg_exc_tmp_J(:,:,iks), evc1_all(:,:,iks), reqs(iks))
      ENDDO
      CALL mp_waitall(reqs)
 #if !defined(__GPU_MPI)
-  !$acc update device(evc1_all)
+     !$acc update device(evc1_all)
 #endif
      !
-     ! - then I compute dvgdvg_mat_JI: inputs dvg_exc_tmp_I and dvg_exc_tmp_J switched
+     ! Compute dvgdvg_mat_JI: inputs dvg_exc_tmp_I and dvg_exc_tmp_J switched
+     !
      CALL wbse_calc_dvgdvg_mat_nac(dvg_exc_tmp_J, dvg_exc_tmp_I, dvgdvg_mat_JI)
      !
-     ! - finally I revert the content of evc1_all back to dvg_exc_tmp_I
+     ! Revert the content of evc1_all back to dvg_exc_tmp_I
+     !
      DO iks = 1,kpt_pool%nloc
         CALL gather_bands(dvg_exc_tmp_I(:,:,iks), evc1_all(:,:,iks), reqs(iks))
      ENDDO
      CALL mp_waitall(reqs)
 #if !defined(__GPU_MPI)
-  !$acc update device(evc1_all)
+     !$acc update device(evc1_all)
 #endif
      !
      ! drhox2
@@ -141,13 +149,15 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   CALL allocate_bse_gpu(band_group%nlocx)
 #endif
   !
-  IF (l_genac .AND. .NOT.computing_eenac) THEN 
-     z_rhs_vec = dvg_exc_tmp_I
-     !$acc update device(z_rhs_vec)
+  IF(l_genac .AND. .NOT. do_eenac) THEN
+     !$acc kernels present(z_rhs_vec,dvg_exc_tmp_I)
+     z_rhs_vec(:,:,:) = dvg_exc_tmp_I
+     !$acc end kernels
   ENDIF
-  IF (l_eenac .AND. computing_eenac) THEN 
-     CALL build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat,&
-                            & dvgdvg_mat_JI, drhox1, drhox2, z_rhs_vec, omega_JI)
+  !
+  IF(l_eenac .AND. do_eenac) THEN
+     CALL build_rhs_zvector_eq_eenac(dvg_exc_tmp_I, dvg_exc_tmp_J, dvgdvg_mat, dvgdvg_mat_JI, drhox1, &
+     & drhox2, z_rhs_vec, omega_JI)
   ENDIF
   !
   CALL solve_zvector_eq_cg(z_rhs_vec, zvector)
@@ -162,17 +172,11 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   DEALLOCATE(z_rhs_vec)
   DEALLOCATE(zvector)
   !
-  IF (l_genac .AND. .NOT.computing_eenac) CALL io_push_title('geNAC total')
-  IF (l_eenac .AND. computing_eenac) CALL io_push_title('eeNAC total')
+  CALL io_push_title(label//' total')
   !
   DO ia = 1,nat
      !
-     IF (l_genac .AND. .NOT.computing_eenac) THEN
-        WRITE(stdout, 9035) ia, ityp(ia), (nac_vec(3*ia-3+ipol), ipol = 1,3)
-     ENDIF
-     IF (l_eenac .AND. computing_eenac) THEN
-        WRITE(stdout, 9036) ia, ityp(ia), (nac_vec(3*ia-3+ipol), ipol = 1,3)
-     ENDIF
+     WRITE(stdout, 9035) ia, ityp(ia), label, (nac_vec(3*ia-3+ipol), ipol = 1,3)
      !
   ENDDO
   !
@@ -180,12 +184,7 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
      !
      CALL json%initialize()
      CALL json%load(filename=TRIM(logfile))
-     IF (l_genac .AND. .NOT.computing_eenac) THEN 
-        CALL json%add('output.nac_vec.genac_total', nac_vec(1:n))
-     ENDIF
-     IF (l_eenac .AND. computing_eenac) THEN 
-        CALL json%add('output.nac_vec.eenac_total', nac_vec(1:n))
-     ENDIF
+     CALL json%add('output.nac_vec.'//label//'_total', nac_vec(1:n))
      !
      OPEN(NEWUNIT=iunit,FILE=TRIM(logfile))
      CALL json%print(iunit)
@@ -211,17 +210,11 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
      !
   ENDDO
   !
-  IF (l_genac .AND. .NOT.computing_eenac) CALL io_push_title('geNAC corrected')
-  IF (l_eenac .AND. computing_eenac) CALL io_push_title('eeNAC corrected')
+  CALL io_push_title(label//' corrected')
   !
   DO ia = 1,nat
      !
-     IF (l_genac .AND. .NOT.computing_eenac) THEN
-        WRITE(stdout, 9035) ia, ityp(ia), (nac_vec(3*ia-3+ipol), ipol=1,3)
-     ENDIF
-     IF (l_eenac .AND. computing_eenac) THEN 
-        WRITE(stdout, 9036) ia, ityp(ia), (nac_vec(3*ia-3+ipol), ipol=1,3)
-     ENDIF
+     WRITE(stdout, 9035) ia, ityp(ia), label, (nac_vec(3*ia-3+ipol), ipol=1,3)
      !
   ENDDO
   !
@@ -231,12 +224,7 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
      !
      CALL json%initialize()
      CALL json%load(filename=TRIM(logfile))
-     IF (l_genac .AND. .NOT.computing_eenac) THEN 
-        CALL json%add('output.nac_vec.genac_corrected', nac_vec(1:n))
-     ENDIF
-     IF (l_eenac .AND. computing_eenac) THEN 
-        CALL json%add('output.nac_vec.eenac_corrected', nac_vec(1:n))
-     ENDIF
+     CALL json%add('output.nac_vec.'//label//'_corrected', nac_vec(1:n))
      !
      OPEN(NEWUNIT=iunit,FILE=TRIM(logfile))
      CALL json%print(iunit)
@@ -247,7 +235,7 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
   ENDIF
   !
   DEALLOCATE(nac_vec)
-  IF (l_eenac .AND. computing_eenac) THEN
+  IF(l_eenac .AND. do_eenac) THEN
      DEALLOCATE(reqs)
      !$acc exit data delete(dvgdvg_mat,dvgdvg_mat_JI)
      DEALLOCATE(dvgdvg_mat)
@@ -256,12 +244,10 @@ SUBROUTINE wbse_calc_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, omega_JI)
      DEALLOCATE(drhox2)
   ENDIF
   !
-  IF (l_genac .AND. .NOT.computing_eenac) CALL stop_clock('calc_geNAC')
-  IF (l_eenac .AND. computing_eenac) CALL stop_clock('calc_eeNAC')
+  CALL stop_clock('calc_'//label)
   !
-9035 FORMAT(5X,'atom ',I4,' type ',I2,'   geNAC = ',3F14.8)
-9036 FORMAT(5X,'atom ',I4,' type ',I2,'   eeNAC = ',3F14.8)
-!
+9035 FORMAT(5X,'atom ',I4,' type ',I2,'   ',A,' = ',3F14.8)
+  !
 END SUBROUTINE
 !
 !-----------------------------------------------------------------------
@@ -376,7 +362,7 @@ SUBROUTINE wbse_calc_drhox1_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
         !
         CALL double_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp_J(:,lbnd,iks),dvg_exc_tmp_J(:,lbnd+1,iks),psic_J,'Wave')
         !
-        !$acc parallel loop present(tmp_r)
+        !$acc parallel loop present(tmp_r,psic,psic_J)
         DO ir = 1,dffts_nnr
            tmp_r(ir) = tmp_r(ir) + w1*REAL(psic(ir),KIND=DP)*REAL(psic_J(ir),KIND=DP) &
                                & + w2*AIMAG(psic(ir))*AIMAG(psic_J(ir))
@@ -399,7 +385,7 @@ SUBROUTINE wbse_calc_drhox1_nac(dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1)
         CALL single_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp_I(:,lbnd,iks),psic,'Wave')
         !
         CALL single_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp_J(:,lbnd,iks),psic_J,'Wave')
-        !$acc parallel loop present(tmp_r)
+        !$acc parallel loop present(tmp_r,psic,psic_J)
         DO ir = 1,dffts_nnr
            tmp_r(ir) = tmp_r(ir) + w1*REAL(psic(ir),KIND=DP)*REAL(psic_J(ir),KIND=DP)
         ENDDO
@@ -539,7 +525,7 @@ SUBROUTINE wbse_nacvec_drhox1(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, nac_vec, 
         !
         ! 1) | dvpsi_i >
         !
-        CALL wbse_get_dvpsi_gamma_nonlocal_nac(ia, dvg_exc_tmp_I(:,:,iks), dvpsi)
+        CALL wbse_get_dvpsi_gamma_nonlocal(ia, dvg_exc_tmp_I(:,:,iks), dvpsi)
         !
         ! 2) nacvec_drhox1_i = < dvg | dvpsi_i >
         !
@@ -597,13 +583,13 @@ SUBROUTINE wbse_nacvec_drhox1(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, nac_vec, 
   !
   DO ia = 1,nat
      DO ipol = 1,3
-        nacvec_drhox1(3*ia-3+ipol) = ( nacvec_drhox1(3*ia-3+ipol) + nacveclc(ipol,ia) ) / -omega_JI
+        nacvec_drhox1(3*ia-3+ipol) = ( nacvec_drhox1(3*ia-3+ipol) + nacveclc(ipol,ia) ) / (-omega_JI)
      ENDDO
   ENDDO
   !
   nac_vec(:) = nac_vec+nacvec_drhox1
   !
-  CALL io_push_title('eeNAC drhox1')
+  CALL io_push_title('eenac drhox1')
   !
   DO ia = 1,nat
      !
@@ -637,7 +623,7 @@ SUBROUTINE wbse_nacvec_drhox1(n, dvg_exc_tmp_I, dvg_exc_tmp_J, drhox1, nac_vec, 
   DEALLOCATE(dvpsi)
   DEALLOCATE(rdrhox1)
   !
-9035 FORMAT(5X,'atom ',I4,' type ',I2,'   eeNAC = ',3F14.8)
+9035 FORMAT(5X,'atom ',I4,' type ',I2,'   eenac = ',3F14.8)
   !
 END SUBROUTINE
 !
@@ -846,7 +832,7 @@ SUBROUTINE wbse_calc_drhox2_nac(dvgdvg_mat, drhox2)
         !
         CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),psic,'Wave')
         !
-        !$acc parallel loop present(aux_r)
+        !$acc parallel loop present(aux_r,psic)
         DO ir = 1,dffts_nnr
            aux_r(ir) = REAL(psic(ir),KIND=DP)
         ENDDO
@@ -860,7 +846,7 @@ SUBROUTINE wbse_calc_drhox2_nac(dvgdvg_mat, drhox2)
               !
               CALL double_invfft_gamma(dffts,npw,npwx,evc(:,jbndp),evc(:,jbndp+1),psic,'Wave')
               !
-              !$acc parallel loop present(aux_r,dvgdvg_mat,drhox2)
+              !$acc parallel loop present(aux_r,psic,dvgdvg_mat,drhox2)
               DO ir = 1,dffts_nnr
                  prod = aux_r(ir) * (REAL(psic(ir),KIND=DP)*dvgdvg_mat(jbnd,lbnd,iks) &
                  &                + AIMAG(psic(ir))*dvgdvg_mat(jbnd+1,lbnd,iks))
@@ -872,7 +858,7 @@ SUBROUTINE wbse_calc_drhox2_nac(dvgdvg_mat, drhox2)
               !
               CALL single_invfft_gamma(dffts,npw,npwx,evc(:,jbndp),psic,'Wave')
               !
-              !$acc parallel loop present(aux_r,dvgdvg_mat,drhox2)
+              !$acc parallel loop present(aux_r,psic,dvgdvg_mat,drhox2)
               DO ir = 1,dffts_nnr
                  prod = aux_r(ir) * REAL(psic(ir),KIND=DP) * dvgdvg_mat(jbnd,lbnd,iks)
                  drhox2(ir,current_spin) = drhox2(ir,current_spin) - w1*CMPLX(prod,KIND=DP)
@@ -940,7 +926,7 @@ SUBROUTINE wbse_nacvec_drhox2(n, dvgdvg_mat, drhox2, nac_vec, omega_JI)
   REAL(DP), INTENT(IN) :: dvgdvg_mat(nbndval0x-n_trunc_bands, band_group%nlocx, kpt_pool%nloc)
   COMPLEX(DP), INTENT(IN) :: drhox2(dffts%nnr, nspin)
   REAL(DP), INTENT(INOUT) :: nac_vec(n)
-  REAL(DP), INTENT(IN)  :: omega_JI 
+  REAL(DP), INTENT(IN)  :: omega_JI
   !
   ! Workspace
   !
@@ -1042,7 +1028,7 @@ SUBROUTINE wbse_nacvec_drhox2(n, dvgdvg_mat, drhox2, nac_vec, omega_JI)
         !
         ! 1) | dvpsi_i >
         !
-        CALL wbse_get_dvpsi_gamma_nonlocal_nac(ia, aux1, dvpsi)
+        CALL wbse_get_dvpsi_gamma_nonlocal(ia, aux1, dvpsi)
         !
         ! 2) nacvec_drhox2 = < evc_iv2 | dvpsi_ia_iv >
         !
@@ -1106,13 +1092,13 @@ SUBROUTINE wbse_nacvec_drhox2(n, dvgdvg_mat, drhox2, nac_vec, omega_JI)
   !
   DO ia = 1,nat
      DO ipol = 1,3
-        nacvec_drhox2(3*ia-3+ipol) = ( nacvec_drhox2(3*ia-3+ipol)+nacveclc(ipol,ia) ) / -omega_JI
+        nacvec_drhox2(3*ia-3+ipol) = ( nacvec_drhox2(3*ia-3+ipol)+nacveclc(ipol,ia) ) / (-omega_JI)
      ENDDO
   ENDDO
   !
   nac_vec(:) = nac_vec+nacvec_drhox2
   !
-  CALL io_push_title('eeNAC drhox2')
+  CALL io_push_title('eenac drhox2')
   !
   DO ia = 1,nat
      !
@@ -1148,7 +1134,7 @@ SUBROUTINE wbse_nacvec_drhox2(n, dvgdvg_mat, drhox2, nac_vec, omega_JI)
   DEALLOCATE(aux1)
   DEALLOCATE(aux2)
   !
-9035 FORMAT(5X,'atom ',I4,' type ',I2,'   eeNAC = ',3F14.8)
+9035 FORMAT(5X,'atom ',I4,' type ',I2,'   eenac = ',3F14.8)
   !
 END SUBROUTINE
 !
@@ -1169,8 +1155,8 @@ SUBROUTINE wbse_nacvec_drhoz_nac(n, zvector, nac_vec)
   USE noncollin_module,     ONLY : npol
   USE fft_base,             ONLY : dffts
   USE bar,                  ONLY : bar_type,start_bar_type,update_bar_type,stop_bar_type
-  USE westcom,              ONLY : iuwfc,lrwfc,logfile,nbnd_occ,n_trunc_bands,l_spin_flip,&
-                                   & l_genac,l_eenac,computing_eenac
+  USE westcom,              ONLY : iuwfc,lrwfc,logfile,nbnd_occ,n_trunc_bands,l_spin_flip,l_genac,&
+                                 & l_eenac,do_eenac
   USE vlocal,               ONLY : vloc
   USE control_flags,        ONLY : gamma_only
   USE distribution_center,  ONLY : kpt_pool,band_group
@@ -1202,6 +1188,15 @@ SUBROUTINE wbse_nacvec_drhoz_nac(n, zvector, nac_vec)
   TYPE(json_file) :: json
   INTEGER :: iunit
   TYPE(bar_type) :: barra
+  CHARACTER(LEN=5) :: label
+  !
+  IF(l_genac .AND. .NOT. do_eenac) THEN
+     label = 'genac'
+  ELSEIF(l_eenac .AND. do_eenac) THEN
+     label = 'eenac'
+  ELSE
+     CALL errore('wbse_nacvec_drhoz_nac','unexpected error',1)
+  ENDIF
   !
   CALL io_push_title('Compute nac_vec of Z vector')
   !
@@ -1293,7 +1288,7 @@ SUBROUTINE wbse_nacvec_drhoz_nac(n, zvector, nac_vec)
         !
         ! 1) | dvpsi_i >
         !
-        CALL wbse_get_dvpsi_gamma_nonlocal_nac(ia, aux1, dvpsi)
+        CALL wbse_get_dvpsi_gamma_nonlocal(ia, aux1, dvpsi)
         !
         ! 2) nacvec_drhoz_i = < z_vector | dvpsi_i >
         !
@@ -1316,13 +1311,11 @@ SUBROUTINE wbse_nacvec_drhoz_nac(n, zvector, nac_vec)
            IF(gstart == 2) THEN
               !$acc parallel loop reduction(+:reduce) present(zvector,dvpsi) copy(reduce)
               DO lbnd = 1,nbnd_do
-                 ! c.c. was already taken care of
                  reduce = reduce - REAL(zvector(1,lbnd,iks),KIND=DP)*REAL(dvpsi(1,lbnd,ipol),KIND=DP)
               ENDDO
              !$acc end parallel
            ENDIF
            !
-           ! c.c. was already taken care of
            nacvec_drhoz(3*ia-3+ipol) = nacvec_drhoz(3*ia-3+ipol) + this_wk*reduce
            !
         ENDDO
@@ -1343,7 +1336,6 @@ SUBROUTINE wbse_nacvec_drhoz_nac(n, zvector, nac_vec)
   !
   CALL wbse_calc_dens(zvector, drhoz, .FALSE.)
   !
-  ! c.c. was already taken care of
   rdrhoz(:,:) = REAL(drhoz,KIND=DP)
   !
   IF(nspin == 2) THEN
@@ -1363,17 +1355,11 @@ SUBROUTINE wbse_nacvec_drhoz_nac(n, zvector, nac_vec)
   !
   nac_vec(:) = nac_vec+nacvec_drhoz
   !
-  IF (l_genac .AND. .NOT.computing_eenac) CALL io_push_title('geNAC drhoz')
-  IF (l_eenac .AND. computing_eenac) CALL io_push_title('eeNAC drhoz')
+  CALL io_push_title(label//' drhoz')
   !
   DO ia = 1,nat
      !
-     IF (l_genac .AND. .NOT.computing_eenac) THEN
-        WRITE(stdout, 9035) ia, ityp(ia), (nacvec_drhoz(3*ia-3+ipol), ipol = 1,3)
-     ENDIF
-     IF (l_eenac .AND. computing_eenac) THEN
-         WRITE(stdout, 9036) ia, ityp(ia), (nacvec_drhoz(3*ia-3+ipol), ipol = 1,3)
-     ENDIF
+     WRITE(stdout, 9035) ia, ityp(ia), label, (nacvec_drhoz(3*ia-3+ipol), ipol = 1,3)
      !
   ENDDO
   !
@@ -1383,12 +1369,7 @@ SUBROUTINE wbse_nacvec_drhoz_nac(n, zvector, nac_vec)
      !
      CALL json%initialize()
      CALL json%load(filename=TRIM(logfile))
-     IF (l_genac .AND. .NOT.computing_eenac) THEN
-        CALL json%add('output.nac_vec.genac_drhoz', nacvec_drhoz(1:n))
-     ENDIF
-     IF (l_eenac .AND. computing_eenac) THEN
-        CALL json%add('output.nac_vec.eenac_drhoz', nacvec_drhoz(1:n))
-     ENDIF
+     CALL json%add('output.nac_vec.'//label//'_drhoz', nacvec_drhoz(1:n))
      !
      OPEN(NEWUNIT=iunit,FILE=TRIM(logfile))
      CALL json%print(iunit)
@@ -1410,156 +1391,8 @@ SUBROUTINE wbse_nacvec_drhoz_nac(n, zvector, nac_vec)
   DEALLOCATE(drhoz)
   DEALLOCATE(aux1)
   !
-9035 FORMAT(5X,'atom ',I4,' type ',I2,'   geNAC = ',3F14.8)
-9036 FORMAT(5X,'atom ',I4,' type ',I2,'   eeNAC = ',3F14.8)
-!
-END SUBROUTINE
-!
-!-----------------------------------------------------------------------
-SUBROUTINE wbse_get_dvpsi_gamma_nonlocal_nac(i_at, dvg_tmp, dvpsi)
-  !-----------------------------------------------------------------------
-  !
-  USE kinds,                ONLY : DP
-  USE ions_base,            ONLY : nat,ityp,ntyp=>nsp
-  USE cell_base,            ONLY : tpiba
-  USE fft_interfaces,       ONLY : fwfft,invfft
-  USE gvect,                ONLY : g,gstart
-  USE noncollin_module,     ONLY : npol
-  USE uspp_param,           ONLY : nh
-  USE uspp,                 ONLY : dvan,vkb
-  USE pwcom,                ONLY : npw,npwx
-  USE mp_bands,             ONLY : intra_bgrp_comm
-  USE mp,                   ONLY : mp_sum
-  USE distribution_center,  ONLY : band_group
-#if defined(__CUDA)
-  USE cublas
-#endif
-  !
-  IMPLICIT NONE
-  !
-  ! I/O
-  !
-  INTEGER, INTENT(IN) :: i_at
-  COMPLEX(DP), INTENT(IN) :: dvg_tmp(npwx*npol, band_group%nlocx)
-  COMPLEX(DP), INTENT(OUT) :: dvpsi(npwx, band_group%nlocx, 3)
-  !
-  ! Workspace
-  !
-  INTEGER :: ia, ib, ig, nt, ih, jkb, ic, nh_nt
-  INTEGER :: band_group_nloc
-  COMPLEX(DP) :: factor
-  REAL(DP), ALLOCATABLE :: bec1(:,:), bec2(:,:)
-  COMPLEX(DP), ALLOCATABLE :: work(:,:)
-  !
-  !$acc kernels present(dvpsi)
-  dvpsi(:,:,:) = (0._DP,0._DP)
-  !$acc end kernels
-  !
-  band_group_nloc = band_group%nloc
-  factor = tpiba*(0._DP,-1._DP)
-  !
-  jkb = 0
-  DO nt = 1,ntyp
-     nh_nt = nh(nt)
-     DO ia = 1,nat
-        IF(ityp(ia) == nt) THEN
-           IF(ia == i_at) EXIT
-           jkb = jkb+nh_nt
-        ENDIF
-     ENDDO
-     IF(ia == i_at) EXIT
-  ENDDO
-  !
-  IF(nh_nt < 1) RETURN
-  !
-  ALLOCATE(work(npwx,nh_nt))
-  ALLOCATE(bec1(nh_nt,band_group%nlocx))
-  ALLOCATE(bec2(nh_nt,band_group%nlocx))
-  !$acc enter data create(work,bec1,bec2)
-  !
-  DO ic = 1,3
-     !
-     ! first term: sum_l sum_G' [ i V_l(G) V^*_l(G') (G'*u) psi(G')
-     !
-     !$acc parallel loop collapse(2) present(work,vkb,g)
-     DO ih = 1,nh_nt
-        DO ig = 1,npw
-           work(ig,ih) = vkb(ig,jkb+ih)*g(ic,ig)*factor
-        ENDDO
-     ENDDO
-     !$acc end parallel
-     !
-     !$acc host_data use_device(work,dvg_tmp,bec1)
-     CALL DGEMM('C', 'N', nh_nt, band_group%nloc, 2*npw, 2._DP, work, 2*npwx, dvg_tmp, 2*npwx, &
-     & 0._DP, bec1, nh_nt)
-     !$acc end host_data
-     !
-     IF(gstart == 2) THEN
-        !$acc parallel loop collapse(2) present(bec1,work,dvg_tmp)
-        DO ib = 1,band_group_nloc
-           DO ih = 1,nh_nt
-              bec1(ih,ib) = bec1(ih,ib) - work(1,ih)*dvg_tmp(1,ib)
-           ENDDO
-        ENDDO
-        !$acc end parallel
-     ENDIF
-     !
-     !$acc host_data use_device(bec1)
-     CALL mp_sum(bec1,intra_bgrp_comm)
-     !$acc end host_data
-     !
-     !$acc parallel loop collapse(2) present(bec1,dvan)
-     DO ib = 1,band_group_nloc
-        DO ih = 1,nh_nt
-           bec1(ih,ib) = dvan(ih,ih,nt)*bec1(ih,ib)
-        ENDDO
-     ENDDO
-     !$acc end parallel
-     !
-     !$acc host_data use_device(vkb,bec1,dvpsi)
-     CALL DGEMM('N', 'N', 2*npw, band_group%nloc, nh_nt, 1._DP, vkb(1,jkb+1), 2*npwx, bec1, nh_nt, &
-     & 1._DP, dvpsi(1,1,ic), 2*npwx)
-     !$acc end host_data
-     !
-     ! second term: sum_l sum_G' [-i (G*u) V_l(G) V^*_l(G') psi(G')
-     !
-     !$acc host_data use_device(vkb,dvg_tmp,bec2)
-     CALL DGEMM('C', 'N', nh_nt, band_group%nloc, 2*npw, 2._DP, vkb(1,jkb+1), 2*npwx, dvg_tmp, &
-     & 2*npwx, 0._DP, bec2, nh_nt)
-     !$acc end host_data
-     !
-     IF(gstart == 2) THEN
-        !$acc parallel loop collapse(2) present(bec2,vkb,dvg_tmp)
-        DO ib = 1,band_group_nloc
-           DO ih = 1,nh_nt
-              bec2(ih,ib) = bec2(ih,ib) - vkb(1,jkb+ih)*dvg_tmp(1,ib)
-           ENDDO
-        ENDDO
-        !$acc end parallel
-     ENDIF
-     !
-     !$acc host_data use_device(bec2)
-     CALL mp_sum(bec2,intra_bgrp_comm)
-     !$acc end host_data
-     !
-     !$acc parallel loop collapse(2) present(bec2,dvan)
-     DO ib = 1,band_group_nloc
-        DO ih = 1,nh_nt
-           bec2(ih,ib) = dvan(ih,ih,nt)*bec2(ih,ib)
-        ENDDO
-     ENDDO
-     !$acc end parallel
-     !
-     !$acc host_data use_device(work,bec2,dvpsi)
-     CALL DGEMM('N', 'N', 2*npw, band_group%nloc, nh_nt, 1._DP, work, 2*npwx, bec2, nh_nt, 1._DP, &
-     & dvpsi(1,1,ic), 2*npwx)
-     !$acc end host_data
-     !
-  ENDDO
-  !
-  !$acc exit data delete(work,bec1,bec2)
-  DEALLOCATE(work)
-  DEALLOCATE(bec1)
-  DEALLOCATE(bec2)
+9035 FORMAT(5X,'atom ',I4,' type ',I2,'   ',A,' = ',3F14.8)
   !
 END SUBROUTINE
+!
+END MODULE

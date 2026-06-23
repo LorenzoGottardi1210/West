@@ -18,6 +18,7 @@ SUBROUTINE wbse_davidson_diago ( )
   ! ... ( L - ev ) * dvg = 0
   !
   USE kinds,                ONLY : DP
+  USE constants,            ONLY : eps8
   USE mp_global,            ONLY : inter_image_comm,my_image_id,nimage,inter_pool_comm,&
                                  & inter_bgrp_comm,nbgrp
   USE mp,                   ONLY : mp_max,mp_bcast
@@ -31,8 +32,8 @@ SUBROUTINE wbse_davidson_diago ( )
                                  & wstat_calculation,n_pdep_read_from_file,n_steps_write_restart,&
                                  & trev_pdep_rel,l_is_wstat_converged,nbnd_occ,lrwfc,iuwfc,dvg_exc,&
                                  & dng_exc,nbndval0x,n_trunc_bands,l_preconditioning,l_pre_shift,&
-                                 & l_spin_flip,l_forces,do_forces,forces_state,&
-                                 & l_genac,l_eenac,genac_state,eenac_stateI,eenac_stateJ,computing_eenac 
+                                 & l_spin_flip,l_forces,do_forces,forces_state,l_genac,l_eenac,&
+                                 & genac_state,eenac_stateI,eenac_stateJ,do_eenac
   USE plep_db,              ONLY : plep_db_write,plep_db_read
   USE davidson_restart,     ONLY : davidson_restart_write,davidson_restart_clear,&
                                  & davidson_restart_read
@@ -42,6 +43,7 @@ SUBROUTINE wbse_davidson_diago ( )
   USE buffers,              ONLY : get_buffer
   USE wavefunctions,        ONLY : evc
   USE wbse_bgrp,            ONLY : init_gather_bands
+  USE wbse_nac,             ONLY : wbse_calc_nac
 #if defined(__CUDA)
   USE west_gpu,             ONLY : allocate_gpu,deallocate_gpu,allocate_bse_gpu,deallocate_bse_gpu,&
                                  & reallocate_ps_gpu
@@ -67,13 +69,12 @@ SUBROUTINE wbse_davidson_diago ( )
   INTEGER, ALLOCATABLE :: ishift(:)
   REAL(DP), ALLOCATABLE :: ew(:)
   REAL(DP), ALLOCATABLE :: hr_distr(:,:), vr_distr(:,:)
-  COMPLEX(DP), ALLOCATABLE :: dng_exc_tmp(:,:,:), dvg_exc_tmp(:,:,:)
-  REAL(DP) :: omega_JI
-  COMPLEX(DP), ALLOCATABLE :: dvg_exc_tmp_J(:,:,:)
+  COMPLEX(DP), ALLOCATABLE :: dng_exc_tmp(:,:,:), dvg_exc_tmp(:,:,:), dvg_exc_tmp_J(:,:,:)
 #if defined(__CUDA)
-  ATTRIBUTES(PINNED) :: dng_exc_tmp, dvg_exc_tmp, dvg_exc_tmp_J 
+  ATTRIBUTES(PINNED) :: dng_exc_tmp, dvg_exc_tmp, dvg_exc_tmp_J
 #endif
   !
+  REAL(DP) :: omega_JI
   INTEGER :: iks,il1,ig1,lbnd,ibnd,iks_do
   INTEGER :: nbndval,nbnd_do,flnbndval
   INTEGER :: owner
@@ -548,13 +549,9 @@ SUBROUTINE wbse_davidson_diago ( )
   !
   DEALLOCATE( conv )
   DEALLOCATE( ew )
-  IF (l_eenac) THEN
-     omega_JI = ev(eenac_stateJ) - ev(eenac_stateI)
-     DEALLOCATE( ev )
-  ELSE
-     omega_JI = 0._DP
-     DEALLOCATE( ev )
-  ENDIF
+  omega_JI = 0._DP
+  IF(l_eenac) omega_JI = ev(eenac_stateJ) - ev(eenac_stateI)
+  DEALLOCATE( ev )
   !
   DEALLOCATE( hr_distr )
   DEALLOCATE( vr_distr )
@@ -568,10 +565,11 @@ SUBROUTINE wbse_davidson_diago ( )
      do_forces = .TRUE.
      !
      IF(.NOT. l_is_wstat_converged) THEN
-      IF (l_forces) CALL errore('chidiago','davidson not converged, cannot compute forces',1)
-      IF (l_genac .OR. l_eenac) CALL errore('chidiago','davidson not converged, cannot compute NACs',1)
+        IF(l_forces) CALL errore('chidiago','davidson not converged, cannot compute forces',1)
+        IF(l_genac .OR. l_eenac) CALL errore('chidiago','davidson not converged, cannot compute NACs',1)
      ENDIF
-     IF (l_forces) THEN
+     !
+     IF(l_forces) THEN
         !
         ! send forces_state to root image
         !
@@ -581,21 +579,21 @@ SUBROUTINE wbse_davidson_diago ( )
         !
         !$acc update device(dvg_exc_tmp)
         !
-        IF (.NOT.l_genac .AND. .NOT.l_eenac) DEALLOCATE( dvg_exc )
+        IF(.NOT. l_genac .AND. .NOT. l_eenac) DEALLOCATE( dvg_exc )
         !
         ! root image computes forces
         !
-        computing_eenac = .FALSE.
+        do_eenac = .FALSE.
         CALL wbse_calc_forces( dvg_exc_tmp )
         !
-        IF (.NOT.l_genac .AND. .NOT.l_eenac) THEN
+        IF(.NOT. l_genac .AND. .NOT. l_eenac) THEN
            !$acc exit data delete(dvg_exc_tmp)
            DEALLOCATE( dvg_exc_tmp )
         ENDIF
         !
      ENDIF
      !
-     IF (l_genac) THEN
+     IF(l_genac) THEN
         !
         ! send genac_state to root image
         !
@@ -605,32 +603,28 @@ SUBROUTINE wbse_davidson_diago ( )
         !
         !$acc update device(dvg_exc_tmp)
         !
-        IF (.NOT.l_eenac) DEALLOCATE( dvg_exc )
+        IF(.NOT. l_eenac) DEALLOCATE( dvg_exc )
         !
         ! root image computes geNAC
         !
-        computing_eenac = .FALSE.
+        do_eenac = .FALSE.
         CALL wbse_calc_nac( dvg_exc_tmp )
         !
-        IF (.NOT.l_eenac) THEN
+        IF(.NOT. l_eenac) THEN
            !$acc exit data delete(dvg_exc_tmp)
            DEALLOCATE( dvg_exc_tmp )
         ENDIF
         !
      ENDIF
      !
-     IF (l_eenac) THEN 
-        IF (eenac_stateI==eenac_stateJ) THEN
-           CALL errore('chidiago','eeNAC must be computed between different states',1)
-        ENDIF
-        IF (ABS(omega_JI) <= 1.0E-8_DP) THEN
-           CALL errore('wbse_calc_nac', &
-                       'omega_JI is zero or too small for eeNAC calculation', 1)
-        ENDIF
+     IF(l_eenac) THEN
+        !
+        IF(eenac_stateI == eenac_stateJ) CALL errore('chidiago','eeNAC must be computed between different states',1)
+        IF(ABS(omega_JI) < eps8) CALL errore('chidiago','omega_JI too small for eeNAC', 1)
+        !
         ALLOCATE( dvg_exc_tmp_J( npwx, band_group%nlocx, kpt_pool%nloc), STAT=ierr )
-        IF( ierr /= 0 ) &
-        CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
-        !$acc enter data create(dvg_exc_tmp_J)      
+        IF( ierr /= 0 ) CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
+        !$acc enter data create(dvg_exc_tmp_J)
         !
         ! send eenac_stateI to root image
         !
@@ -648,17 +642,17 @@ SUBROUTINE wbse_davidson_diago ( )
         !
         !$acc update device(dvg_exc_tmp_J)
         !
-        DEALLOCATE(dvg_exc)
+        DEALLOCATE( dvg_exc )
         !
         ! root image computes eeNAC
         !
-        computing_eenac = .TRUE.
-        CALL wbse_calc_nac( dvg_exc_tmp,dvg_exc_tmp_J,omega_JI)
+        do_eenac = .TRUE.
+        CALL wbse_calc_nac( dvg_exc_tmp, dvg_exc_tmp_J, omega_JI )
         !
         !$acc exit data delete(dvg_exc_tmp_J)
-        DEALLOCATE(dvg_exc_tmp_J)
+        DEALLOCATE( dvg_exc_tmp_J )
         !$acc exit data delete(dvg_exc_tmp)
-        DEALLOCATE(dvg_exc_tmp)
+        DEALLOCATE( dvg_exc_tmp )
         !
      ENDIF
      !

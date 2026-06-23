@@ -35,7 +35,7 @@
 31. O2 molecule, spin-flip BSE (HSE) forces, Gamma only
 32. Pb atom, GW, spin orbit
 33. NV- diamond spin-flip TDDFT (PBE) forces and eeNACs, Gamma only
-34. NV- diamond spin-flip TDDFT (PBE0) forces and eeNACs, Gamma only
+34. NV- diamond spin-flip TDDFT (DDH) forces and eeNACs, Gamma only
 
 ## Executing tests
 

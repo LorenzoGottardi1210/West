@@ -1,7 +1,5 @@
 #!/bin/bash
 
-WGET="wget -N -q"
-
 ${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/C_ONCV_PBE-1.2.upf
 ${WGET} http://www.quantum-simulation.org/potentials/sg15_oncv/upf/N_ONCV_PBE-1.2.upf
 

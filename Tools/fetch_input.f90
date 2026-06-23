@@ -36,8 +36,8 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
                              & trev_liouville_rel,wbse_ipol,l_dipole_realspace,wbse_epsinfty,&
                              & spin_excitation,l_preconditioning,l_pre_shift,l_spin_flip,&
                              & l_spin_flip_kernel,l_spin_flip_alda0,l_print_spin_flip_kernel,&
-                             & spin_flip_cut,l_forces,forces_state,forces_zeq_cg_tr,& 
-                             & l_genac,l_eenac,genac_state,eenac_stateI,eenac_stateJ,& 
+                             & spin_flip_cut,l_forces,forces_state,forces_zeq_cg_tr,l_genac,&
+                             & l_eenac,genac_state,eenac_stateI,eenac_stateJ,&
                              & forces_zeq_n_cg_maxiter,ddvxc_fd_coeff,forces_inexact_krylov,&
                              & forces_inexact_krylov_tr,main_input_file,logfile
   USE kinds,            ONLY : DP
@@ -620,7 +620,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      !
      ! CHECKS
      !
-     IF(.NOT. gamma_only) CALL errore('fetch_input','Err: BSE requires gamma_only',1)
+     IF(.NOT. gamma_only) CALL errore('fetch_input','Err: TDDFT/BSE requires gamma_only',1)
      IF(n_pdep_eigen_to_use < 1) CALL errore('fetch_input','Err: n_pdep_eigen_to_use<1',1)
      IF(n_trunc_bands < 0) CALL errore('fetch_input','Err: n_trunc_bands<0',1)
      IF(n_pdep_eigen_to_use == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_pdep_eigen_to_use',1)
@@ -697,7 +697,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      !
      ! CHECKS
      !
-     IF(.NOT. gamma_only) CALL errore('fetch_input','Err: BSE requires gamma_only',1)
+     IF(.NOT. gamma_only) CALL errore('fetch_input','Err: TDDFT/BSE requires gamma_only',1)
      !
      SELECT CASE(wbse_calculation)
      CASE('D','d')
@@ -723,6 +723,10 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
         IF(genac_state == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch genac_state',1)
         IF(eenac_stateI == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch eenac_stateI',1)
         IF(eenac_stateJ == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch eenac_stateJ',1)
+        IF(genac_state < 1) CALL errore('fetch_input','Err: genac_state<1',1)
+        IF(eenac_stateI < 1) CALL errore('fetch_input','Err: eenac_stateI<1',1)
+        IF(eenac_stateJ < 1) CALL errore('fetch_input','Err: eenac_stateJ<1',1)
+        IF(eenac_stateI == eenac_stateJ) CALL errore('fetch_input','Err: eenac_state I and J must be different',1)
         IF(forces_zeq_n_cg_maxiter == DUMMY_DEFAULT) &
         & CALL errore('fetch_input','Err: cannot fetch forces_zeq_n_cg_maxiter',1)
         IF(forces_inexact_krylov == DUMMY_DEFAULT) &
@@ -731,9 +735,9 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
         IF(l_spin_flip) CALL errore('fetch_input','Err: spin flip must use Davidson',1)
         IF(n_lanczos < 1) CALL errore('fetch_input','Err: n_lanczos<1',1)
         IF(n_lanczos == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_lanczos',1)
-        IF(l_forces) CALL errore('fetch_input', 'Err: forces calculation must use Davidson', 1)
-        IF(l_genac) CALL errore('fetch_input', 'Err: non-adiabatic calculation must use Davidson', 1)
-        IF(l_eenac) CALL errore('fetch_input', 'Err: non-adiabatic calculation must use Davidson', 1)
+        IF(l_forces) CALL errore('fetch_input','Err: forces must use Davidson',1)
+        IF(l_genac) CALL errore('fetch_input','Err: non-adiabatic must use Davidson',1)
+        IF(l_eenac) CALL errore('fetch_input','Err: non-adiabatic must use Davidson',1)
      CASE DEFAULT
         CALL errore('fetch_input','Err: wbse_calculation/=(D,L)',1)
      END SELECT

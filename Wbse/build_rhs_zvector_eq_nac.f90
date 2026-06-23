@@ -60,7 +60,7 @@ SUBROUTINE build_rhs_zvector_eq_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,dvgdvg_mat,dvg
   !
   IF(.NOT. l_bse_triplet) THEN
      !
-     ! Two calls because of the derivative wrt to real and complex orbitals
+     ! Two calls because of derivative wrt real and complex orbitals
      !
      CALL rhs_zvector_part2_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
      CALL rhs_zvector_part2_eenac(dvg_exc_tmp_J,dvg_exc_tmp_I,z_rhs_vec)
@@ -140,9 +140,10 @@ SUBROUTINE rhs_zvector_part1_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,dvgdvg_mat,dvgdvg
   USE bar,                  ONLY : bar_type,start_bar_type,update_bar_type,stop_bar_type
   USE distribution_center,  ONLY : kpt_pool,band_group
   USE mp_global,            ONLY : inter_image_comm,my_image_id
-  USE wbse_dv,              ONLY : wbse_dv_of_drho
+  USE wbse_dv,              ONLY : wbse_dv_setup,wbse_dv_of_drho
   USE wbse_bgrp,            ONLY : gather_bands
   USE west_mp,              ONLY : west_mp_wait
+  USE xc_lib,               ONLY : xclib_dft_is
   USE wavefunctions,        ONLY : evc,psic
 #if defined(__CUDA)
   USE cublas
@@ -161,7 +162,6 @@ SUBROUTINE rhs_zvector_part1_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,dvgdvg_mat,dvgdvg
   !
   ! Workspace
   !
-  LOGICAL :: lrpa
   INTEGER :: ibnd,jbnd,iks,iks_do,ir,ig,nbndval,nbnd_do,lbnd
   INTEGER :: dffts_nnr
   INTEGER :: req
@@ -182,7 +182,7 @@ SUBROUTINE rhs_zvector_part1_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,dvgdvg_mat,dvgdvg
   z_rhs_vec_part1(:,:,:) = (0._DP,0._DP)
   !$acc end kernels
   !
-  IF(l_bse .OR. l_hybrid_tddft) THEN
+  IF(xclib_dft_is('hybrid')) THEN
      !
      ALLOCATE(tmp_vec(npwx*npol,band_group%nlocx,kpt_pool%nloc))
      !$acc enter data create(tmp_vec)
@@ -211,9 +211,9 @@ SUBROUTINE rhs_zvector_part1_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,dvgdvg_mat,dvgdvg
   !
   !$acc enter data copyin(drhox)
   !
-  lrpa = l_bse
+  CALL wbse_dv_setup(.FALSE.)
   !
-  CALL wbse_dv_of_drho(drhox,lrpa,.FALSE.)
+  CALL wbse_dv_of_drho(drhox,.FALSE.,.FALSE.)
   !
   CALL start_bar_type(barra,'zvec1',kpt_pool%nloc)
   !
@@ -289,9 +289,8 @@ SUBROUTINE rhs_zvector_part1_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,dvgdvg_mat,dvgdvg
      !$acc kernels present(z_rhs_vec_part1)
      z_rhs_vec_part1(:,:,:) = 2._DP*z_rhs_vec_part1
      !$acc end kernels
-     IF(l_bse) CALL errore('build_rhs_zvector_eq_eenac','BSE NACs not implemented',1)
      !
-     IF(l_hybrid_tddft) THEN
+     IF(xclib_dft_is('hybrid')) THEN
         !
         ! hybrid_kernel_term3 called once for a_I and once for a_J (derivative wrt real and complex orbitals)
         ! it uses global variable evc1_all and evc1J_all:
@@ -335,12 +334,14 @@ SUBROUTINE rhs_zvector_part1_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,dvgdvg_mat,dvgdvg
            iks_do = iks
         ENDIF
         !
-        ! Two calls because of the derivative wrt to real and complex orbitals
+        ! Two calls because of derivative wrt real and complex orbitals
         !
-        !$acc host_data use_device(evc,dvgdvg_mat,dvgdvg_mat_JI,tmp_vec)
+        !$acc host_data use_device(evc,dvgdvg_mat,tmp_vec)
         CALL DGEMM('N','N',2*npwx*npol,nbnd_do,nbndval-n_trunc_bands,-1._DP,evc(1,1+n_trunc_bands),&
         & 2*npwx*npol,dvgdvg_mat(1,1,iks_do),nbndval0x-n_trunc_bands,0._DP,tmp_vec(1,1,iks),2*npwx*npol)
+        !$acc end host_data
         !
+        !$acc host_data use_device(evc,dvgdvg_mat_JI,tmp_vec)
         CALL DGEMM('N','N',2*npwx*npol,nbnd_do,nbndval-n_trunc_bands,-1._DP,evc(1,1+n_trunc_bands),&
         & 2*npwx*npol,dvgdvg_mat_JI(1,1,iks_do),nbndval0x-n_trunc_bands,1._DP,tmp_vec(1,1,iks),2*npwx*npol)
         !$acc end host_data
@@ -351,7 +352,11 @@ SUBROUTINE rhs_zvector_part1_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,dvgdvg_mat,dvgdvg
         !$acc update device(evc1_all(:,:,iks))
 #endif
         !
-        CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),z_rhs_vec_part1(:,:,iks),.FALSE.)
+        IF(l_hybrid_tddft) THEN
+           CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),z_rhs_vec_part1(:,:,iks),.FALSE.)
+        ELSEIF(l_bse) THEN
+           CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part1(:,:,iks),.FALSE.,1)
+        ENDIF
         !
      ENDIF
      !
@@ -437,7 +442,6 @@ SUBROUTINE rhs_zvector_part2_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
   INTEGER :: dffts_nnr,band_group_myoffset
   COMPLEX(DP), ALLOCATABLE :: dotp(:)
   COMPLEX(DP), ALLOCATABLE :: z_rhs_vec_part2(:,:,:),aux_g(:,:),evc_copy(:,:)
-  REAL(DP) :: reduce,reduce2
   COMPLEX(DP), ALLOCATABLE :: dvrs(:,:)
   COMPLEX(DP), ALLOCATABLE :: dpcpart(:,:)
   REAL(DP), ALLOCATABLE :: dv_vv_mat(:,:)
@@ -450,7 +454,7 @@ SUBROUTINE rhs_zvector_part2_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
   band_group_myoffset = band_group%myoffset
   !
   ALLOCATE(z_rhs_vec_part2(npwx*npol,band_group%nlocx,kpt_pool%nloc))
-  ALLOCATE(aux_g(npwx*npol,2))
+  ALLOCATE(aux_g(npwx*npol,nbndval0x-n_trunc_bands))
   ALLOCATE(dv_vv_mat(nbndval0x-n_trunc_bands,band_group%nlocx))
   ALLOCATE(dpcpart(npwx*npol,nbndval0x-n_trunc_bands))
   ALLOCATE(dvrs(dffts%nnr,nspin))
@@ -460,11 +464,13 @@ SUBROUTINE rhs_zvector_part2_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
   z_rhs_vec_part2(:,:,:) = (0._DP,0._DP)
   !$acc end kernels
   !
+  !$acc kernels present(dv_vv_mat)
+  dv_vv_mat(:,:) = 0._DP
+  !$acc end kernels
+  !
   !$acc kernels present(dpcpart)
   dpcpart(:,:) = (0._DP,0._DP)
   !$acc end kernels
-  !
-  dv_vv_mat(:,:) = (0._DP,0._DP)
   !
   IF(.NOT. l_spin_flip) THEN
      !
@@ -515,7 +521,7 @@ SUBROUTINE rhs_zvector_part2_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
            !
            CALL double_invfft_gamma(dffts,npw,npwx,dvg_exc_tmp_J(:,lbnd,iks),dvg_exc_tmp_J(:,lbnd+1,iks),psic,'Wave')
            !
-           !$acc parallel loop present(dvrs)
+           !$acc parallel loop present(psic,dvrs)
            DO ir = 1,dffts_nnr
               psic(ir) = psic(ir)*CMPLX(REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
            ENDDO
@@ -545,90 +551,54 @@ SUBROUTINE rhs_zvector_part2_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
         !
         ! Compute the second part: dv_vv_mat
         !
-        DO lbnd = 1,nbnd_do
+        ! double band @ gamma
+        !
+        DO jbnd = 1,(nbndval-n_trunc_bands)-MOD((nbndval-n_trunc_bands),2),2
            !
-           ibnd = band_group%l2g(lbnd)
-           ibndp = ibnd+n_trunc_bands
+           kbnd = jbnd+1
+           jbndp = jbnd+n_trunc_bands
+           kbndp = kbnd+n_trunc_bands
            !
-           ! double band @ gamma
+           CALL double_invfft_gamma(dffts,npw,npwx,evc(:,jbndp),evc(:,kbndp),psic,'Wave')
            !
-           DO jbnd = 1,(nbndval-n_trunc_bands)-MOD((nbndval-n_trunc_bands),2),2
-              !
-              kbnd = jbnd+1
-              jbndp = jbnd+n_trunc_bands
-              kbndp = kbnd+n_trunc_bands
-              !
-              CALL double_invfft_gamma(dffts,npw,npwx,evc(:,jbndp),evc(:,kbndp),psic,'Wave')
-              !
-              !$acc parallel loop present(dvrs)
-              DO ir = 1,dffts_nnr
-                 psic(ir) = psic(ir)*CMPLX(REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
-              ENDDO
-              !$acc end parallel
-              !
-              CALL double_fwfft_gamma(dffts,npw,npwx,psic,aux_g(:,1),aux_g(:,2),'Wave')
-              !
-              reduce = 0._DP
-              reduce2 = 0._DP
-              !$acc parallel loop reduction(+:reduce,reduce2) present(evc,aux_g) copy(reduce,reduce2)
-              DO ig = 1,npw
-                 reduce = reduce + REAL(evc(ig,ibndp),KIND=DP) * REAL(aux_g(ig,1),KIND=DP) &
-                 &               + AIMAG(evc(ig,ibndp)) * AIMAG(aux_g(ig,1))
-                 reduce2 = reduce2 + REAL(evc(ig,ibndp),KIND=DP) * REAL(aux_g(ig,2),KIND=DP) &
-                 &                 + AIMAG(evc(ig,ibndp)) * AIMAG(aux_g(ig,2))
-              ENDDO
-              !$acc end parallel
-              !
-              IF(gstart == 2) THEN
-                 !$acc update host(aux_g(1,1:2))
-                 reduce = reduce - 0.5_DP * REAL(evc(1,ibndp),KIND=DP) * REAL(aux_g(1,1),KIND=DP)
-                 reduce2 = reduce2 - 0.5_DP * REAL(evc(1,ibndp),KIND=DP) * REAL(aux_g(1,2),KIND=DP)
-              ENDIF
-              !
-              dv_vv_mat(jbnd,lbnd) = 2._DP * reduce
-              dv_vv_mat(kbnd,lbnd) = 2._DP * reduce2
-              !
+           !$acc parallel loop present(psic,dvrs)
+           DO ir = 1,dffts_nnr
+              psic(ir) = psic(ir)*CMPLX(REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
            ENDDO
+           !$acc end parallel
            !
-           ! single band @ gamma
-           !
-           IF(MOD((nbndval-n_trunc_bands),2) == 1) THEN
-              !
-              jbnd = nbndval - n_trunc_bands
-              jbndp = jbnd + n_trunc_bands
-              !
-              CALL single_invfft_gamma(dffts,npw,npwx,evc(:,jbndp),psic,'Wave')
-              !
-              !$acc parallel loop present(dvrs)
-              DO ir = 1,dffts_nnr
-                 psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
-              ENDDO
-              !$acc end parallel
-              !
-              CALL single_fwfft_gamma(dffts,npw,npwx,psic,aux_g(:,1),'Wave')
-              !
-              reduce = 0._DP
-              !$acc parallel loop reduction(+:reduce) present(evc,aux_g) copy(reduce)
-              DO ig = 1,npw
-                 reduce = reduce + REAL(evc(ig,ibndp),KIND=DP) * REAL(aux_g(ig,1),KIND=DP) &
-                 &               + AIMAG(evc(ig,ibndp)) * AIMAG(aux_g(ig,1))
-              ENDDO
-              !$acc end parallel
-              !
-              IF(gstart == 2) THEN
-                 !$acc update host(aux_g(1,1))
-                 reduce = reduce - 0.5_DP * REAL(evc(1,ibndp),KIND=DP) * REAL(aux_g(1,1),KIND=DP)
-              ENDIF
-              !
-              dv_vv_mat(jbnd,lbnd) = 2._DP * reduce
-              !
-           ENDIF
+           CALL double_fwfft_gamma(dffts,npw,npwx,psic,aux_g(:,jbnd),aux_g(:,kbnd),'Wave')
            !
         ENDDO
         !
-        CALL mp_sum(dv_vv_mat,intra_bgrp_comm)
+        ! single band @ gamma
         !
-        !$acc update device(dv_vv_mat)
+        IF(MOD((nbndval-n_trunc_bands),2) == 1) THEN
+           !
+           jbnd = nbndval-n_trunc_bands
+           jbndp = jbnd+n_trunc_bands
+           !
+           CALL single_invfft_gamma(dffts,npw,npwx,evc(:,jbndp),psic,'Wave')
+           !
+           !$acc parallel loop present(psic,dvrs)
+           DO ir = 1,dffts_nnr
+              psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
+           ENDDO
+           !$acc end parallel
+           !
+           CALL single_fwfft_gamma(dffts,npw,npwx,psic,aux_g(:,jbnd),'Wave')
+           !
+        ENDIF
+        !
+        ibnd = band_group%l2g(1)
+        ibndp = ibnd+n_trunc_bands
+        !
+        CALL glbrak_gamma(aux_g,evc(:,ibndp:ibndp+nbnd_do-1),dv_vv_mat,npw,npwx,&
+        & nbndval-n_trunc_bands,nbnd_do,nbndval0x-n_trunc_bands,npol)
+        !
+        !$acc host_data use_device(dv_vv_mat)
+        CALL mp_sum(dv_vv_mat,intra_bgrp_comm)
+        !$acc end host_data
         !
         !$acc host_data use_device(dvg_exc_tmp_J,dv_vv_mat,dpcpart)
         CALL DGEMM('N','T',2*npwx*npol,nbndval-n_trunc_bands,nbnd_do,-1._DP,dvg_exc_tmp_J(1,1,iks),&
@@ -785,90 +755,51 @@ SUBROUTINE rhs_zvector_part2_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
            !
            ! Compute the second part: dv_vv_mat
            !
-           DO lbnd = 1,nbnd_do
+           ! double band @ gamma
+           !
+           DO jbnd = 1,(nbndval-n_trunc_bands)-MOD((nbndval-n_trunc_bands),2),2
               !
-              ibnd = band_group%l2g(lbnd)
-              ibndp = ibnd+n_trunc_bands
+              kbnd = jbnd+1
               !
-              ! double band @ gamma
+              CALL double_invfft_gamma(dffts,npw,npwx,evc_copy(:,jbnd),evc_copy(:,kbnd),psic,'Wave')
               !
-              DO jbnd = 1,(nbndval-n_trunc_bands)-MOD((nbndval-n_trunc_bands),2),2
-                 !
-                 kbnd = jbnd+1
-                 jbndp = jbnd+n_trunc_bands
-                 kbndp = kbnd+n_trunc_bands
-                 !
-                 CALL double_invfft_gamma(dffts,npw,npwx,evc_copy(:,jbnd),evc_copy(:,kbnd),psic,'Wave')
-                 !
-                 !$acc parallel loop present(dvrs)
-                 DO ir = 1,dffts_nnr
-                    psic(ir) = psic(ir)*CMPLX(REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
-                 ENDDO
-                 !$acc end parallel
-                 !
-                 CALL double_fwfft_gamma(dffts,npw,npwx,psic,aux_g(:,1),aux_g(:,2),'Wave')
-                 !
-                 reduce = 0._DP
-                 reduce2 = 0._DP
-                 !$acc parallel loop reduction(+:reduce,reduce2) present(evc,aux_g) copy(reduce,reduce2)
-                 DO ig = 1,npw
-                    reduce = reduce + REAL(evc(ig,ibndp),KIND=DP) * REAL(aux_g(ig,1),KIND=DP) &
-                    &               + AIMAG(evc(ig,ibndp)) * AIMAG(aux_g(ig,1))
-                    reduce2 = reduce2 + REAL(evc(ig,ibndp),KIND=DP) * REAL(aux_g(ig,2),KIND=DP) &
-                    &                 + AIMAG(evc(ig,ibndp)) * AIMAG(aux_g(ig,2))
-                 ENDDO
-                 !$acc end parallel
-                 !
-                 IF(gstart == 2) THEN
-                    !$acc update host(aux_g(1,1:2))
-                    reduce = reduce - 0.5_DP * REAL(evc(1,ibndp),KIND=DP) * REAL(aux_g(1,1),KIND=DP)
-                    reduce2 = reduce2 - 0.5_DP * REAL(evc(1,ibndp),KIND=DP) * REAL(aux_g(1,2),KIND=DP)
-                 ENDIF
-                 !
-                 dv_vv_mat(jbnd,lbnd) = 2._DP * reduce
-                 dv_vv_mat(kbnd,lbnd) = 2._DP * reduce2
-                 !
+              !$acc parallel loop present(psic,dvrs)
+              DO ir = 1,dffts_nnr
+                 psic(ir) = psic(ir)*CMPLX(REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
               ENDDO
+              !$acc end parallel
               !
-              ! single band @ gamma
-              !
-              IF(MOD((nbndval-n_trunc_bands),2) == 1) THEN
-                 !
-                 jbnd = nbndval - n_trunc_bands
-                 jbndp = jbnd + n_trunc_bands
-                 !
-                 CALL single_invfft_gamma(dffts,npw,npwx,evc_copy(:,jbnd),psic,'Wave')
-                 !
-                 !$acc parallel loop present(dvrs)
-                 DO ir = 1,dffts_nnr
-                    psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
-                 ENDDO
-                 !$acc end parallel
-                 !
-                 CALL single_fwfft_gamma(dffts,npw,npwx,psic,aux_g(:,1),'Wave')
-                 !
-                 reduce = 0._DP
-                 !$acc parallel loop reduction(+:reduce) present(evc,aux_g) copy(reduce)
-                 DO ig = 1,npw
-                    reduce = reduce + REAL(evc(ig,ibndp),KIND=DP) * REAL(aux_g(ig,1),KIND=DP) &
-                    &               + AIMAG(evc(ig,ibndp)) * AIMAG(aux_g(ig,1))
-                 ENDDO
-                 !$acc end parallel
-                 !
-                 IF(gstart == 2) THEN
-                    !$acc update host(aux_g(1,1))
-                    reduce = reduce - 0.5_DP * REAL(evc(1,ibndp),KIND=DP) * REAL(aux_g(1,1),KIND=DP)
-                 ENDIF
-                 !
-                 dv_vv_mat(jbnd,lbnd) = 2._DP * reduce
-                 !
-              ENDIF
+              CALL double_fwfft_gamma(dffts,npw,npwx,psic,aux_g(:,jbnd),aux_g(:,kbnd),'Wave')
               !
            ENDDO
            !
-           CALL mp_sum(dv_vv_mat,intra_bgrp_comm)
+           ! single band @ gamma
            !
-           !$acc update device(dv_vv_mat)
+           IF(MOD((nbndval-n_trunc_bands),2) == 1) THEN
+              !
+              jbnd = nbndval-n_trunc_bands
+              !
+              CALL single_invfft_gamma(dffts,npw,npwx,evc_copy(:,jbnd),psic,'Wave')
+              !
+              !$acc parallel loop present(psic,dvrs)
+              DO ir = 1,dffts_nnr
+                 psic(ir) = CMPLX(REAL(psic(ir),KIND=DP)*REAL(dvrs(ir,current_spin),KIND=DP),KIND=DP)
+              ENDDO
+              !$acc end parallel
+              !
+              CALL single_fwfft_gamma(dffts,npw,npwx,psic,aux_g(:,jbnd),'Wave')
+              !
+           ENDIF
+           !
+           ibnd = band_group%l2g(1)
+           ibndp = ibnd+n_trunc_bands
+           !
+           CALL glbrak_gamma(aux_g,evc(:,ibndp:ibndp+nbnd_do-1),dv_vv_mat,npw,npwx,&
+           & nbndval-n_trunc_bands,nbnd_do,nbndval0x-n_trunc_bands,npol)
+           !
+           !$acc host_data use_device(dv_vv_mat)
+           CALL mp_sum(dv_vv_mat,intra_bgrp_comm)
+           !$acc end host_data
            !
            !$acc host_data use_device(dvg_exc_tmp_J,dv_vv_mat,dpcpart)
            CALL DGEMM('N','T',2*npwx*npol,nbndval-n_trunc_bands,nbnd_do,-1._DP,dvg_exc_tmp_J(1,1,iks),&
@@ -1148,7 +1079,7 @@ SUBROUTINE compute_ddvxc_5p_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,ddvxc)
   COMPLEX(DP), ALLOCATABLE :: dvrs_I(:,:)
   COMPLEX(DP), ALLOCATABLE :: dvrs_J(:,:)
   INTEGER :: isgn
-  INTEGER, DIMENSION(2) :: signs = [-1,1]
+  INTEGER, PARAMETER :: signs(2) = [-1,1]
   COMPLEX(DP), ALLOCATABLE :: ddvxc_tmp(:,:,:)
   !
   CALL start_clock('ddvxc_5p')
@@ -1376,10 +1307,9 @@ SUBROUTINE rhs_zvector_part4_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
   !
   ! Workspace
   !
-  INTEGER :: ig,lbnd,ibnd,jbnd,jbndp,iks,iks_do,nbnd_do,nbndval,flnbndval
+  INTEGER :: ig,lbnd,ibnd,iks,iks_do,nbnd_do,nbndval,flnbndval
   INTEGER :: band_group_myoffset
   INTEGER :: req
-  REAL(DP) :: reduce
   COMPLEX(DP), ALLOCATABLE :: dotp(:)
   COMPLEX(DP), ALLOCATABLE :: z_rhs_vec_part4(:,:,:),tmp_vec_I(:,:),tmp_vec_J(:,:)
   REAL(DP), ALLOCATABLE :: dv_vv_mat_I(:,:),dv_vv_mat_J(:,:)
@@ -1404,14 +1334,17 @@ SUBROUTINE rhs_zvector_part4_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
   z_rhs_vec_part4(:,:,:) = (0._DP,0._DP)
   !$acc end kernels
   !
-  !$acc kernels present(dpcpart_I,dpcpart_J)
-  dpcpart_I(:,:) = (0._DP,0._DP)
-  dpcpart_J(:,:) = (0._DP,0._DP)
+  !$acc kernels present(dv_vv_mat_I)
+  dv_vv_mat_I(:,:) = 0._DP
   !$acc end kernels
-  !
-  !$acc kernels present(dv_vv_mat_I,dv_vv_mat_J)
-  dv_vv_mat_I(:,:) = (0._DP,0._DP)
-  dv_vv_mat_J(:,:) = (0._DP,0._DP)
+  !$acc kernels present(dv_vv_mat_J)
+  dv_vv_mat_J(:,:) = 0._DP
+  !$acc end kernels
+  !$acc kernels present(dpcpart_I)
+  dpcpart_I(:,:) = (0._DP,0._DP)
+  !$acc end kernels
+  !$acc kernels present(dpcpart_J)
+  dpcpart_J(:,:) = (0._DP,0._DP)
   !$acc end kernels
   !
   CALL start_bar_type(barra,'zvec4',kpt_pool%nloc)
@@ -1490,65 +1423,27 @@ SUBROUTINE rhs_zvector_part4_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
      !
      ! Compute the second part: dv_vv_mat
      !
-     !$acc kernels present(tmp_vec_I,tmp_vec_J)
+     ! Two calls because of derivative wrt real and complex orbitals
+     !
+     !$acc kernels present(tmp_vec_I)
      tmp_vec_I(:,:) = (0._DP,0._DP)
+     !$acc end kernels
+     !$acc kernels present(tmp_vec_J)
      tmp_vec_J(:,:) = (0._DP,0._DP)
      !$acc end kernels
      !
-     ! two calls because of the derivative wrt real and complex orbitals
      CALL bse_kernel_gamma(current_spin,evc1_all(:,:,iks),tmp_vec_I,l_spin_flip)
      CALL bse_kernel_gamma(current_spin,evc1J_all(:,:,iks),tmp_vec_J,l_spin_flip)
      !
-     !$acc parallel vector_length(1024) present(evc,tmp_vec_I,tmp_vec_J,dv_vv_mat_I,dv_vv_mat_J)
-     !$acc loop collapse(2)
-     DO jbnd = 1,nbndval - n_trunc_bands
-        DO lbnd = 1,nbnd_do
-           !
-           jbndp = jbnd + n_trunc_bands
-           !
-           reduce = 0._DP
-           !$acc loop reduction(+:reduce)
-           DO ig = 1,npw
-              reduce = reduce + REAL(evc(ig,jbndp),KIND=DP) * REAL(tmp_vec_I(ig,lbnd),KIND=DP) &
-              &               + AIMAG(evc(ig,jbndp)) * AIMAG(tmp_vec_I(ig,lbnd))
-           ENDDO
-           !
-           IF(gstart == 2) THEN
-              reduce = reduce - 0.5_DP * REAL(evc(1,jbndp),KIND=DP) * REAL(tmp_vec_I(1,lbnd),KIND=DP)
-           ENDIF
-           !
-           dv_vv_mat_I(jbnd,lbnd) = 2._DP * reduce
-           !
-        ENDDO
-     ENDDO
-     !$acc end parallel
+     CALL glbrak_gamma(evc(:,n_trunc_bands+1:nbndval),tmp_vec_I,dv_vv_mat_I,npw,npwx,&
+     & nbndval-n_trunc_bands,nbnd_do,nbndval0x-n_trunc_bands,npol)
+     CALL glbrak_gamma(evc(:,n_trunc_bands+1:nbndval),tmp_vec_J,dv_vv_mat_J,npw,npwx,&
+     & nbndval-n_trunc_bands,nbnd_do,nbndval0x-n_trunc_bands,npol)
      !
-     !$acc parallel vector_length(1024) present(evc,tmp_vec_I,tmp_vec_J,dv_vv_mat_I,dv_vv_mat_J)
-     !$acc loop collapse(2)
-     DO jbnd = 1,nbndval - n_trunc_bands
-        DO lbnd = 1,nbnd_do
-           !
-           jbndp = jbnd + n_trunc_bands
-           !
-           reduce = 0._DP
-           !$acc loop reduction(+:reduce)
-           DO ig = 1,npw
-              reduce = reduce + REAL(evc(ig,jbndp),KIND=DP) * REAL(tmp_vec_J(ig,lbnd),KIND=DP) &
-              &               + AIMAG(evc(ig,jbndp)) * AIMAG(tmp_vec_J(ig,lbnd))
-           ENDDO
-           !
-           IF(gstart == 2) THEN
-              reduce = reduce - 0.5_DP * REAL(evc(1,jbndp),KIND=DP) * REAL(tmp_vec_J(1,lbnd),KIND=DP)
-           ENDIF
-           !
-           dv_vv_mat_J(jbnd,lbnd) = 2._DP * reduce
-           !
-        ENDDO
-     ENDDO
-     !$acc end parallel
-     !
-     !$acc host_data use_device(dv_vv_mat_I,dv_vv_mat_J)
+     !$acc host_data use_device(dv_vv_mat_I)
      CALL mp_sum(dv_vv_mat_I,intra_bgrp_comm)
+     !$acc end host_data
+     !$acc host_data use_device(dv_vv_mat_J)
      CALL mp_sum(dv_vv_mat_J,intra_bgrp_comm)
      !$acc end host_data
      !
@@ -1562,8 +1457,10 @@ SUBROUTINE rhs_zvector_part4_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
      & 2*npwx*npol,dv_vv_mat_J,nbndval0x-n_trunc_bands,0._DP,dpcpart_J,2*npwx*npol)
      !$acc end host_data
      !
-     !$acc host_data use_device(dpcpart_I,dpcpart_J)
+     !$acc host_data use_device(dpcpart_I)
      CALL mp_sum(dpcpart_I,inter_bgrp_comm)
+     !$acc end host_data
+     !$acc host_data use_device(dpcpart_J)
      CALL mp_sum(dpcpart_J,inter_bgrp_comm)
      !$acc end host_data
      !
@@ -1583,7 +1480,8 @@ SUBROUTINE rhs_zvector_part4_eenac(dvg_exc_tmp_I,dvg_exc_tmp_J,z_rhs_vec)
            !
            ibnd = band_group_myoffset+lbnd
            !
-           z_rhs_vec_part4(ig,lbnd,iks) = z_rhs_vec_part4(ig,lbnd,iks)+dpcpart_I(ig,ibnd)+dpcpart_J(ig,ibnd)
+           z_rhs_vec_part4(ig,lbnd,iks) = z_rhs_vec_part4(ig,lbnd,iks) &
+           &                            + dpcpart_I(ig,ibnd) + dpcpart_J(ig,ibnd)
            !
         ENDDO
      ENDDO

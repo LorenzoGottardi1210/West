@@ -561,7 +561,6 @@ SUBROUTINE wbse_calc_dvgdvg_mat(dvg_exc_tmp, dvgdvg_mat)
   !-----------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP
-  USE gvect,                ONLY : gstart
   USE pwcom,                ONLY : ngk,npwx,npw
   USE mp,                   ONLY : mp_sum
   USE noncollin_module,     ONLY : npol
@@ -580,8 +579,7 @@ SUBROUTINE wbse_calc_dvgdvg_mat(dvg_exc_tmp, dvgdvg_mat)
   !
   ! Workspace
   !
-  INTEGER :: iks, iks_do, nbndval, nbnd_do, lbnd, ibnd, ig
-  REAL(DP) :: reduce
+  INTEGER :: iks, iks_do, nbndval, nbnd_do, lbnd, ibnd
   TYPE(bar_type) :: barra
   INTEGER, PARAMETER :: flks(2) = [2,1]
   !
@@ -611,35 +609,8 @@ SUBROUTINE wbse_calc_dvgdvg_mat(dvg_exc_tmp, dvgdvg_mat)
         IF(ibnd > n_trunc_bands .AND. ibnd <= nbndval) nbnd_do = nbnd_do+1
      ENDDO
      !
-     !$acc parallel present(dvgdvg_mat,evc1_all,dvg_exc_tmp)
-     !$acc loop collapse(2)
-     DO lbnd = 1,nbnd_do
-        DO ibnd = 1,nbndval-n_trunc_bands
-           !
-           reduce = 0._DP
-           !$acc loop reduction(+:reduce)
-           DO ig = 1,npw
-              reduce = reduce &
-              & + REAL(evc1_all(ig,ibnd,iks),KIND=DP)*REAL(dvg_exc_tmp(ig,lbnd,iks),KIND=DP) &
-              & + AIMAG(evc1_all(ig,ibnd,iks))*AIMAG(dvg_exc_tmp(ig,lbnd,iks))
-           ENDDO
-           !
-           dvgdvg_mat(ibnd,lbnd,iks) = 2._DP*reduce
-           !
-        ENDDO
-     ENDDO
-     !$acc end parallel
-     !
-     IF(gstart == 2) THEN
-        !$acc parallel loop collapse(2) present(dvgdvg_mat,evc1_all,dvg_exc_tmp)
-        DO lbnd = 1,nbnd_do
-           DO ibnd = 1,nbndval - n_trunc_bands
-              dvgdvg_mat(ibnd,lbnd,iks) = dvgdvg_mat(ibnd,lbnd,iks) &
-              & - REAL(evc1_all(1,ibnd,iks),KIND=DP)*REAL(dvg_exc_tmp(1,lbnd,iks),KIND=DP)
-           ENDDO
-        ENDDO
-        !$acc end parallel
-     ENDIF
+     CALL glbrak_gamma(evc1_all(:,n_trunc_bands+1:nbndval,iks),dvg_exc_tmp(:,:,iks),&
+     & dvgdvg_mat(:,:,iks),npw,npwx,nbndval-n_trunc_bands,nbnd_do,nbndval0x-n_trunc_bands,npol)
      !
      CALL update_bar_type(barra,'dvgdvg',1)
      !

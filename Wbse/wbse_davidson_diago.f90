@@ -43,7 +43,7 @@ SUBROUTINE wbse_davidson_diago ( )
   USE buffers,              ONLY : get_buffer
   USE wavefunctions,        ONLY : evc
   USE wbse_bgrp,            ONLY : init_gather_bands
-  USE wbse_nac,             ONLY : wbse_calc_nac
+  USE wbse_forces,          ONLY : wbse_calc_forces,wbse_calc_nacs
 #if defined(__CUDA)
   USE west_gpu,             ONLY : allocate_gpu,deallocate_gpu,allocate_bse_gpu,deallocate_bse_gpu,&
                                  & reallocate_ps_gpu
@@ -608,7 +608,7 @@ SUBROUTINE wbse_davidson_diago ( )
         ! root image computes geNAC
         !
         do_eenac = .FALSE.
-        CALL wbse_calc_nac( dvg_exc_tmp )
+        CALL wbse_calc_nacs( dvg_exc_tmp )
         !
         IF(.NOT. l_eenac) THEN
            !$acc exit data delete(dvg_exc_tmp)
@@ -647,7 +647,7 @@ SUBROUTINE wbse_davidson_diago ( )
         ! root image computes eeNAC
         !
         do_eenac = .TRUE.
-        CALL wbse_calc_nac( dvg_exc_tmp, dvg_exc_tmp_J, omega_JI )
+        CALL wbse_calc_nacs( dvg_exc_tmp, dvg_exc_tmp_J, omega_JI )
         !
         !$acc exit data delete(dvg_exc_tmp_J)
         DEALLOCATE( dvg_exc_tmp_J )

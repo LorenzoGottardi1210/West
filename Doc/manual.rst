@@ -1297,7 +1297,7 @@ wbse_control
    * - **Default**
      - False
    * - **Description**
-     - If (True), then the spin-flip kernel is written to a cube file. Used only in spin-flip TDDFT calculations and when l_spin_flip_kernel is True.
+     - Deprecated parameter.
 
 .. data:: spin_flip_cut
 

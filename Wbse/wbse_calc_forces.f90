@@ -44,6 +44,7 @@ MODULE wbse_forces
       USE io_push,              ONLY : io_push_title
       USE wbse_bgrp,            ONLY : gather_bands
       USE mp,                   ONLY : mp_waitall
+      USE rhs_zvector,          ONLY : build_rhs_zvector_eq
 #if defined(__CUDA)
       USE west_gpu,             ONLY : allocate_bse_gpu,deallocate_bse_gpu
 #endif
@@ -223,6 +224,7 @@ MODULE wbse_forces
       USE io_push,              ONLY : io_push_title
       USE wbse_bgrp,            ONLY : gather_bands
       USE mp,                   ONLY : mp_waitall
+      USE rhs_zvector,          ONLY : build_rhs_zvector_eq_eenac
 #if defined(__CUDA)
       USE west_gpu,             ONLY : allocate_bse_gpu,deallocate_bse_gpu
 #endif

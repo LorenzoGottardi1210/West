@@ -180,11 +180,8 @@ MODULE rhs_zvector
       !
       ! part4: d < a | K1d | a > / d | v >
       !
-      IF(l_hybrid_tddft) THEN
-         CALL rhs_zvector_part4(dvg_exc_tmp_I,z_rhs_vec,.TRUE.,dvg_exc_tmp_J)
-      ELSEIF(l_bse) THEN
-         CALL errore('build_rhs_zvector_eq_eenac','BSE NACs not implemented',1)
-      ENDIF
+      IF(l_hybrid_tddft .OR. l_bse) &
+      & CALL rhs_zvector_part4(dvg_exc_tmp_I,z_rhs_vec,.TRUE.,dvg_exc_tmp_J)
       !
       ! part1: d < a | D | a > / d | v >
       !
@@ -276,7 +273,7 @@ MODULE rhs_zvector
       INTEGER :: dffts_nnr
       INTEGER :: req
       COMPLEX(DP), ALLOCATABLE :: dotp(:)
-      COMPLEX(DP), ALLOCATABLE :: z_rhs_vec_part1(:,:,:),tmp_vec(:,:,:)
+      COMPLEX(DP), ALLOCATABLE :: z_rhs_vec_part1(:,:,:),tmp_vec(:,:)
       COMPLEX(DP), ALLOCATABLE :: drhox(:,:)
       TYPE(bar_type) :: barra
       INTEGER, PARAMETER :: flks(2) = [2,1]
@@ -299,11 +296,11 @@ MODULE rhs_zvector
       !
       IF(xclib_dft_is('hybrid')) THEN
          !
-         ALLOCATE(tmp_vec(npwx*npol,band_group%nlocx,kpt_pool%nloc))
+         ALLOCATE(tmp_vec(npwx*npol,band_group%nlocx))
          !$acc enter data create(tmp_vec)
          !
          !$acc kernels present(tmp_vec)
-         tmp_vec(:,:,:) = (0._DP,0._DP)
+         tmp_vec(:,:) = (0._DP,0._DP)
          !$acc end kernels
          !
       ENDIF
@@ -401,10 +398,11 @@ MODULE rhs_zvector
          ENDIF
          !
          IF(l_nac) THEN
+            !
             ! Factor of 2 from the derivative wrt real and complex orbitals
             !
             !$acc kernels present(z_rhs_vec_part1)
-            z_rhs_vec_part1(:,:,:) = 2._DP*z_rhs_vec_part1
+            z_rhs_vec_part1(:,:,iks) = 2._DP*z_rhs_vec_part1(:,:,iks)
             !$acc end kernels
             !
          ENDIF
@@ -412,21 +410,10 @@ MODULE rhs_zvector
          IF(xclib_dft_is('hybrid')) THEN
             !
             IF(l_nac) THEN
+               !
                ! hybrid_kernel_term3 called once for a_I and once for a_J (derivative wrt real and complex orbitals)
                ! it uses global variable evc1_all and evc1J_all:
-               ! first time evc1_all contains a_I and evc1J_all contains a_J, second time contents are switched
-               !
-               CALL gather_bands(dvg_exc_tmp(:,:,iks),evc1_all(:,:,iks),req)
-               CALL west_mp_wait(req)
-               CALL gather_bands(dvg_exc_tmp_J(:,:,iks),evc1J_all(:,:,iks),req)
-               CALL west_mp_wait(req)
-#if !defined(__GPU_MPI)
-               !$acc update device(evc1_all(:,:,iks),evc1J_all(:,:,iks))
-#endif
-               !
-               CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part1(:,:,iks),l_spin_flip,3)
-               !
-               ! switch the contents of evc1_all and evc1J_all
+               ! first time evc1_all contains a_J and evc1J_all contains a_I, second time contents are switched
                !
                CALL gather_bands(dvg_exc_tmp_J(:,:,iks),evc1_all(:,:,iks),req)
                CALL west_mp_wait(req)
@@ -438,7 +425,7 @@ MODULE rhs_zvector
                !
                CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part1(:,:,iks),l_spin_flip,3)
                !
-               ! the contents of evc1_all and evc1J_all are reverted back (may be unnecessary)
+               ! switch contents of evc1_all and evc1J_all
                !
                CALL gather_bands(dvg_exc_tmp(:,:,iks),evc1_all(:,:,iks),req)
                CALL west_mp_wait(req)
@@ -447,6 +434,8 @@ MODULE rhs_zvector
 #if !defined(__GPU_MPI)
                !$acc update device(evc1_all(:,:,iks),evc1J_all(:,:,iks))
 #endif
+               !
+               CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part1(:,:,iks),l_spin_flip,3)
                !
             ELSE
                !
@@ -463,7 +452,7 @@ MODULE rhs_zvector
             !$acc host_data use_device(evc,dvgdvg_mat,tmp_vec)
             CALL DGEMM('N','N',2*npwx*npol,nbnd_do,nbndval-n_trunc_bands,-1._DP,&
             & evc(1,1+n_trunc_bands),2*npwx*npol,dvgdvg_mat(1,1,iks_do),nbndval0x-n_trunc_bands,&
-            & 0._DP,tmp_vec(1,1,iks),2*npwx*npol)
+            & 0._DP,tmp_vec,2*npwx*npol)
             !$acc end host_data
             !
             IF(l_nac) THEN
@@ -473,12 +462,16 @@ MODULE rhs_zvector
                !$acc host_data use_device(evc,dvgdvg_mat_JI,tmp_vec)
                CALL DGEMM('N','N',2*npwx*npol,nbnd_do,nbndval-n_trunc_bands,-1._DP,&
                & evc(1,1+n_trunc_bands),2*npwx*npol,dvgdvg_mat_JI(1,1,iks_do),&
-               & nbndval0x-n_trunc_bands,1._DP,tmp_vec(1,1,iks),2*npwx*npol)
+               & nbndval0x-n_trunc_bands,1._DP,tmp_vec,2*npwx*npol)
                !$acc end host_data
                !
             ENDIF
             !
-            CALL gather_bands(tmp_vec(:,:,iks),evc1_all(:,:,iks),req)
+            ! Wait for non-blocking cuBLAS
+            !
+            !$acc wait
+            !
+            CALL gather_bands(tmp_vec,evc1_all(:,:,iks),req)
             CALL west_mp_wait(req)
 #if !defined(__GPU_MPI)
             !$acc update device(evc1_all(:,:,iks))
@@ -1213,7 +1206,7 @@ MODULE rhs_zvector
             ! Factor of 2 from the derivative wrt real and complex orbitals
             !
             !$acc kernels present(z_rhs_vec_part3)
-            z_rhs_vec_part3(:,:,:) = 2._DP*z_rhs_vec_part3
+            z_rhs_vec_part3(:,:,iks) = 2._DP*z_rhs_vec_part3(:,:,iks)
             !$acc end kernels
             !
          ENDIF
@@ -1797,23 +1790,7 @@ MODULE rhs_zvector
             !
             ! hybrid_kernel_term4 called once for a_I and once for a_J (derivative wrt real and complex orbitals)
             ! it uses global variable evc1_all and evc1J_all:
-            ! first time evc1_all contains a_I and evc1J_all contains a_J, second time contents are switched
-            !
-            CALL gather_bands(dvg_exc_tmp(:,:,iks_do),evc1_all(:,:,iks_do),req)
-            CALL west_mp_wait(req)
-            CALL gather_bands(dvg_exc_tmp_J(:,:,iks_do),evc1J_all(:,:,iks_do),req)
-            CALL west_mp_wait(req)
-#if !defined(__GPU_MPI)
-            !$acc update device(evc1J_all(:,:,iks_do),evc1_all(:,:,iks_do))
-#endif
-            !
-            IF((.NOT. l_bse) .AND. l_hybrid_tddft) THEN
-               CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part4(:,:,iks),l_spin_flip,4)
-            ELSEIF(l_bse) THEN
-               CALL bse_kernel_term4(current_spin,z_rhs_vec_part4(:,:,iks),l_spin_flip)
-            ENDIF
-            !
-            ! switch the contents of evc1_all and evc1J_all
+            ! first time evc1_all contains a_J and evc1J_all contains a_I, second time contents are switched
             !
             CALL gather_bands(dvg_exc_tmp(:,:,iks_do),evc1J_all(:,:,iks_do),req)
             CALL west_mp_wait(req)
@@ -1829,15 +1806,21 @@ MODULE rhs_zvector
                CALL bse_kernel_term4(current_spin,z_rhs_vec_part4(:,:,iks),l_spin_flip)
             ENDIF
             !
-            ! the contents of evc1_all and evc1J_all are reverted back (may be unnecessary)
+            ! switch contents of evc1_all and evc1J_all
             !
             CALL gather_bands(dvg_exc_tmp(:,:,iks_do),evc1_all(:,:,iks_do),req)
             CALL west_mp_wait(req)
             CALL gather_bands(dvg_exc_tmp_J(:,:,iks_do),evc1J_all(:,:,iks_do),req)
             CALL west_mp_wait(req)
 #if !defined(__GPU_MPI)
-            !$acc update device(evc1J_all(:,:,iks_do),evc1_all(:,:,iks_do))
+            !$acc update device(evc1_all(:,:,iks_do),evc1J_all(:,:,iks_do))
 #endif
+            !
+            IF((.NOT. l_bse) .AND. l_hybrid_tddft) THEN
+               CALL hybrid_kernel_term1234(current_spin,z_rhs_vec_part4(:,:,iks),l_spin_flip,4)
+            ELSEIF(l_bse) THEN
+               CALL bse_kernel_term4(current_spin,z_rhs_vec_part4(:,:,iks),l_spin_flip)
+            ENDIF
             !
          ELSE
             !
@@ -1869,21 +1852,17 @@ MODULE rhs_zvector
          !$acc end host_data
          !
          IF(l_nac) THEN
-            !
             !$acc host_data use_device(dvg_exc_tmp_J,dv_vv_mat,dpcpart)
             CALL DGEMM('N','T',2*npwx*npol,nbndval-n_trunc_bands,nbnd_do,-1._DP,&
             & dvg_exc_tmp_J(1,1,iks),2*npwx*npol,dv_vv_mat,nbndval0x-n_trunc_bands,0._DP,dpcpart,&
             & 2*npwx*npol)
             !$acc end host_data
-            !
          ELSE
-            !
             !$acc host_data use_device(dvg_exc_tmp,dv_vv_mat,dpcpart)
             CALL DGEMM('N','T',2*npwx*npol,nbndval-n_trunc_bands,nbnd_do,-1._DP,&
             & dvg_exc_tmp(1,1,iks),2*npwx*npol,dv_vv_mat,nbndval0x-n_trunc_bands,0._DP,dpcpart,&
             & 2*npwx*npol)
             !$acc end host_data
-            !
          ENDIF
          !
          !$acc host_data use_device(dpcpart)

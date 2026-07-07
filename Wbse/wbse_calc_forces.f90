@@ -277,6 +277,23 @@ MODULE wbse_forces
          !$acc enter data create(dvgdvg_mat,dvgdvg_mat_JI)
          ALLOCATE(drhox1(dffts%nnr,nspin))
          !
+         ! To compute dvgdvg_mat_JI: put dvg_exc_tmp_J into evc1_all
+         !
+         DO iks = 1,kpt_pool%nloc
+            CALL gather_bands(dvg_exc_tmp_J(:,:,iks),evc1_all(:,:,iks),reqs(iks))
+         ENDDO
+         !
+         CALL mp_waitall(reqs)
+#if !defined(__GPU_MPI)
+         !$acc update device(evc1_all)
+#endif
+         !
+         ! Compute dvgdvg_mat_JI: inputs dvg_exc_tmp_I and dvg_exc_tmp_J switched
+         !
+         CALL wbse_calc_dvgdvg_mat(dvg_exc_tmp_J,dvgdvg_mat_JI,.TRUE.,dvg_exc_tmp_I)
+         !
+         ! Put dvg_exc_tmp_I into evc1_all
+         !
          DO iks = 1,kpt_pool%nloc
             CALL gather_bands(dvg_exc_tmp_I(:,:,iks),evc1_all(:,:,iks),reqs(iks))
          ENDDO
@@ -299,31 +316,6 @@ MODULE wbse_forces
          ! dvgdvg_mat_IJ (computed between aJ and aI)
          !
          CALL wbse_calc_dvgdvg_mat(dvg_exc_tmp_I,dvgdvg_mat,.TRUE.,dvg_exc_tmp_J)
-         !
-         ! To compute dvgdvg_mat_JI:
-         ! put the content of dvg_exc_tmp_J into evc1_all
-         !
-         DO iks = 1,kpt_pool%nloc
-            CALL gather_bands(dvg_exc_tmp_J(:,:,iks),evc1_all(:,:,iks),reqs(iks))
-         ENDDO
-         CALL mp_waitall(reqs)
-#if !defined(__GPU_MPI)
-         !$acc update device(evc1_all)
-#endif
-         !
-         ! Compute dvgdvg_mat_JI: inputs dvg_exc_tmp_I and dvg_exc_tmp_J switched
-         !
-         CALL wbse_calc_dvgdvg_mat(dvg_exc_tmp_J,dvgdvg_mat_JI,.TRUE.,dvg_exc_tmp_I)
-         !
-         ! Revert the content of evc1_all back to dvg_exc_tmp_I
-         !
-         DO iks = 1,kpt_pool%nloc
-            CALL gather_bands(dvg_exc_tmp_I(:,:,iks),evc1_all(:,:,iks),reqs(iks))
-         ENDDO
-         CALL mp_waitall(reqs)
-#if !defined(__GPU_MPI)
-         !$acc update device(evc1_all)
-#endif
          !
          ! drhox2
          !

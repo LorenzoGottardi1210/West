@@ -6,6 +6,7 @@
     "westpp": "1e-6",
     "qdet": "1e-4",
     "bse": "1e-4",
-    "forces": "1e-5"
+    "forces": "1e-5",
+    "nac_vec": "1e-5"
   }
 }

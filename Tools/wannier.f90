@@ -265,6 +265,7 @@ MODULE wann_loc_wfc
       ! Gygi et al., Computer Physics Communications 155, 1-6 (2003)
       !
       USE kinds,                 ONLY : DP
+      USE constants,             ONLY : eps16
       USE io_global,             ONLY : stdout
       USE linear_algebra_kernel, ONLY : matdiago_dsy
       USE io_push,               ONLY : io_push_title
@@ -396,7 +397,7 @@ MODULE wann_loc_wfc
                   !
                   ! Compute eigenvalues and eigenvectors of G
                   !
-                  IF(g12*g12 > 1.E-16_DP*ABS(g11*g22)) THEN
+                  IF(g12*g12 > eps16*ABS(g11*g22)) THEN
                      tau = 0.5_DP * (g22-g11) / g12
                      t = 1.0_DP / (ABS(tau) + SQRT(1._DP+tau**2))
                      IF(tau < 0._DP) t = -t

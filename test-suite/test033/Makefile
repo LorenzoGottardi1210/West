@@ -23,11 +23,11 @@ clean:
 title:
 	@echo
 	@echo "###############"
-	@echo "### test016 ###"
+	@echo "### test033 ###"
 	@echo "###############"
 	@echo
 
 description:
 	@echo
-	@echo "Formaldehyde molecule gamma_only TDDFT (PBE) forces, geNACs and eeNACs"
+	@echo "NV- diamond gamma_only spin-flip TDDFT (PBE) forces and eeNACs"
 	@echo

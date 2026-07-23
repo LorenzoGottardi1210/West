@@ -346,13 +346,17 @@ MODULE wbse_center
   REAL(DP) :: wbse_epsinfty
   CHARACTER(LEN=1) :: spin_excitation
   LOGICAL :: l_forces
-  LOGICAL :: do_forces
   INTEGER :: forces_state
   REAL(DP) :: forces_zeq_cg_tr
   INTEGER :: forces_zeq_n_cg_maxiter
   REAL(DP) :: ddvxc_fd_coeff
   INTEGER :: forces_inexact_krylov
   REAL(DP) :: forces_inexact_krylov_tr
+  LOGICAL :: l_genac
+  LOGICAL :: l_eenac
+  INTEGER :: genac_state
+  INTEGER :: eenac_stateI
+  INTEGER :: eenac_stateJ
   !
   ! FOR global variables
   !
@@ -367,6 +371,8 @@ MODULE wbse_center
   REAL(DP) :: sigma_c_head
   REAL(DP) :: sigma_x_head
   LOGICAL :: do_inexact_krylov
+  LOGICAL :: do_forces
+  LOGICAL :: do_eenac
   !
   ! FOR global Lanzcos diago vars
   !
@@ -384,6 +390,7 @@ MODULE wbse_center
   COMPLEX(DP), ALLOCATABLE :: u_matrix(:,:,:)
   REAL(DP),    ALLOCATABLE :: ovl_matrix(:,:,:)
   COMPLEX(DP), ALLOCATABLE :: evc1_all(:,:,:)
+  COMPLEX(DP), ALLOCATABLE :: evc1J_all(:,:,:)
   INTEGER,     ALLOCATABLE :: n_bse_idx(:)
   INTEGER,     ALLOCATABLE :: idx_matrix(:,:,:)
   INTEGER,     ALLOCATABLE :: tau_is_read(:,:,:)

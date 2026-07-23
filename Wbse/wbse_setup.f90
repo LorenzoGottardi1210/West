@@ -22,7 +22,7 @@ SUBROUTINE wbse_setup()
                                  & n_liouville_maxiter,n_liouville_read_from_file,&
                                  & trev_liouville_rel,trev_liouville,alphapv_dfpt,l_use_ecutrho,&
                                  & wbse_save_dir,l_hybrid_tddft,l_spin_flip,l_spin_flip_kernel,&
-                                 & do_forces,do_inexact_krylov
+                                 & do_forces,do_inexact_krylov,l_genac,l_eenac
   USE kinds,                ONLY : DP
   USE mp_global,            ONLY : npool
   USE types_coulomb,        ONLY : pot3D,pot3D_x,pot3D_c
@@ -58,6 +58,7 @@ SUBROUTINE wbse_setup()
   SELECT CASE(TRIM(solver))
   CASE('BSE','bse')
      l_bse = .TRUE.
+     IF(l_genac .OR. l_eenac) CALL errore('wbse_setup','BSE NACs not implemented',1)
   CASE('TDDFT','tddft')
      l_bse = .FALSE.
   END SELECT

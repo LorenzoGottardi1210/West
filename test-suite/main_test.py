@@ -200,6 +200,38 @@ def read_and_test_wbse_forces(fileA,fileB,tol):
         assert np.allclose(test_f[key],ref_f[key],rtol=0,atol=tol),f'TDDFT forces changed, field {key}'
 
 
+def read_wbse_nac_vec(fileName):
+    """
+    Reads the NAC vectors in wbse
+    """
+
+    with open(fileName,'r') as f:
+        data = json.load(f)
+
+    nac_vec = {}
+    for key in data['output']['nac_vec']:
+        nac_vec[key] = np.array(data['output']['nac_vec'][key],dtype='f8')
+
+    return nac_vec
+
+
+def read_and_test_wbse_nac_vec(fileA,fileB,tol):
+    """
+    Reads and tests TDDFT NAC vectors
+    """
+
+    test_f = read_wbse_nac_vec(fileA)
+    ref_f = read_wbse_nac_vec(fileB)
+
+    maxDiff = 0.0
+    for key in ref_f:
+        maxDiff = max(maxDiff,np.amax(np.abs(np.abs(test_f[key])-np.abs(ref_f[key]))))
+    print(f'TDDFT NAC vectors (wbse) max diff: {maxDiff}')
+
+    for key in ref_f:
+        assert np.allclose(np.abs(test_f[key]),np.abs(ref_f[key]),rtol=0,atol=tol),f'TDDFT NAC vectors changed, field {key}'
+
+
 def read_qdet_1body(fileName):
     """
     Reads QDET one-body term
@@ -284,7 +316,7 @@ def read_and_test_qdet_2body(fileA,fileB,tol):
 #########
 
 
-@pytest.mark.parametrize('testdir',['test001','test002','test003','test004','test005','test006','test007','test008','test009','test010','test011','test012','test013','test014','test015','test016','test017','test018','test019','test020','test021','test022','test023','test024','test025','test026','test027','test028','test029','test030','test031','test032'])
+@pytest.mark.parametrize('testdir',['test001','test002','test003','test004','test005','test006','test007','test008','test009','test010','test011','test012','test013','test014','test015','test016','test017','test018','test019','test020','test021','test022','test023','test024','test025','test026','test027','test028','test029','test030','test031','test032','test033','test034'])
 def test_totalEnergy(testdir):
     with open('parameters.json','r') as f:
         parameters = json.load(f)
@@ -320,15 +352,22 @@ def test_bseSpectrum(testdir):
     read_and_test_wbse_lanczos(testdir+'/test.wbse.save/wbse.json',testdir+'/ref/wbse.json',float(parameters['tolerance']['bse']))
 
 
-@pytest.mark.parametrize('testdir',['test016','test017','test018','test019','test020','test021','test022','test023','test024','test026','test027','test028','test029','test030','test031'])
+@pytest.mark.parametrize('testdir',['test016','test017','test018','test019','test020','test021','test022','test023','test024','test026','test027','test028','test029','test030','test031','test033','test034'])
 def test_bseEigen(testdir):
     with open('parameters.json','r') as f:
         parameters = json.load(f)
     read_and_test_wbse_davidson(testdir+'/test.wbse.save/wbse.json',testdir+'/ref/wbse.json',float(parameters['tolerance']['bse']))
 
 
-@pytest.mark.parametrize('testdir',['test016','test017','test018','test019','test020','test021','test022','test023','test026','test027','test028','test029','test030','test031'])
+@pytest.mark.parametrize('testdir',['test016','test017','test018','test019','test020','test021','test022','test023','test026','test027','test028','test029','test030','test031','test033','test034'])
 def test_tddftForces(testdir):
     with open('parameters.json','r') as f:
         parameters = json.load(f)
     read_and_test_wbse_forces(testdir+'/test.wbse.save/wbse.json',testdir+'/ref/wbse.json',float(parameters['tolerance']['forces']))
+
+
+@pytest.mark.parametrize('testdir',['test016','test017','test018','test019','test033','test034'])
+def test_tddftNACs(testdir):
+    with open('parameters.json','r') as f:
+        parameters = json.load(f)
+    read_and_test_wbse_nac_vec(testdir+'/test.wbse.save/wbse.json',testdir+'/ref/wbse.json',float(parameters['tolerance']['nac_vec']))

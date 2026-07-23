@@ -17,7 +17,11 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
   ! iterm == 1: \sum_{v'} (\int v_c \phi_{v'} \phi_{v}) a_{v'}
   ! iterm == 2: \sum_{v'} (\int v_c a_{v'} \phi_{v}) \phi_{v'}
   ! iterm == 3: \sum_{v'} (\int v_c a_{v'} \phi_{v}) a_{v'}
+  !             if l_eenac & do_eenac:
+  !             \sum_{v'} (\int v_c a_{I,v'} \phi_{v}) a_{J,v'}
   ! iterm == 4: \sum_{v'} (\int v_c a_{v'} a_{v}) \phi_{v'}
+  !             if l_eenac & do_eenac:
+  !             \sum_{v'} (\int v_c a_{I,v'} a_{J,v}) \phi_{v'}
   !
   USE kinds,                 ONLY : DP
   USE cell_base,             ONLY : omega
@@ -27,7 +31,7 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
   USE fft_at_gamma,          ONLY : single_fwfft_gamma,single_invfft_gamma,double_fwfft_gamma,double_invfft_gamma
   USE mp_global,             ONLY : inter_image_comm,my_image_id
   USE pwcom,                 ONLY : npw,npwx,isk,ngk
-  USE westcom,               ONLY : nbnd_occ,iuwfc,lrwfc,n_trunc_bands,evc1_all
+  USE westcom,               ONLY : nbnd_occ,iuwfc,lrwfc,n_trunc_bands,evc1_all,evc1J_all,l_forces,l_eenac,do_eenac
   USE exx,                   ONLY : exxalfa
   USE buffers,               ONLY : get_buffer
   USE distribution_center,   ONLY : kpt_pool,band_group
@@ -123,14 +127,22 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
            CASE(1,2,3)
               CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibndp),evc(:,ibndp+1),psic,'Wave')
            CASE(4)
-              CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,ibnd,iks_do),evc1_all(:,ibnd+1,iks_do),psic,'Wave')
+              IF(l_forces .AND. .NOT. do_eenac) &
+              & CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,ibnd,iks_do),evc1_all(:,ibnd+1,iks_do),psic,'Wave')
+              !
+              IF(l_eenac .AND. do_eenac) &
+              & CALL double_invfft_gamma(dffts,npw,npwx,evc1J_all(:,ibnd,iks_do),evc1J_all(:,ibnd+1,iks_do),psic,'Wave')
            END SELECT
         ELSE
            SELECT CASE(iterm)
            CASE(1,2,3)
               CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ibndp),psic,'Wave')
            CASE(4)
-              CALL single_invfft_gamma(dffts,npw,npwx,evc1_all(:,ibnd,iks_do),psic,'Wave')
+              IF(l_forces .AND. .NOT. do_eenac) &
+              & CALL single_invfft_gamma(dffts,npw,npwx,evc1_all(:,ibnd,iks_do),psic,'Wave')
+              !
+              IF(l_eenac .AND. do_eenac) &
+              & CALL single_invfft_gamma(dffts,npw,npwx,evc1J_all(:,ibnd,iks_do),psic,'Wave')
            END SELECT
         ENDIF
         !
@@ -144,7 +156,11 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
            CASE(2)
               CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,jbnd,ikq),evc(:,jbndp),psic2,'Wave')
            CASE(3)
-              CALL single_invfft_gamma(dffts,npw,npwx,evc1_all(:,jbnd,ikq),psic2,'Wave')
+              IF(l_forces .AND. .NOT. do_eenac) &
+              & CALL single_invfft_gamma(dffts,npw,npwx,evc1_all(:,jbnd,ikq),psic2,'Wave')
+              !
+              IF(l_eenac .AND. do_eenac) &
+              & CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,jbnd,ikq),evc1J_all(:,jbnd,ikq),psic2,'Wave')
            CASE(4)
               CALL double_invfft_gamma(dffts,npw,npwx,evc1_all(:,jbnd,iks_do),evc(:,jbndp),psic2,'Wave')
            END SELECT
@@ -176,11 +192,21 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
               CALL double_invfft_gamma(dffts,npw,npwx,gaux,gaux2,caux,'Wave')
               !
               IF(iterm == 3) THEN
-                 !$acc parallel loop present(raux,psic2,caux)
-                 DO ir = 1,dffts_nnr
-                    raux(ir) = raux(ir)+REAL(psic2(ir),KIND=DP)*caux(ir)
-                 ENDDO
-                 !$acc end parallel
+                 IF(l_forces .AND. .NOT. do_eenac) THEN
+                    !$acc parallel loop present(raux,psic2,caux)
+                    DO ir = 1,dffts_nnr
+                       raux(ir) = raux(ir)+REAL(psic2(ir),KIND=DP)*caux(ir)
+                    ENDDO
+                    !$acc end parallel
+                 ENDIF
+                 !
+                 IF(l_eenac .AND. do_eenac) THEN
+                    !$acc parallel loop present(raux,psic2,caux)
+                    DO ir = 1,dffts_nnr
+                       raux(ir) = raux(ir)+AIMAG(psic2(ir))*caux(ir)
+                    ENDDO
+                    !$acc end parallel
+                 ENDIF
               ELSE
                  !$acc parallel loop present(raux,psic2,caux)
                  DO ir = 1,dffts_nnr
@@ -210,11 +236,21 @@ SUBROUTINE hybrid_kernel_term1234(current_spin, hybrid_kd, sf, iterm)
               CALL single_invfft_gamma(dffts,npw,npwx,gaux,caux,'Wave')
               !
               IF(iterm == 3) THEN
-                 !$acc parallel loop present(raux,psic2,caux)
-                 DO ir = 1,dffts_nnr
-                    raux(ir) = raux(ir)+REAL(psic2(ir),KIND=DP)*REAL(caux(ir),KIND=DP)
-                 ENDDO
-                 !$acc end parallel
+                 IF(l_forces .AND. .NOT. do_eenac) THEN
+                    !$acc parallel loop present(raux,psic2,caux)
+                    DO ir = 1,dffts_nnr
+                       raux(ir) = raux(ir)+REAL(psic2(ir),KIND=DP)*REAL(caux(ir),KIND=DP)
+                    ENDDO
+                    !$acc end parallel
+                 ENDIF
+                 !
+                 IF(l_eenac .AND. do_eenac) THEN
+                    !$acc parallel loop present(raux,psic2,caux)
+                    DO ir = 1,dffts_nnr
+                       raux(ir) = raux(ir)+AIMAG(psic2(ir))*REAL(caux(ir),KIND=DP)
+                    ENDDO
+                    !$acc end parallel
+                 ENDIF
               ELSE
                  !$acc parallel loop present(raux,psic2,caux)
                  DO ir = 1,dffts_nnr

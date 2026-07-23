@@ -210,7 +210,8 @@ MODULE wfreq_db
       !
       USE mp_world,             ONLY : mpime,root
       USE io_global,            ONLY : stdout
-      USE westcom,              ONLY : wfreq_save_dir,logfile,n_pairs
+      USE westcom,              ONLY : wfreq_save_dir,logfile,qp_bands,occupation,n_bands,n_pairs,&
+                                     & pijmap,l_qdet_fcidump
       USE pwcom,                ONLY : nspin
       USE io_push,              ONLY : io_push_bar
       USE json_module,          ONLY : json_file
@@ -229,8 +230,12 @@ MODULE wfreq_db
       CHARACTER(LEN=6) :: my_label_ik,my_label_jk
       CHARACTER(LEN=9) :: my_label_ipair
       !
+      CHARACTER(LEN=512) :: fname
       TYPE(json_file) :: json
-      INTEGER :: iun,ipair
+      INTEGER :: iun,ipair,jpair,ii,jj,kk,ll
+      REAL(DP) :: nelec
+      CHARACTER(LEN=20) :: my_format
+      INTEGER :: idigit,jdigit,kdigit,ldigit
       !
       ! TIMING
       !
@@ -239,41 +244,83 @@ MODULE wfreq_db
       !
       IF(mpime == root) THEN
          !
-         CALL json%initialize()
-         CALL json%load(filename=TRIM(logfile))
-         !
-         DO iks = 1,nspin
-            DO jks = 1,nspin
-               !
-               WRITE(my_label_ik,'(i6.6)') iks
-               WRITE(my_label_jk,'(i6.6)') jks
-               !
+         IF(l_qdet_fcidump) THEN
+            !
+            fname = TRIM(wfreq_save_dir)//'/FCIDUMP'
+            OPEN(NEWUNIT=iun,FILE=fname)
+            !
+            nelec = 0._DP
+            DO ii = 1,n_bands
+               nelec = nelec + 2._DP * occupation(qp_bands(ii,1),1)
+            ENDDO
+            !
+            WRITE(iun,'(a,i6,a,i6,a)') '&FCI NORB=',n_bands,',NELEC=',NINT(nelec),',MS2=0,'
+            WRITE(iun,'(a)') 'ISYM=1,'
+            WRITE(iun,'(a)',ADVANCE='NO') 'ORBSYM='
+            DO ii = 1,n_bands
+               WRITE(iun,'(a)',ADVANCE='NO') '1,'
+            ENDDO
+            WRITE(iun,'(a)') ''
+            WRITE(iun,'(a)') 'UHF=.FALSE.,'
+            WRITE(iun,'(a)') '/'
+            !
+            DO jpair = 1,n_pairs
                DO ipair = 1,n_pairs
+                  ii = pijmap(1,ipair)
+                  jj = pijmap(2,ipair)
+                  kk = pijmap(1,jpair)
+                  ll = pijmap(2,jpair)
+                  idigit = FLOOR(LOG10(REAL(ii)))+2
+                  jdigit = FLOOR(LOG10(REAL(jj)))+2
+                  kdigit = FLOOR(LOG10(REAL(kk)))+2
+                  ldigit = FLOOR(LOG10(REAL(ll)))+2
+                  WRITE(my_format,'(a,i1,a,i1,a,i1,a,i1,a)') &
+                  & '(e20.12,i',idigit,',i',jdigit,',i',kdigit,',i',ldigit,')'
+                  WRITE(iun,my_format) REAL(eri_w(ipair,jpair,1,1),KIND=DP),ii,jj,kk,ll
+               ENDDO
+            ENDDO
+            !
+            CLOSE(iun)
+            !
+         ELSE
+            !
+            CALL json%initialize()
+            CALL json%load(filename=TRIM(logfile))
+            !
+            DO iks = 1,nspin
+               DO jks = 1,nspin
                   !
-                  WRITE(my_label_ipair,'(i9.9)') ipair
+                  WRITE(my_label_ik,'(i6.6)') iks
+                  WRITE(my_label_jk,'(i6.6)') jks
                   !
-                  IF(PRESENT(eri_vc)) THEN
-                     CALL json%add('qdet.eri_vc.K'//my_label_ik//'.K'//my_label_jk//'.pair'//&
-                     & my_label_ipair,eri_vc(:,ipair,jks,iks)*rytoev)
-                  ENDIF
-                  !
-                  IF(PRESENT(eri_w_full)) THEN
-                     CALL json%add('qdet.eri_w_full.K'//my_label_ik//'.K'//my_label_jk//'.pair'//&
-                     & my_label_ipair,REAL(eri_w_full(:,ipair,jks,iks),KIND=DP)*rytoev)
-                  ENDIF
-                  !
-                  CALL json%add('qdet.eri_w.K'//my_label_ik//'.K'//my_label_jk//'.pair'//&
-                  & my_label_ipair,REAL(eri_w(:,ipair,jks,iks),KIND=DP)*rytoev)
+                  DO ipair = 1,n_pairs
+                     !
+                     WRITE(my_label_ipair,'(i9.9)') ipair
+                     !
+                     IF(PRESENT(eri_vc)) THEN
+                        CALL json%add('qdet.eri_vc.K'//my_label_ik//'.K'//my_label_jk//'.pair'//&
+                        & my_label_ipair,eri_vc(:,ipair,jks,iks)*rytoev)
+                     ENDIF
+                     !
+                     IF(PRESENT(eri_w_full)) THEN
+                        CALL json%add('qdet.eri_w_full.K'//my_label_ik//'.K'//my_label_jk//&
+                        & '.pair'//my_label_ipair,REAL(eri_w_full(:,ipair,jks,iks),KIND=DP)*rytoev)
+                     ENDIF
+                     !
+                     CALL json%add('qdet.eri_w.K'//my_label_ik//'.K'//my_label_jk//'.pair'//&
+                     & my_label_ipair,REAL(eri_w(:,ipair,jks,iks),KIND=DP)*rytoev)
+                     !
+                  ENDDO
                   !
                ENDDO
-               !
             ENDDO
-         ENDDO
-         !
-         OPEN(NEWUNIT=iun,FILE=TRIM(logfile))
-         CALL json%print(iun)
-         CLOSE(iun)
-         CALL json%destroy()
+            !
+            OPEN(NEWUNIT=iun,FILE=TRIM(logfile))
+            CALL json%print(iun)
+            CLOSE(iun)
+            CALL json%destroy()
+            !
+         ENDIF
          !
       ENDIF
       !
@@ -285,7 +332,7 @@ MODULE wfreq_db
       WRITE(stdout,*)
       CALL io_push_bar()
       WRITE(stdout,'(5x,"SAVE written in ",a)') TRIM(human_readable_time(time_spent(2)-time_spent(1)))
-      WRITE(stdout,'(5x "In location : ",a)') TRIM(wfreq_save_dir)
+      WRITE(stdout,'(5x,"In location : ",a)') TRIM(wfreq_save_dir)
       CALL io_push_bar()
       !
     END SUBROUTINE
@@ -296,7 +343,7 @@ MODULE wfreq_db
       !
       USE mp_world,             ONLY : mpime,root
       USE io_global,            ONLY : stdout
-      USE westcom,              ONLY : wfreq_save_dir,logfile,n_pairs
+      USE westcom,              ONLY : wfreq_save_dir,logfile,n_pairs,pijmap,l_qdet_fcidump
       USE pwcom,                ONLY : nspin
       USE io_push,              ONLY : io_push_bar
       USE json_module,          ONLY : json_file
@@ -312,8 +359,11 @@ MODULE wfreq_db
       INTEGER :: iks
       CHARACTER(LEN=6) :: my_label_ik
       !
+      CHARACTER(LEN=512) :: fname
       TYPE(json_file) :: json
-      INTEGER :: iun
+      INTEGER :: iun,ipair,ii,jj
+      CHARACTER(LEN=20) :: my_format
+      INTEGER :: idigit,jdigit
       !
       ! TIMING
       !
@@ -322,19 +372,39 @@ MODULE wfreq_db
       !
       IF(mpime == root) THEN
          !
-         CALL json%initialize()
-         CALL json%load(filename=TRIM(logfile))
-         !
-         DO iks = 1,nspin
-            WRITE(my_label_ik,'(i6.6)') iks
-            CALL json%add('qdet.h1e.K'//my_label_ik,h1e(:,iks)*rytoev)
-         ENDDO
-         !
-         OPEN(NEWUNIT=iun,FILE=TRIM(logfile))
-         CALL json%print(iun)
-         CLOSE(iun)
-         CALL json%destroy()
-         !
+         IF(l_qdet_fcidump) THEN
+            !
+            fname = TRIM(wfreq_save_dir)//'/FCIDUMP'
+            OPEN(NEWUNIT=iun,FILE=fname,POSITION='APPEND')
+            !
+            DO ipair = 1,n_pairs
+               ii = pijmap(1,ipair)
+               jj = pijmap(2,ipair)
+               idigit = FLOOR(LOG10(REAL(ii)))+2
+               jdigit = FLOOR(LOG10(REAL(jj)))+2
+               WRITE(my_format,'(a,i1,a,i1,a)') '(e20.12,i',idigit,',i',jdigit,',i2,i2)'
+               WRITE(iun,my_format) h1e(ipair,1),ii,jj,0,0
+            ENDDO
+            !
+            WRITE(iun,'(e20.12,4i2)') 0._DP,0,0,0,0
+            CLOSE(iun)
+            !
+         ELSE
+            !
+            CALL json%initialize()
+            CALL json%load(filename=TRIM(logfile))
+            !
+            DO iks = 1,nspin
+               WRITE(my_label_ik,'(i6.6)') iks
+               CALL json%add('qdet.h1e.K'//my_label_ik,h1e(:,iks)*rytoev)
+            ENDDO
+            !
+            OPEN(NEWUNIT=iun,FILE=TRIM(logfile))
+            CALL json%print(iun)
+            CLOSE(iun)
+            CALL json%destroy()
+            !
+         ENDIF
       ENDIF
       !
       ! TIMING

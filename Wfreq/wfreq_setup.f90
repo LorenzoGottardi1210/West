@@ -24,7 +24,7 @@ SUBROUTINE wfreq_setup
                                    & sigma_freq,n_spectralf,l_enable_off_diagonal,ijpmap,pijmap,n_pairs,&
                                    & sigma_exx_full,sigma_vxcl_full,sigma_vxcnl_full,sigma_hf_full,&
                                    & sigma_sc_eks_full,sigma_sc_eqplin_full,sigma_corr_full,proj_c,&
-                                   & qdet_dc,l_dc2025
+                                   & qdet_dc,l_dc2025,l_qdet_fcidump
   USE wavefunctions,          ONLY : evc
   USE buffers,                ONLY : get_buffer
   USE pwcom,                  ONLY : nbnd,nkstot,nks,npw,npwx,nspin,ngk
@@ -179,6 +179,7 @@ SUBROUTINE wfreq_setup
      IF(lda_plus_u) CALL errore('wfreq_setup','QDET with lda_plus_u not supported',1)
      IF(lelfield) CALL errore('wfreq_setup','QDET with lelfield not supported',1)
      IF(.NOT. gamma_only) CALL errore('wfreq_setup','QDET requires gamma_only',1)
+     IF(l_qdet_fcidump .AND. nspin /= 1) CALL errore('wfreq_setup','FCIDUMP only supported for nspin=1',1)
      !
      ! qp_bands can be sorted or unsorted, but all occupied bands must appear before empty ones
      !

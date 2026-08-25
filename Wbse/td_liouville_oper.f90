@@ -230,11 +230,7 @@ SUBROUTINE west_apply_liouvillian(evc1,evc1_new,sf)
      ! use h_psi_, i.e. h_psi without band parallelization, as west
      ! handles band parallelization by itself
      !
-#if defined(__CUDA)
-     CALL h_psi__gpu(npwx,npw,nbnd_do,evc1(:,:,iks),hevc1)
-#else
      CALL h_psi_(npwx,npw,nbnd_do,evc1(:,:,iks),hevc1)
-#endif
      !
      IF(do_forces .AND. do_inexact_krylov .AND. xclib_dft_is('hybrid')) THEN
         IF(forces_inexact_krylov == 1 .OR. forces_inexact_krylov == 5) CALL start_exx()

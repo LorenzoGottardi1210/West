@@ -49,11 +49,7 @@ SUBROUTINE apply_sternheimerop_to_m_wfcs(nbndval, psi, hpsi, e, alpha, m)
      ! use h_psi_, i.e. h_psi without band parallelization, as west
      ! handles band parallelization by itself
      !
-#if defined(__CUDA)
-     CALL h_psi__gpu( npwx, npw, m, psi, hpsi )
-#else
      CALL h_psi_( npwx, npw, m, psi, hpsi )
-#endif
   ENDIF
   !
   ! then we compute the operator H-epsilon S

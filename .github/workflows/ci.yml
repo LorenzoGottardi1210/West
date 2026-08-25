@@ -3,7 +3,7 @@ name: CI
 on: [push, pull_request]
 
 env:
-  QE_VERSION: qe-7.5
+  QE_VERSION: qe-7.6
 
 jobs:
   test:
@@ -11,7 +11,7 @@ jobs:
     container: miccomcenter/bot:gcc1340_0001
 
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v7
       with:
         path: West
     - name: Build QE
@@ -40,7 +40,7 @@ jobs:
         cd qe/West/test-suite
         make NP=8
     - name: Archive artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       if: failure()
       with:
         name: artifacts

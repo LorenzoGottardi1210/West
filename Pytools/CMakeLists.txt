@@ -1,3 +1,7 @@
+# ==============================================================================
+#  CMakeLists.txt for Pytools  
+# ==============================================================================
+
 set(PYTOOLS_SRC
     read_json.py
     setup.py
@@ -22,7 +26,7 @@ add_custom_command(
     # Se uno di questi file cambia, CMake sa che deve rifare l'installazione
     DEPENDS ${PYTOOLS_ABS_SRC}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMENT "Installazione di Pytools via pip in corso..."
+    COMMENT "installing pytools "
 )
 add_custom_target(west_pytools ALL
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/install_timestamp

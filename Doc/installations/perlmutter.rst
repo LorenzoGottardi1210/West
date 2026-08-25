@@ -13,7 +13,7 @@ Perlmutter is an HPE Cray EX supercomputer located at National Energy Research S
 Building WEST (GPU)
 ~~~~~~~~~~~~~~~~~~~
 
-WEST executables can be compiled using the following script (tested on March 13, 2026):
+WEST executables can be compiled using the following script (tested on August 20, 2026):
 
 .. code-block:: bash
 
@@ -23,12 +23,12 @@ WEST executables can be compiled using the following script (tested on March 13,
    module unload darshan
    module load gpu
    module load PrgEnv-nvidia
-   module load nvidia/25.5
-   module load cudatoolkit/12.9
+   module load nvidia/26.5
+   module load cudatoolkit/13.2
    module load craype-accel-nvidia80
-   module load cray-python/3.11.7
+   module load cray-python/3.12.12
 
-   ./configure --with-cuda=$CUDA_HOME --with-cuda-runtime=12.9 --with-cuda-cc=80 --with-cuda-mpi=yes
+   ./configure --with-cuda=$CUDA_HOME --with-cuda-runtime=13.2 --with-cuda-cc=80 --with-cuda-mpi=yes
 
    # Edit make.inc:
    sed -i 's/^MPIF90 *=.*/MPIF90 = ftn/' make.inc
@@ -42,7 +42,7 @@ WEST executables can be compiled using the following script (tested on March 13,
 
    cd West
 
-   make conf PYT=python3 PYT_LDFLAGS="-L$PYTHON_PATH/lib/ -lpython3.11 -Wl,-rpath,$PYTHON_PATH/lib/"
+   make conf PYT=python3 PYT_LDFLAGS="-L$PYTHON_PATH/lib/ -lpython3.12 -Wl,-rpath,$PYTHON_PATH/lib/"
    make -j 8 all
 
 To use the script do:
@@ -78,12 +78,11 @@ The following is an example executable script `run_west.sh` to run the `wstat.x`
    module unload darshan
    module load gpu
    module load PrgEnv-nvidia
-   module load nvidia/25.5
-   module load cudatoolkit/12.9
+   module load nvidia/26.5
+   module load cudatoolkit/13.2
    module load craype-accel-nvidia80
-   module load cray-python/3.11.7
+   module load cray-python/3.12.12
 
-   export LD_LIBRARY_PATH=/opt/cray/pe/python/3.11.7/lib:$LD_LIBRARY_PATH
    export OMP_NUM_THREADS=1
    export SLURM_CPU_BIND=cores
    export MPICH_GPU_SUPPORT_ENABLED=1
@@ -99,7 +98,7 @@ Job submission is done with the following:
 Building WEST (CPU)
 ~~~~~~~~~~~~~~~~~~~
 
-WEST executables can be compiled using the following script (tested on March 13, 2026):
+WEST executables can be compiled using the following script (tested on August 20, 2026):
 
 .. code-block:: bash
 
@@ -109,7 +108,7 @@ WEST executables can be compiled using the following script (tested on March 13,
    module unload darshan
    module load cpu
    module load cray-fftw/3.3.10.11
-   module load cray-python/3.11.7
+   module load cray-python/3.12.12
 
    export MPIF90=ftn
    export F90=ftn
@@ -128,7 +127,7 @@ WEST executables can be compiled using the following script (tested on March 13,
 
    cd West
 
-   make conf PYT=python3 PYT_LDFLAGS="-L$PYTHON_PATH/lib/ -lpython3.11 -Wl,-rpath,$PYTHON_PATH/lib/"
+   make conf PYT=python3 PYT_LDFLAGS="-L$PYTHON_PATH/lib/ -lpython3.12 -Wl,-rpath,$PYTHON_PATH/lib/"
    make -j 8 all
 
 To use the script do:
@@ -163,9 +162,8 @@ The following is an example executable script `run_west.sh` to run the `wstat.x`
    module unload darshan
    module load cpu
    module load cray-fftw/3.3.10.11
-   module load cray-python/3.11.7
+   module load cray-python/3.12.12
 
-   export LD_LIBRARY_PATH=/opt/cray/pe/python/3.11.7/lib:$LD_LIBRARY_PATH
    export OMP_NUM_THREADS=1
    export SLURM_CPU_BIND=cores
 

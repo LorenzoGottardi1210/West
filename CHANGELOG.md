@@ -1,6 +1,20 @@
 Change Log
 ==========
 
+v6.4.0 (2026/08/31)
+-------------------
+
+- Code updated for compatibility with Quantum ESPRESSO 7.6.
+- Release of noncollinear TDDFT.
+- Release of TDDFT nonadiabatic coupling.
+- Added an option to output QDET results in the FCIDUMP format.
+- Added support for computing Wannier centers in orthorhombic and hexagonal cells.
+- Improved the performance of TDDFT/BSE forces with hybrid functionals.
+- Bug fix. Print an error message and stop if metaGGA or fractional occupations is used in TDDFT/BSE.
+- Updated library dependency to Json-Fortran 9.3.0.
+- Updated CI/CD. Added tests to cover the new functionalities.
+- Updated documentation. Updated build instructions for NERSC/Perlmutter and UChicago/RCC/Midway3. Added more tutorials.
+
 v6.3.0 (2026/02/27)
 -------------------
 
@@ -169,7 +183,7 @@ v4.3.0 (2021/05/26)
 v4.2.1 (2020/10/19)
 -------------------
 
-- Added support for python 3.8 (--embed)
+- Added support for Python 3.8 (--embed)
 - Updated scripts for RCC-Midway and MacOSX
 - Solved bugs in reporting conf layer in Makefile
 - Updated documentation
@@ -177,7 +191,7 @@ v4.2.1 (2020/10/19)
 v4.2.0 (2020/07/03)
 -------------------
 
-- Introduced automatic installation of missing python packages
+- Introduced automatic installation of missing Python packages
 - Introduced the conf layer in the Makefile to ease installation
 - Updated manual
 
@@ -195,7 +209,7 @@ v4.0.0 (2019/09/30)
 
 - Added client/server mode
 - Added coupling to Qbox code (http://qboxcode.org)
-- Added python3 interface
+- Added Python3 interface
 - Simplified the input format (now accepting both JSON and YAML formats)
 - Expanded documentation
 

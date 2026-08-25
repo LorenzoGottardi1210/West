@@ -16,6 +16,7 @@ SUBROUTINE wfreq_setup
   !
   USE mp_global,              ONLY : inter_image_comm,my_image_id,inter_pool_comm,npool,intra_bgrp_comm,nbgrp
   USE mp,                     ONLY : mp_bcast,mp_sum
+  USE control_flags,          ONLY : gamma_only
   USE westcom,                ONLY : lrwfc,iuwfc,wfreq_save_dir,wfreq_calculation,nbnd_occ,occupation,&
                                    & qp_bands,n_bands,alphapv_dfpt,n_imfreq,n_refreq,n_pdep_eigen_to_use,&
                                    & l_macropol,macropol_calculation,sigma_exx,sigma_vxcl,sigma_vxcnl,&
@@ -37,7 +38,6 @@ SUBROUTINE wfreq_setup
   USE ldaU,                   ONLY : lda_plus_u
   USE bp,                     ONLY : lelfield
   USE realus,                 ONLY : real_space
-  USE control_flags,          ONLY : gamma_only
   USE wfreq_db,               ONLY : qdet_db_write_overlap
   !
   IMPLICIT NONE

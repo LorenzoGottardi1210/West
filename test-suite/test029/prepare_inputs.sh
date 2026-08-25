@@ -48,9 +48,9 @@ C             0.6206777059        0.1271982848        0.6248928293
 C             0.6167428815        0.6167447445        0.1308940454
 K_POINTS gamma
 CELL_PARAMETERS angstrom
--0.000000 3.566790 3.566790
- 3.566790 0.000000 3.566790
- 3.566790 3.566790 0.000000
+0.000000 3.566790 3.566790
+3.566790 0.000000 3.566790
+3.566790 3.566790 0.000000
 EOF
 
 
@@ -76,6 +76,8 @@ wbse_init_control:
   wbse_init_calculation: S
   bse_method: PDEP
   n_pdep_eigen_to_use: 30
+  localization: W
+  overlap_thr: 0.0005
 EOF
 
 
@@ -89,6 +91,8 @@ wbse_init_control:
   wbse_init_calculation: S
   bse_method: PDEP
   n_pdep_eigen_to_use: 30
+  localization: W
+  overlap_thr: 0.0005
 
 wbse_control:
   wbse_calculation: D

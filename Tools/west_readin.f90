@@ -82,6 +82,7 @@ SUBROUTINE west_readin()
      IF(nbgrp > 1) CALL errore('west_readin','band groups not implemented for WESTPP',1)
      IF(npool > 1) CALL errore('west_readin','pools not implemented for WESTPP',1)
   CASE('WBSE_INIT','WBSE')
+     IF(nkpt > 1) CALL errore('west_readin','k-points not implemented for BSE',1)
      IF(npool > 1 .AND. l_spin_flip) CALL errore('west_readin','pools not implemented for spin flip',1)
   END SELECT
   !

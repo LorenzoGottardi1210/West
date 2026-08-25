@@ -15,26 +15,22 @@ SUBROUTINE do_wann()
   !------------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP
-  USE constants,            ONLY : tpi
   USE cell_base,            ONLY : at,alat,bg
   USE westcom,              ONLY : iuwfc,lrwfc,westpp_range,westpp_wannier_tr_rel,wannier_tr_rel,&
                                  & logfile,wann_b,wann_ng,wann_m
   USE mp_world,             ONLY : mpime,root
-  USE mp,                   ONLY : mp_bcast,mp_sum
-  USE mp_global,            ONLY : inter_image_comm,my_image_id,intra_bgrp_comm
-  USE fft_base,             ONLY : dffts
-  USE fft_at_gamma,         ONLY : double_invfft_gamma,single_invfft_gamma
-  USE pwcom,                ONLY : npw,npwx,current_k,ngk,nbnd
+  USE mp,                   ONLY : mp_bcast
+  USE mp_global,            ONLY : inter_image_comm,my_image_id
+  USE pwcom,                ONLY : npw,current_k,ngk,nbnd
   USE control_flags,        ONLY : gamma_only
   USE buffers,              ONLY : get_buffer
   USE types_bz_grid,        ONLY : k_grid
-  USE wann_loc_wfc,         ONLY : wann_init,wann_calc_proj,wann_jade
-  USE distribution_center,  ONLY : aband
+  USE wann_loc_wfc,         ONLY : wann_init
+  USE distribution_center,  ONLY : band_group
   USE class_idistribute,    ONLY : idistribute
   USE io_push,              ONLY : io_push_title
-  USE bar,                  ONLY : bar_type,start_bar_type,update_bar_type,stop_bar_type
   USE json_module,          ONLY : json_file,json_core,json_value
-  USE wavefunctions,        ONLY : evc,psic
+  USE wavefunctions,        ONLY : evc
 #if defined(__CUDA)
   USE west_gpu,             ONLY : allocate_gpu,deallocate_gpu
 #endif
@@ -43,22 +39,15 @@ SUBROUTINE do_wann()
   !
   ! Workspace
   !
-  INTEGER :: nstate,local_ib,global_ib,global_jb,ib,jb
-  INTEGER :: iks,ir,il,ik
+  INTEGER :: nstate,ib
+  INTEGER :: iks,il,ik
   INTEGER :: iunit
-  INTEGER :: dffts_nnr
-  REAL(DP) :: reduce
-  REAL(DP) :: val(8)
   REAL(DP) :: tmp(3)
   REAL(DP) :: wan_center(3),wan_center_cry(3)
-  REAL(DP), ALLOCATABLE :: proj(:,:)
   REAL(DP), ALLOCATABLE :: amat(:,:,:)
   REAL(DP), ALLOCATABLE :: umat(:,:)
-  REAL(DP), ALLOCATABLE :: aux(:)
   CHARACTER(LEN=6) :: label_k
   CHARACTER(LEN=6) :: label_b
-  TYPE(bar_type) :: barra
-  INTEGER :: barra_load
   TYPE(json_file) :: json
   TYPE(json_core) :: jcor
   TYPE(json_value), POINTER :: jval
@@ -82,28 +71,11 @@ SUBROUTINE do_wann()
   !
   ALLOCATE(amat(nstate,nstate,2*wann_ng))
   ALLOCATE(umat(nstate,nstate))
-  ALLOCATE(proj(dffts%nnr,2*wann_ng))
-  ALLOCATE(aux(dffts%nnr))
-  !$acc enter data create(proj,aux)
   !
-  dffts_nnr = dffts%nnr
-  !
-  aband = idistribute()
-  CALL aband%init(nstate,'i','westpp_range',.TRUE.)
-  !
-  barra_load = 0
-  DO iks = 1,k_grid%nps
-     DO local_ib = 1,aband%nloc
-        global_ib = aband%l2g(local_ib)
-        DO global_jb = global_ib,nstate
-           barra_load = barra_load+1
-        ENDDO
-     ENDDO
-  ENDDO
+  band_group = idistribute()
+  CALL band_group%init(nstate,'i','westpp_range',.TRUE.)
   !
   CALL io_push_title('(B)oys/Wannier localization')
-  !
-  CALL start_bar_type(barra,'westpp',barra_load)
   !
   DO iks = 1,k_grid%nps ! KPOINT-SPIN LOOP
      !
@@ -120,102 +92,7 @@ SUBROUTINE do_wann()
         !$acc update device(evc)
      ENDIF
      !
-     ! compute unitary transformation matrix
-     !
-     CALL wann_calc_proj(proj)
-     !
-     !$acc update device(proj)
-     !
-     amat(:,:,:) = 0._DP
-     !
-     DO local_ib = 1,aband%nloc
-        !
-        global_ib = aband%l2g(local_ib)
-        ib = global_ib+westpp_range(1)-1
-        !
-        CALL single_invfft_gamma(dffts,npw,npwx,evc(:,ib),psic,'Wave')
-        !
-        !$acc kernels present(aux,psic)
-        aux(:) = REAL(psic,KIND=DP)
-        !$acc end kernels
-        !
-        DO global_jb = global_ib,nstate,2
-           !
-           jb = global_jb+westpp_range(1)-1
-           !
-           IF(global_jb < nstate) THEN
-              !
-              CALL double_invfft_gamma(dffts,npw,npwx,evc(:,jb),evc(:,jb+1),psic,'Wave')
-              !
-              DO il = 1,2*wann_ng
-                 !
-                 reduce = 0._DP
-                 !
-                 !$acc parallel loop reduction(+:reduce) present(aux,psic,proj) copy(reduce)
-                 DO ir = 1,dffts_nnr
-                    reduce = reduce + aux(ir)*REAL(psic(ir),KIND=DP)*proj(ir,il)
-                 ENDDO
-                 !$acc end parallel
-                 !
-                 val(il) = reduce
-                 !
-              ENDDO
-              !
-              amat(global_ib,global_jb,1:2*wann_ng) = val(1:2*wann_ng)
-              IF(ib /= jb) amat(global_jb,global_ib,1:2*wann_ng) = val(1:2*wann_ng)
-              !
-              DO il = 1,2*wann_ng
-                 !
-                 reduce = 0._DP
-                 !
-                 !$acc parallel loop reduction(+:reduce) present(aux,psic,proj) copy(reduce)
-                 DO ir = 1,dffts_nnr
-                    reduce = reduce + aux(ir)*AIMAG(psic(ir))*proj(ir,il)
-                 ENDDO
-                 !$acc end parallel
-                 !
-                 val(il) = reduce
-                 !
-              ENDDO
-              !
-              amat(global_ib,global_jb+1,1:2*wann_ng) = val(1:2*wann_ng)
-              IF(ib /= jb+1) amat(global_jb+1,global_ib,1:2*wann_ng) = val(1:2*wann_ng)
-              !
-              CALL update_bar_type(barra,'westpp',2)
-              !
-           ELSE
-              !
-              CALL single_invfft_gamma(dffts,npw,npwx,evc(:,jb),psic,'Wave')
-              !
-              DO il = 1,2*wann_ng
-                 !
-                 reduce = 0._DP
-                 !
-                 !$acc parallel loop reduction(+:reduce) present(aux,psic,proj) copy(reduce)
-                 DO ir = 1,dffts_nnr
-                    reduce = reduce + aux(ir)*REAL(psic(ir),KIND=DP)*proj(ir,il)
-                 ENDDO
-                 !$acc end parallel
-                 !
-                 val(il) = reduce
-                 !
-              ENDDO
-              !
-              amat(global_ib,global_jb,1:2*wann_ng) = val(1:2*wann_ng)
-              IF(ib /= jb) amat(global_jb,global_ib,1:2*wann_ng) = val(1:2*wann_ng)
-              !
-              CALL update_bar_type(barra,'westpp',1)
-              !
-           ENDIF
-           !
-        ENDDO
-        !
-     ENDDO
-     !
-     CALL mp_sum(amat,intra_bgrp_comm)
-     CALL mp_sum(amat,inter_image_comm)
-     !
-     CALL wann_jade(nstate,amat,2*wann_ng,umat)
+     CALL wbse_wann_local(westpp_range(1),westpp_range(2),amat,umat)
      !
      IF(mpime == root) THEN
         !
@@ -264,13 +141,8 @@ SUBROUTINE do_wann()
      !
   ENDDO
   !
-  CALL stop_bar_type(barra,'westpp')
-  !
   DEALLOCATE(amat)
   DEALLOCATE(umat)
-  !$acc exit data delete(proj,aux)
-  DEALLOCATE(proj)
-  DEALLOCATE(aux)
   !
 #if defined(__CUDA)
   CALL deallocate_gpu()

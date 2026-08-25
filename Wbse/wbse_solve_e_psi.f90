@@ -290,6 +290,7 @@ END SUBROUTINE
 SUBROUTINE compute_d0psi_dfpt()
   !
   USE kinds,                ONLY : DP
+  USE control_flags,        ONLY : gamma_only
   USE mp_global,            ONLY : my_image_id,inter_image_comm
   USE mp,                   ONLY : mp_bcast
   USE buffers,              ONLY : get_buffer
@@ -396,7 +397,7 @@ SUBROUTINE compute_d0psi_dfpt()
      !
   ENDDO
   !
-  IF(gstart == 2) THEN
+  IF(gamma_only .AND. gstart == 2) THEN
      kpt_pool_nloc = kpt_pool%nloc
      band_group_nloc = band_group%nloc
      !

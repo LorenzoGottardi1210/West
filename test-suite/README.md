@@ -36,6 +36,7 @@
 32. Pb atom, GW, spin orbit
 33. NV- diamond spin-flip TDDFT (PBE) forces and eeNACs, Gamma only
 34. NV- diamond spin-flip TDDFT (DDH) forces and eeNACs, Gamma only
+35. Zn atom, noncollinear TDDFT (LDA), spin orbit
 
 ## Executing tests
 

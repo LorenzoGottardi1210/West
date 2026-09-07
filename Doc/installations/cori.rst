@@ -50,12 +50,6 @@ Running WEST Jobs
 
 The following is an example executable script `run_west.sh` to run the `wstat.x` WEST executable on two nodes of Cori (Haswell partition) with 32 MPI ranks per node. The <project_name> must be replaced with an active project allocation.
 
-**Important**: The following environment variable is needed to work around a bug in ROMIO, Cray MPICH.
-
-.. code-block:: bash
-
-   export ROMIO_FSTYPE_FORCE="ufs:"
-
 .. code-block:: bash
 
    $ cat run_west.sh

@@ -64,6 +64,7 @@ MODULE pdep_io
          iq_ = iq
       ELSE
          iq_ = default_iq
+         IF(.NOT. gamma_only) npwq = ngq(iq_)
       ENDIF
       !
       IF(.NOT. gamma_only) THEN
@@ -188,6 +189,7 @@ MODULE pdep_io
          iq_ = iq
       ELSE
          iq_ = default_iq
+         IF(.NOT. gamma_only) npwq = ngq(iq_)
       ENDIF
       !
       IF(.NOT. gamma_only) THEN

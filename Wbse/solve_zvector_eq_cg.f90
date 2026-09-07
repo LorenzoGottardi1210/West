@@ -48,11 +48,7 @@ SUBROUTINE solve_zvector_eq_cg(z_rhs, z_out)
   REAL(DP), EXTERNAL :: get_clock
   CHARACTER(20), EXTERNAL :: human_readable_time
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('zvec_cg')
-#else
   CALL start_clock('zvec_cg')
-#endif
   !
   CALL io_push_title('Solve the Z vector equation using the CG algorithm')
   !
@@ -226,11 +222,7 @@ SUBROUTINE solve_zvector_eq_cg(z_rhs, z_out)
   DEALLOCATE(rz_old)
   DEALLOCATE(rz_new)
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('zvec_cg')
-#else
   CALL stop_clock('zvec_cg')
-#endif
   !
 END SUBROUTINE
 !
@@ -267,11 +259,7 @@ SUBROUTINE cg_precondition(x, px, turn_shift)
   REAL(DP), ALLOCATABLE :: g2kin_save(:,:)
   REAL(DP), PARAMETER :: minimum = 1._DP
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('precd_cg')
-#else
   CALL start_clock('precd_cg')
-#endif
   !
   band_group_myoffset = band_group%myoffset
   !
@@ -347,10 +335,6 @@ SUBROUTINE cg_precondition(x, px, turn_shift)
   !$acc exit data delete(g2kin_save)
   DEALLOCATE(g2kin_save)
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('precd_cg')
-#else
   CALL stop_clock('precd_cg')
-#endif
   !
 END SUBROUTINE

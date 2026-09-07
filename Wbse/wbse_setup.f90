@@ -22,13 +22,14 @@ SUBROUTINE wbse_setup()
                                  & n_liouville_maxiter,n_liouville_read_from_file,&
                                  & trev_liouville_rel,trev_liouville,alphapv_dfpt,l_use_ecutrho,&
                                  & wbse_save_dir,l_hybrid_tddft,l_spin_flip,l_spin_flip_kernel,&
-                                 & do_forces,do_inexact_krylov
+                                 & do_forces,do_inexact_krylov,l_genac,l_eenac
   USE kinds,                ONLY : DP
   USE mp_global,            ONLY : npool
   USE types_coulomb,        ONLY : pot3D,pot3D_x,pot3D_c
   USE wbse_dv,              ONLY : wbse_dv_setup,wbse_sf_kernel_setup
   USE xc_lib,               ONLY : xclib_dft_is
   USE exx_base,             ONLY : erfc_scrlen
+  USE control_flags,        ONLY : gamma_only
   USE pwcom,                ONLY : nkstot,nks,nspin
   USE distribution_center,  ONLY : kpt_pool
   USE class_idistribute,    ONLY : idistribute,IDIST_BLK
@@ -58,6 +59,7 @@ SUBROUTINE wbse_setup()
   SELECT CASE(TRIM(solver))
   CASE('BSE','bse')
      l_bse = .TRUE.
+     IF(l_genac .OR. l_eenac) CALL errore('wbse_setup','BSE NACs not implemented',1)
   CASE('TDDFT','tddft')
      l_bse = .FALSE.
   END SELECT
@@ -69,6 +71,9 @@ SUBROUTINE wbse_setup()
   ELSE
      l_hybrid_tddft = .FALSE.
   ENDIF
+  !
+  IF((l_bse .OR. l_hybrid_tddft) .AND. .NOT. gamma_only .AND. l_local_repr) &
+  & CALL errore('wbse_setup','Err: localization requires gamma_only',1)
   !
   SELECT CASE(wbse_calculation)
   CASE('D','d')
@@ -206,6 +211,7 @@ SUBROUTINE bse_start()
   !
   USE kinds,                ONLY : DP
   USE io_global,            ONLY : stdout
+  USE control_flags,        ONLY : gamma_only
   USE pwcom,                ONLY : npwx
   USE westcom,              ONLY : tau_is_read,tau_all,n_tau,nbnd_occ,nbndval0x,n_trunc_bands,&
                                  & sigma_head,sigma_c_head,sigma_x_head,wbse_epsinfty,l_local_repr,&
@@ -337,11 +343,20 @@ SUBROUTINE bse_start()
         !
      ENDDO
      !
-     DO jbnd = 1,nbnd_do
-        DO ibnd = jbnd,nbnd_do
-           IF(tau_is_read(ibnd,jbnd,iks) == 1 .OR. tau_is_read(jbnd,ibnd,iks) == 1) n_tau = n_tau+1
+     IF(gamma_only) THEN
+        DO jbnd = 1,nbnd_do
+           DO ibnd = jbnd,nbnd_do
+              IF(tau_is_read(ibnd,jbnd,iks) == 1 .OR. tau_is_read(jbnd,ibnd,iks) == 1) &
+              & n_tau = n_tau+1
+           ENDDO
         ENDDO
-     ENDDO
+     ELSE
+        DO jbnd = 1,nbnd_do
+           DO ibnd = 1,nbnd_do
+              IF(tau_is_read(ibnd,jbnd,iks) == 1) n_tau = n_tau+1
+           ENDDO
+        ENDDO
+     ENDIF
      !
   ENDDO
   !

@@ -17,13 +17,12 @@ PROGRAM westpp
   ! This is the main program that generates post-processing data for WEST.
   !
   USE check_stop,           ONLY : check_stop_init
-  USE mp_global,            ONLY : mp_startup, mp_global_end
-  USE west_environment,     ONLY : west_environment_start, west_environment_end
-  USE westcom,              ONLY : westpp_calculation
+  USE mp_global,            ONLY : mp_startup,mp_global_end
+  USE west_environment,     ONLY : west_environment_start,west_environment_end
+  USE westcom,              ONLY : westpp_calculation,code
   !
   IMPLICIT NONE
   !
-  CHARACTER(LEN=9) :: code = 'WESTPP'
   INTEGER :: i
   LOGICAL :: lgate(11)
   !
@@ -37,9 +36,11 @@ PROGRAM westpp
   CALL mp_startup( start_images = .TRUE. )
 #endif
   !
-  CALL west_environment_start( code )
+  code = 'WESTPP'
   !
-  CALL west_readin( code )
+  CALL west_environment_start( )
+  !
+  CALL west_readin( )
   !
   CALL westpp_setup( )
   !
@@ -99,7 +100,7 @@ PROGRAM westpp
   !
   CALL west_print_clocks( )
   !
-  CALL west_environment_end( code )
+  CALL west_environment_end( )
   !
   CALL mp_global_end( )
   !

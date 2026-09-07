@@ -66,11 +66,7 @@ SUBROUTINE solve_deflated_lanczos_w_full_ortho(nbnd_to_deflate, NRHS, NLSTEPS, b
   r(:,:) = b
   !$acc end kernels
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu("lan_H")
-#else
   CALL start_clock( "lan_H" )
-#endif
   !
   ! FROM R TO Q & BETA
   !
@@ -137,11 +133,7 @@ SUBROUTINE solve_deflated_lanczos_w_full_ortho(nbnd_to_deflate, NRHS, NLSTEPS, b
      ! use h_psi_, i.e. h_psi without band parallelization, as west
      ! handles band parallelization by itself
      !
-#if defined(__CUDA)
-     CALL h_psi__gpu(npwx,npw,NRHS,q_s(:,:,il),r)
-#else
      CALL h_psi_(npwx,npw,NRHS,q_s(:,:,il),r)
-#endif
      !
      CALL apply_alpha_pc_to_m_wfcs(nbnd_to_deflate,NRHS,r,(1.0_DP,0.0_DP))
      !
@@ -348,10 +340,6 @@ SUBROUTINE solve_deflated_lanczos_w_full_ortho(nbnd_to_deflate, NRHS, NLSTEPS, b
   IF(.NOT. gamma_only) DEALLOCATE(tmp_c)
 #endif
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu("lan_H")
-#else
   CALL stop_clock("lan_H")
-#endif
   !
 END SUBROUTINE

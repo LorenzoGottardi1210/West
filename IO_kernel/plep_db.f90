@@ -38,6 +38,7 @@ MODULE plep_db
       USE distribution_center,  ONLY : pert,kpt_pool,band_group
       USE json_module,          ONLY : json_file
       USE west_mp,              ONLY : west_mp_root_sum
+      USE noncollin_module,     ONLY : npol
       !
       IMPLICIT NONE
       !
@@ -97,7 +98,7 @@ MODULE plep_db
       !
       ! Dump eigenvectors
       !
-      ALLOCATE(dvg_tmp(npwx,nbndval0x-n_trunc_bands,kpt_pool%nglob))
+      ALLOCATE(dvg_tmp(npwx*npol,nbndval0x-n_trunc_bands,kpt_pool%nglob))
       !
       DO local_j = 1,pert%nloc
          !
@@ -160,6 +161,7 @@ MODULE plep_db
       USE io_push,              ONLY : io_push_bar
       USE distribution_center,  ONLY : pert,kpt_pool,band_group
       USE json_module,          ONLY : json_file
+      USE noncollin_module,     ONLY : npol
       !
       IMPLICIT NONE
       !
@@ -194,9 +196,8 @@ MODULE plep_db
          !
          CALL json%initialize()
          CALL json%load(filename=TRIM(wbse_save_dir)//'/summary.json')
-         IF(json%failed()) THEN
-            CALL errore('plep_db_read','Cannot open file: '//TRIM(wbse_save_dir)//'/summary.json',1)
-         ENDIF
+         IF(json%failed()) &
+         & CALL errore('plep_db_read','Cannot open file: '//TRIM(wbse_save_dir)//'/summary.json',1)
          !
          CALL json%get('plep.eigenval',tmp_ev)
          tmp_n_pdep_eigen = SIZE(tmp_ev,1)
@@ -224,11 +225,9 @@ MODULE plep_db
       !
       ! 3) READ THE EIGENVECTOR FILES
       !
-      IF(.NOT. ALLOCATED(dvg_exc)) THEN
-         ALLOCATE(dvg_exc(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx))
-      ENDIF
+      IF(.NOT. ALLOCATED(dvg_exc)) ALLOCATE(dvg_exc(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx))
       !
-      ALLOCATE(dvg_tmp(npwx,nbndval0x-n_trunc_bands,kpt_pool%nglob))
+      ALLOCATE(dvg_tmp(npwx*npol,nbndval0x-n_trunc_bands,kpt_pool%nglob))
       !
       DO local_j = 1,pert%nloc
          !

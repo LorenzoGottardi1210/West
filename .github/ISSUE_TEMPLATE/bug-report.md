@@ -11,8 +11,8 @@ assignees: ''
 A concise description of the problem.
 
 **Code version**
- - QE: 7.5
- - WEST: 6.3.0
+ - QE: 7.6
+ - WEST: 6.4.0
 
 **How to reproduce**
 `mpirun -n 16 wstst.x -ni 4 -i wstat.in`

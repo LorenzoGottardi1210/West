@@ -18,12 +18,15 @@ SUBROUTINE wbse_davidson_diago ( )
   ! ... ( L - ev ) * dvg = 0
   !
   USE kinds,                ONLY : DP
+  USE constants,            ONLY : eps8
+  USE control_flags,        ONLY : gamma_only
   USE mp_global,            ONLY : inter_image_comm,my_image_id,nimage,inter_pool_comm,&
                                  & inter_bgrp_comm,nbgrp
   USE mp,                   ONLY : mp_max,mp_bcast
   USE west_mp,              ONLY : west_mp_get
   USE io_global,            ONLY : stdout
   USE pwcom,                ONLY : npw,npwx,ngk
+  USE noncollin_module,     ONLY : npol
   USE distribution_center,  ONLY : pert,kpt_pool,band_group
   USE class_idistribute,    ONLY : idistribute,IDIST_BLK
   USE io_push,              ONLY : io_push_title
@@ -31,7 +34,8 @@ SUBROUTINE wbse_davidson_diago ( )
                                  & wstat_calculation,n_pdep_read_from_file,n_steps_write_restart,&
                                  & trev_pdep_rel,l_is_wstat_converged,nbnd_occ,lrwfc,iuwfc,dvg_exc,&
                                  & dng_exc,nbndval0x,n_trunc_bands,l_preconditioning,l_pre_shift,&
-                                 & l_spin_flip,l_forces,do_forces,forces_state
+                                 & l_spin_flip,l_forces,do_forces,forces_state,l_genac,l_eenac,&
+                                 & genac_state,eenac_stateI,eenac_stateJ,do_eenac
   USE plep_db,              ONLY : plep_db_write,plep_db_read
   USE davidson_restart,     ONLY : davidson_restart_write,davidson_restart_clear,&
                                  & davidson_restart_read
@@ -41,6 +45,7 @@ SUBROUTINE wbse_davidson_diago ( )
   USE buffers,              ONLY : get_buffer
   USE wavefunctions,        ONLY : evc
   USE wbse_bgrp,            ONLY : init_gather_bands
+  USE wbse_forces,          ONLY : wbse_calc_forces,wbse_calc_nacs
 #if defined(__CUDA)
   USE west_gpu,             ONLY : allocate_gpu,deallocate_gpu,allocate_bse_gpu,deallocate_bse_gpu,&
                                  & reallocate_ps_gpu
@@ -66,15 +71,18 @@ SUBROUTINE wbse_davidson_diago ( )
   INTEGER, ALLOCATABLE :: ishift(:)
   REAL(DP), ALLOCATABLE :: ew(:)
   REAL(DP), ALLOCATABLE :: hr_distr(:,:), vr_distr(:,:)
-  COMPLEX(DP), ALLOCATABLE :: dng_exc_tmp(:,:,:), dvg_exc_tmp(:,:,:)
+  COMPLEX(DP), ALLOCATABLE :: hr_c_distr(:,:), vr_c_distr(:,:)
+  COMPLEX(DP), ALLOCATABLE :: dng_exc_tmp(:,:,:), dvg_exc_tmp(:,:,:), dvg_exc_tmp_J(:,:,:)
 #if defined(__CUDA)
-  ATTRIBUTES(PINNED) :: dng_exc_tmp, dvg_exc_tmp
+  ATTRIBUTES(PINNED) :: dng_exc_tmp, dvg_exc_tmp, dvg_exc_tmp_J
 #endif
   !
+  REAL(DP) :: omega_JI
   INTEGER :: iks,il1,ig1,lbnd,ibnd,iks_do
   INTEGER :: nbndval,nbnd_do,flnbndval
   INTEGER :: owner
   REAL(DP) :: time_spent(2)
+  INTEGER :: iq, lastdone_iq
   CHARACTER(LEN=8) :: iter_label
   !
   REAL(DP), EXTERNAL :: GET_CLOCK
@@ -114,31 +122,45 @@ SUBROUTINE wbse_davidson_diago ( )
   !
   IF ( nvec > nvecx / 2 ) CALL errore( 'chidiago', 'nvecx is too small', 1 )
   !
-  ALLOCATE( dvg_exc( npwx, band_group%nlocx, kpt_pool%nloc, pert%nlocx ), STAT=ierr )
+  ALLOCATE( dvg_exc( npwx*npol, band_group%nlocx, kpt_pool%nloc, pert%nlocx ), STAT=ierr )
   IF( ierr /= 0 ) &
      CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
   !
-  ALLOCATE( dvg_exc_tmp( npwx, band_group%nlocx, kpt_pool%nloc), STAT=ierr )
+  ALLOCATE( dvg_exc_tmp( npwx*npol, band_group%nlocx, kpt_pool%nloc), STAT=ierr )
   IF( ierr /= 0 ) &
      CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
   !$acc enter data create(dvg_exc_tmp)
   !
-  ALLOCATE( dng_exc( npwx, band_group%nlocx, kpt_pool%nloc, pert%nlocx ), STAT=ierr )
+  ALLOCATE( dng_exc( npwx*npol, band_group%nlocx, kpt_pool%nloc, pert%nlocx ), STAT=ierr )
   IF( ierr /= 0 ) &
      CALL errore( 'chidiago',' cannot allocate dng ', ABS(ierr) )
   !
-  ALLOCATE( dng_exc_tmp( npwx, band_group%nlocx, kpt_pool%nloc ), STAT=ierr )
+  ALLOCATE( dng_exc_tmp( npwx*npol, band_group%nlocx, kpt_pool%nloc ), STAT=ierr )
   IF( ierr /= 0 ) &
      CALL errore( 'chidiago',' cannot allocate dng ', ABS(ierr) )
   !$acc enter data create(dng_exc_tmp)
   !
-  ALLOCATE( hr_distr( nvecx, pert%nlocx ), STAT=ierr )
-  IF( ierr /= 0 ) &
-     CALL errore( 'chidiago',' cannot allocate hr_distr ', ABS(ierr) )
-  !
-  ALLOCATE( vr_distr( nvecx, pert%nlocx ), STAT=ierr )
-  IF( ierr /= 0 ) &
-     CALL errore( 'chidiago',' cannot allocate vr_distr ', ABS(ierr) )
+  IF(gamma_only) THEN
+     !
+     ALLOCATE( hr_distr( nvecx, pert%nlocx ), STAT=ierr )
+     IF( ierr /= 0 ) &
+        CALL errore( 'chidiago',' cannot allocate hr_distr ', ABS(ierr) )
+     !
+     ALLOCATE( vr_distr( nvecx, pert%nlocx ), STAT=ierr )
+     IF( ierr /= 0 ) &
+        CALL errore( 'chidiago',' cannot allocate vr_distr ', ABS(ierr) )
+     !
+  ELSE
+     !
+     ALLOCATE( hr_c_distr( nvecx, pert%nlocx ), STAT=ierr )
+     IF( ierr /= 0 ) &
+        CALL errore( 'chidiago',' cannot allocate hr_c_distr ', ABS(ierr) )
+     !
+     ALLOCATE( vr_c_distr( nvecx, pert%nlocx ), STAT=ierr )
+     IF( ierr /= 0 ) &
+        CALL errore( 'chidiago',' cannot allocate vr_c_distr ', ABS(ierr) )
+     !
+  ENDIF
   !
   ALLOCATE( ew( nvecx ), STAT=ierr )
   IF( ierr /= 0 ) &
@@ -158,10 +180,16 @@ SUBROUTINE wbse_davidson_diago ( )
   ew = 0._DP
   dng_exc = 0._DP
   dvg_exc = 0._DP
-  hr_distr = 0._DP
-  vr_distr = 0._DP
+  IF(gamma_only) THEN
+     hr_distr = 0._DP
+     vr_distr = 0._DP
+  ELSE
+     hr_c_distr = 0._DP
+     vr_c_distr = 0._DP
+  ENDIF
   notcnv = nvec
   dav_iter = -2
+  iq = 1
   !
   ! KIND OF CALCULATION
   !
@@ -170,7 +198,11 @@ SUBROUTINE wbse_davidson_diago ( )
      !
      ! RESTART
      !
-     CALL davidson_restart_read( dav_iter, notcnv, nbase, ew, hr_distr, vr_distr )
+     IF(gamma_only) THEN
+        CALL davidson_restart_read( dav_iter, notcnv, nbase, ew, hr_distr, vr_distr )
+     ELSE
+        CALL davidson_restart_read( dav_iter, notcnv, nbase, ew, hr_c_distr, vr_c_distr, lastdone_iq, iq )
+     ENDIF
      !$acc enter data copyin(dvg_exc,dng_exc)
      !
   CASE('s','S')
@@ -254,11 +286,19 @@ SUBROUTINE wbse_davidson_diago ( )
      ! hr = <dvg|dng>
      !
      !$acc enter data copyin(dvg_exc,dng_exc)
-     CALL wbse_build_hr( dvg_exc, dng_exc, mstart, mstart+mloc-1, hr_distr, nvec, l_spin_flip )
+     IF(gamma_only) THEN
+        CALL wbse_build_hr( dvg_exc, dng_exc, mstart, mstart+mloc-1, hr_distr, nvec, l_spin_flip )
+     ELSE
+        CALL wbse_build_hr( dvg_exc, dng_exc, mstart, mstart+mloc-1, hr_c_distr, nvec, l_spin_flip )
+     ENDIF
      !
      ! ... diagonalize the reduced hamiltonian
      !
-     CALL diagox( nbase, nvec, hr_distr, nvecx, ew, vr_distr )
+     IF(gamma_only) THEN
+        CALL diagox( nbase, nvec, hr_distr, nvecx, ew, vr_distr )
+     ELSE
+        CALL diagox( nbase, nvec, hr_c_distr, nvecx, ew, vr_c_distr )
+     ENDIF
      time_spent(2)=get_clock( 'chidiago' )
      ev(1:nvec) = ew(1:nvec)
      !
@@ -266,7 +306,13 @@ SUBROUTINE wbse_davidson_diago ( )
      !
      CALL wbse_output_ev_and_time(nvec,ev,conv,time_spent,dav_iter,notcnv)
      dav_iter = 0
-     IF(n_steps_write_restart == 1) CALL davidson_restart_write( dav_iter, notcnv, nbase, ew, hr_distr, vr_distr )
+     IF(n_steps_write_restart == 1) THEN
+        IF(gamma_only) THEN
+           CALL davidson_restart_write( dav_iter, notcnv, nbase, ew, hr_distr, vr_distr )
+        ELSE
+           CALL davidson_restart_write( dav_iter, notcnv, nbase, ew, hr_c_distr, vr_c_distr, iq )
+        ENDIF
+     ENDIF
      !
   ENDIF
   !
@@ -314,11 +360,23 @@ SUBROUTINE wbse_davidson_diago ( )
      !
      ! ... expand the basis set with new basis vectors ( H - e*S )|psi> ...
      !
-     CALL redistribute_vr_distr( notcnv, nbase, nvecx, vr_distr, ishift )
-     CALL mp_bcast(vr_distr,0,inter_bgrp_comm)
-     CALL mp_bcast(vr_distr,0,inter_pool_comm)
+     IF(gamma_only) THEN
+        CALL redistribute_vr_distr( notcnv, nbase, nvecx, vr_distr, ishift )
+     ELSE
+        CALL redistribute_vr_distr( notcnv, nbase, nvecx, vr_c_distr, ishift )
+     ENDIF
+     !
      DEALLOCATE(ishift)
-     CALL wbse_update_with_vr_distr(dvg_exc, dng_exc, notcnv, nbase, nvecx, vr_distr, ew, l_spin_flip )
+     !
+     IF(gamma_only) THEN
+        CALL mp_bcast(vr_distr,0,inter_bgrp_comm)
+        CALL mp_bcast(vr_distr,0,inter_pool_comm)
+        CALL wbse_update_with_vr_distr(dvg_exc, dng_exc, notcnv, nbase, nvecx, vr_distr, ew, l_spin_flip )
+     ELSE
+        CALL mp_bcast(vr_c_distr,0,inter_bgrp_comm)
+        CALL mp_bcast(vr_c_distr,0,inter_pool_comm)
+        CALL wbse_update_with_vr_distr(dvg_exc, dng_exc, notcnv, nbase, nvecx, vr_c_distr, ew, l_spin_flip )
+     ENDIF
      !
      IF (l_preconditioning) THEN
         !
@@ -443,13 +501,21 @@ SUBROUTINE wbse_davidson_diago ( )
      ! hr = <dvg|dng>
      !
      !$acc enter data copyin(dvg_exc,dng_exc)
-     CALL wbse_build_hr( dvg_exc, dng_exc, mstart, mstart+mloc-1, hr_distr, nbase+notcnv, l_spin_flip )
+     IF(gamma_only) THEN
+        CALL wbse_build_hr( dvg_exc, dng_exc, mstart, mstart+mloc-1, hr_distr, nbase+notcnv, l_spin_flip )
+     ELSE
+        CALL wbse_build_hr( dvg_exc, dng_exc, mstart, mstart+mloc-1, hr_c_distr, nbase+notcnv, l_spin_flip )
+     ENDIF
      !
      nbase = nbase + notcnv
      !
      ! ... diagonalize the reduced Liouville hamiltonian
      !
-     CALL diagox( nbase, nvec, hr_distr, nvecx, ew, vr_distr )
+     IF(gamma_only) THEN
+        CALL diagox( nbase, nvec, hr_distr, nvecx, ew, vr_distr )
+     ELSE
+        CALL diagox( nbase, nvec, hr_c_distr, nvecx, ew, vr_c_distr )
+     ENDIF
      time_spent(2)=get_clock( 'chidiago' )
      !
      ! ... test for convergence
@@ -485,7 +551,11 @@ SUBROUTINE wbse_davidson_diago ( )
            !
            CALL stop_clock( 'chidiago:last' )
            !
-           CALL wbse_refresh_with_vr_distr( dvg_exc, nvec, nbase, nvecx, vr_distr, l_spin_flip )
+           IF(gamma_only) THEN
+              CALL wbse_refresh_with_vr_distr( dvg_exc, nvec, nbase, nvecx, vr_distr, l_spin_flip )
+           ELSE
+              CALL wbse_refresh_with_vr_distr( dvg_exc, nvec, nbase, nvecx, vr_c_distr, l_spin_flip )
+           ENDIF
            !$acc update host(dvg_exc)
            !
            CALL plep_db_write( )
@@ -501,7 +571,7 @@ SUBROUTINE wbse_davidson_diago ( )
            !
            ! ... last iteration, some roots not converged: return
            !
-           WRITE( stdout, '(5X,"WARNING : ",I5," eigenvalues not converged in chidiago")' ) notcnv
+           WRITE(stdout,'(7X,"** WARNING : ",I5," eigenvalues not converged in chidiago")') notcnv
            !
            CALL stop_clock( 'chidiago:last' )
            !
@@ -513,31 +583,60 @@ SUBROUTINE wbse_davidson_diago ( )
         !
         WRITE(stdout,'(/,7x,"Refresh the basis set")')
         !
-        CALL wbse_refresh_with_vr_distr( dvg_exc, nvec, nbase, nvecx, vr_distr, l_spin_flip )
+        IF(gamma_only) THEN
+           CALL wbse_refresh_with_vr_distr( dvg_exc, nvec, nbase, nvecx, vr_distr, l_spin_flip )
+        ELSE
+           CALL wbse_refresh_with_vr_distr( dvg_exc, nvec, nbase, nvecx, vr_c_distr, l_spin_flip )
+        ENDIF
         !$acc update host(dvg_exc)
-        CALL wbse_refresh_with_vr_distr( dng_exc, nvec, nbase, nvecx, vr_distr, l_spin_flip )
+        IF(gamma_only) THEN
+           CALL wbse_refresh_with_vr_distr( dng_exc, nvec, nbase, nvecx, vr_distr, l_spin_flip )
+        ELSE
+           CALL wbse_refresh_with_vr_distr( dng_exc, nvec, nbase, nvecx, vr_c_distr, l_spin_flip )
+        ENDIF
         !$acc update host(dng_exc)
         !
         ! ... refresh the reduced hamiltonian
         !
         nbase = nvec
         !
-        hr_distr = 0._DP
-        vr_distr = 0._DP
-        !
-        DO il1 = 1, pert%nloc
-           ig1 = pert%l2g(il1)
-           IF( ig1 > nbase ) CYCLE
-           hr_distr(ig1,il1) = ev(ig1)
-           vr_distr(ig1,il1) = 1._DP
-        ENDDO
+        IF(gamma_only) THEN
+           !
+           hr_distr = 0._DP
+           vr_distr = 0._DP
+           !
+           DO il1 = 1, pert%nloc
+              ig1 = pert%l2g(il1)
+              IF( ig1 > nbase ) CYCLE
+              hr_distr(ig1,il1) = ev(ig1)
+              vr_distr(ig1,il1) = 1._DP
+           ENDDO
+           !
+        ELSE
+           !
+           hr_c_distr = 0._DP
+           vr_c_distr = 0._DP
+           !
+           DO il1 = 1, pert%nloc
+              ig1 = pert%l2g(il1)
+              IF( ig1 > nbase ) CYCLE
+              hr_c_distr(ig1,il1) = ev(ig1)
+              vr_c_distr(ig1,il1) = 1._DP
+           ENDDO
+           !
+        ENDIF
         !
         CALL stop_clock( 'chidiago:last' )
         !
      ENDIF
      !
-     IF(n_steps_write_restart > 0 .AND. MOD(dav_iter,n_steps_write_restart) == 0) &
-        CALL davidson_restart_write( dav_iter, notcnv, nbase, ew, hr_distr, vr_distr )
+     IF(n_steps_write_restart > 0 .AND. MOD(dav_iter,n_steps_write_restart) == 0) THEN
+        IF(gamma_only) THEN
+           CALL davidson_restart_write( dav_iter, notcnv, nbase, ew, hr_distr, vr_distr )
+        ELSE
+           CALL davidson_restart_write( dav_iter, notcnv, nbase, ew, hr_c_distr, vr_c_distr, iq )
+        ENDIF
+     ENDIF
      !
   ENDDO iterate
   !
@@ -545,43 +644,123 @@ SUBROUTINE wbse_davidson_diago ( )
   !
   DEALLOCATE( conv )
   DEALLOCATE( ew )
+  omega_JI = 0._DP
+  IF(l_eenac) omega_JI = ev(eenac_stateJ) - ev(eenac_stateI)
   DEALLOCATE( ev )
-  DEALLOCATE( hr_distr )
-  DEALLOCATE( vr_distr )
+  !
+  IF(gamma_only) THEN
+     DEALLOCATE( hr_distr )
+     DEALLOCATE( vr_distr )
+  ELSE
+     DEALLOCATE( hr_c_distr )
+     DEALLOCATE( vr_c_distr )
+  ENDIF
   !
   DEALLOCATE( dng_exc )
   !
   CALL stop_clock( 'chidiago' )
   !
-  IF(l_forces) THEN
+  IF(l_forces .OR. l_genac .OR. l_eenac) THEN
      !
      do_forces = .TRUE.
      !
-     IF(.NOT. l_is_wstat_converged) &
-     & CALL errore('chidiago','davidson not converged, cannot compute forces',1)
+     IF(.NOT. l_is_wstat_converged) THEN
+        IF(l_forces) CALL errore('chidiago','davidson not converged, cannot compute forces',1)
+        IF(l_genac .OR. l_eenac) CALL errore('chidiago','davidson not converged, cannot compute NACs',1)
+     ENDIF
      !
-     ! send forces_state to root image
+     IF(l_forces) THEN
+        !
+        ! send forces_state to root image
+        !
+        CALL pert%g2l(forces_state,il1,owner)
+        !
+        CALL west_mp_get(dvg_exc_tmp,dvg_exc(:,:,:,il1),my_image_id,0,owner,owner,inter_image_comm)
+        !
+        !$acc update device(dvg_exc_tmp)
+        !
+        IF(.NOT. l_genac .AND. .NOT. l_eenac) DEALLOCATE( dvg_exc )
+        !
+        ! root image computes forces
+        !
+        do_eenac = .FALSE.
+        CALL wbse_calc_forces( dvg_exc_tmp )
+        !
+        IF(.NOT. l_genac .AND. .NOT. l_eenac) THEN
+           !$acc exit data delete(dvg_exc_tmp)
+           DEALLOCATE( dvg_exc_tmp )
+        ENDIF
+        !
+     ENDIF
      !
-     CALL pert%g2l(forces_state,il1,owner)
+     IF(l_genac) THEN
+        !
+        ! send genac_state to root image
+        !
+        CALL pert%g2l(genac_state,il1,owner)
+        !
+        CALL west_mp_get(dvg_exc_tmp,dvg_exc(:,:,:,il1),my_image_id,0,owner,owner,inter_image_comm)
+        !
+        !$acc update device(dvg_exc_tmp)
+        !
+        IF(.NOT. l_eenac) DEALLOCATE( dvg_exc )
+        !
+        ! root image computes geNAC
+        !
+        do_eenac = .FALSE.
+        CALL wbse_calc_nacs( dvg_exc_tmp )
+        !
+        IF(.NOT. l_eenac) THEN
+           !$acc exit data delete(dvg_exc_tmp)
+           DEALLOCATE( dvg_exc_tmp )
+        ENDIF
+        !
+     ENDIF
      !
-     CALL west_mp_get(dvg_exc_tmp,dvg_exc(:,:,:,il1),my_image_id,0,owner,owner,inter_image_comm)
-     !
-     !$acc update device(dvg_exc_tmp)
-     !
-     DEALLOCATE( dvg_exc )
-     !
-     ! root image computes forces
-     !
-     CALL wbse_calc_forces( dvg_exc_tmp )
-     !
-     !$acc exit data delete(dvg_exc_tmp)
-     DEALLOCATE( dvg_exc_tmp )
+     IF(l_eenac) THEN
+        !
+        IF(eenac_stateI == eenac_stateJ) CALL errore('chidiago','eeNAC must be computed between different states',1)
+        IF(ABS(omega_JI) < eps8) CALL errore('chidiago','omega_JI too small for eeNAC', 1)
+        !
+        ALLOCATE( dvg_exc_tmp_J( npwx*npol, band_group%nlocx, kpt_pool%nloc), STAT=ierr )
+        IF( ierr /= 0 ) CALL errore( 'chidiago',' cannot allocate dvg ', ABS(ierr) )
+        !$acc enter data create(dvg_exc_tmp_J)
+        !
+        ! send eenac_stateI to root image
+        !
+        CALL pert%g2l(eenac_stateI,il1,owner)
+        !
+        CALL west_mp_get(dvg_exc_tmp,dvg_exc(:,:,:,il1),my_image_id,0,owner,owner,inter_image_comm)
+        !
+        !$acc update device(dvg_exc_tmp)
+        !
+        ! send eenac_stateJ to root image
+        !
+        CALL pert%g2l(eenac_stateJ,il1,owner)
+        !
+        CALL west_mp_get(dvg_exc_tmp_J,dvg_exc(:,:,:,il1),my_image_id,0,owner,owner,inter_image_comm)
+        !
+        !$acc update device(dvg_exc_tmp_J)
+        !
+        DEALLOCATE( dvg_exc )
+        !
+        ! root image computes eeNAC
+        !
+        do_eenac = .TRUE.
+        CALL wbse_calc_nacs( dvg_exc_tmp, dvg_exc_tmp_J, omega_JI )
+        !
+        !$acc exit data delete(dvg_exc_tmp_J)
+        DEALLOCATE( dvg_exc_tmp_J )
+        !$acc exit data delete(dvg_exc_tmp)
+        DEALLOCATE( dvg_exc_tmp )
+        !
+     ENDIF
      !
   ELSE
      !
-     DEALLOCATE( dvg_exc )
+     DEALLOCATE(dvg_exc)
      !$acc exit data delete(dvg_exc_tmp)
-     DEALLOCATE( dvg_exc_tmp )
+     DEALLOCATE(dvg_exc_tmp)
      !
   ENDIF
   !
@@ -605,7 +784,9 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
   USE gvect,                ONLY : gstart
   USE mp,                   ONLY : mp_sum,mp_bcast
   USE pwcom,                ONLY : npw,npwx,ngk
+  USE noncollin_module,     ONLY : npol
   USE westcom,              ONLY : nbnd_occ,n_trunc_bands
+  USE control_flags,        ONLY : gamma_only
   USE distribution_center,  ONLY : pert,kpt_pool,band_group
 #if defined(__CUDA)
   USE cublas
@@ -616,7 +797,7 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
   ! I/O
   !
   INTEGER,INTENT(IN) :: m_global_start,m_global_end
-  COMPLEX(DP),INTENT(INOUT) :: amat(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
+  COMPLEX(DP),INTENT(INOUT) :: amat(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
   LOGICAL,INTENT(IN) :: sf
   !
   ! Workspace
@@ -625,7 +806,9 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
   INTEGER :: ig,ip,ncol,lbnd,ibnd,iks,nbndval,nbnd_do,iks_do
   INTEGER :: k_global,k_local,j_local,k_id
   INTEGER :: m_local_start,m_local_end
-  REAL(DP) :: anorm
+  REAL(DP) :: anorm,factor
+  REAL(DP) :: tmp_r
+  COMPLEX(DP) :: tmp_c
   COMPLEX(DP) :: za
   COMPLEX(DP),ALLOCATABLE :: zbraket(:)
   COMPLEX(DP),ALLOCATABLE :: vec(:,:,:)
@@ -635,18 +818,20 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
   COMPLEX(DP),PARAMETER :: mone = (-1._DP,0._DP)
   INTEGER,PARAMETER :: flks(2) = [2,1]
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('paramgs')
-#else
   CALL start_clock('paramgs')
-#endif
   !
   ! 1) Run some checks
   !
   IF(m_global_start < 1 .OR. m_global_start > m_global_end .OR. m_global_end > pert%nglob) &
   & CALL errore('mgs','wbse_do_mgs problem',1)
   !
-  ALLOCATE(vec(npwx,band_group%nlocx,kpt_pool%nloc))
+  IF(gamma_only) THEN
+     factor = 2._DP
+  ELSE
+     factor = 1._DP
+  ENDIF
+  !
+  ALLOCATE(vec(npwx*npol,band_group%nlocx,kpt_pool%nloc))
   ALLOCATE(zbraket(pert%nloc))
   !
   !$acc enter data create(vec,zbraket)
@@ -708,14 +893,14 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
               !
               !$acc parallel loop collapse(2) reduction(+:anorm) present(amat) copy(anorm)
               DO lbnd = 1,nbnd_do
-                 DO ig = 1,npw
-                    anorm = anorm+2._DP*REAL(amat(ig,lbnd,iks,k_local),KIND=DP)**2 &
-                    & +2._DP*AIMAG(amat(ig,lbnd,iks,k_local))**2
+                 DO ig = 1,npwx*npol
+                    anorm = anorm+factor*REAL(amat(ig,lbnd,iks,k_local),KIND=DP)**2 &
+                    & +factor*AIMAG(amat(ig,lbnd,iks,k_local))**2
                  ENDDO
               ENDDO
               !$acc end parallel
               !
-              IF(gstart == 2) THEN
+              IF(gamma_only .AND. gstart == 2) THEN
                  !$acc parallel loop reduction(+:anorm) present(amat) copy(anorm)
                  DO lbnd = 1,nbnd_do
                     anorm = anorm-REAL(amat(1,lbnd,iks,k_local),KIND=DP)**2
@@ -734,7 +919,7 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
            za = CMPLX(1._DP/SQRT(anorm),KIND=DP)
            !
            !$acc host_data use_device(amat)
-           CALL ZSCAL(npwx*band_group%nlocx*kpt_pool%nloc,za,amat(1,1,1,k_local),1)
+           CALL ZSCAL(npwx*npol*band_group%nlocx*kpt_pool%nloc,za,amat(1,1,1,k_local),1)
            !$acc end host_data
            !
         ENDIF
@@ -742,7 +927,7 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
         ! 5) Copy the current vector into V
         !
         !$acc host_data use_device(amat,vec)
-        CALL ZCOPY(npwx*band_group%nlocx*kpt_pool%nloc,amat(1,1,1,k_local),1,vec,1)
+        CALL ZCOPY(npwx*npol*band_group%nlocx*kpt_pool%nloc,amat(1,1,1,k_local),1,vec,1)
         !$acc end host_data
         !
         !$acc update host(vec)
@@ -765,49 +950,90 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
         !
         ! IN the range ip=j_local:pert%nloc    = >    | ip > = | ip > - | vec > * < vec | ip >
         !
-        DO ip = j_local,m_local_end
+        IF(gamma_only) THEN
            !
-           anorm = 0._DP
-           !
-           DO iks = 1,kpt_pool%nloc
+           DO ip = j_local,m_local_end
               !
-              IF(sf) THEN
-                 iks_do = flks(iks)
-              ELSE
-                 iks_do = iks
-              ENDIF
+              tmp_r = 0._DP
               !
-              nbndval = nbnd_occ(iks_do)
-              npw = ngk(iks)
-              !
-              nbnd_do = 0
-              DO lbnd = 1,band_group%nloc
-                 ibnd = band_group%l2g(lbnd)+n_trunc_bands
-                 IF(ibnd > n_trunc_bands .AND. ibnd <= nbndval) nbnd_do = nbnd_do+1
-              ENDDO
-              !
-              !$acc parallel loop collapse(2) reduction(+:anorm) present(vec,amat) copy(anorm)
-              DO lbnd = 1,nbnd_do
-                 DO ig = 1,npw
-                    anorm = anorm+2._DP*REAL(vec(ig,lbnd,iks),KIND=DP)*REAL(amat(ig,lbnd,iks,ip),KIND=DP) &
-                    & +2._DP*AIMAG(vec(ig,lbnd,iks))*AIMAG(amat(ig,lbnd,iks,ip))
+              DO iks = 1,kpt_pool%nloc
+                 !
+                 IF(sf) THEN
+                    iks_do = flks(iks)
+                 ELSE
+                    iks_do = iks
+                 ENDIF
+                 !
+                 nbndval = nbnd_occ(iks_do)
+                 npw = ngk(iks)
+                 !
+                 nbnd_do = 0
+                 DO lbnd = 1,band_group%nloc
+                    ibnd = band_group%l2g(lbnd)+n_trunc_bands
+                    IF(ibnd > n_trunc_bands .AND. ibnd <= nbndval) nbnd_do = nbnd_do+1
                  ENDDO
-              ENDDO
-              !$acc end parallel
-              !
-              IF(gstart == 2) THEN
-                 !$acc parallel loop reduction(+:anorm) present(vec,amat) copy(anorm)
+                 !
+                 !$acc parallel loop collapse(2) reduction(+:tmp_r) present(vec,amat) copy(tmp_r)
                  DO lbnd = 1,nbnd_do
-                    anorm = anorm-REAL(vec(1,lbnd,iks),KIND=DP)*REAL(amat(1,lbnd,iks,ip),KIND=DP)
+                    DO ig = 1,npw
+                       tmp_r = tmp_r+2._DP*REAL(vec(ig,lbnd,iks),KIND=DP)*REAL(amat(ig,lbnd,iks,ip),KIND=DP) &
+                       & +2._DP*AIMAG(vec(ig,lbnd,iks))*AIMAG(amat(ig,lbnd,iks,ip))
+                    ENDDO
                  ENDDO
                  !$acc end parallel
-              ENDIF
+                 !
+                 IF(gstart == 2) THEN
+                    !$acc parallel loop reduction(+:tmp_r) present(vec,amat) copy(tmp_r)
+                    DO lbnd = 1,nbnd_do
+                       tmp_r = tmp_r-REAL(vec(1,lbnd,iks),KIND=DP)*REAL(amat(1,lbnd,iks,ip),KIND=DP)
+                    ENDDO
+                    !$acc end parallel
+                 ENDIF
+                 !
+              ENDDO
+              !
+              zbraket(ip) = CMPLX(tmp_r,KIND=DP)
               !
            ENDDO
            !
-           zbraket(ip) = CMPLX(anorm,KIND=DP)
+        ELSE
            !
-        ENDDO
+           DO ip = j_local,m_local_end
+              !
+              tmp_c = 0._DP
+              !
+              DO iks = 1,kpt_pool%nloc
+                 !
+                 IF(sf) THEN
+                    iks_do = flks(iks)
+                 ELSE
+                    iks_do = iks
+                 ENDIF
+                 !
+                 nbndval = nbnd_occ(iks_do)
+                 npw = ngk(iks)
+                 !
+                 nbnd_do = 0
+                 DO lbnd = 1,band_group%nloc
+                    ibnd = band_group%l2g(lbnd)+n_trunc_bands
+                    IF(ibnd > n_trunc_bands .AND. ibnd <= nbndval) nbnd_do = nbnd_do+1
+                 ENDDO
+                 !
+                 !$acc parallel loop collapse(2) reduction(+:tmp_c) present(vec,amat) copy(tmp_c)
+                 DO lbnd = 1,nbnd_do
+                    DO ig = 1,npwx*npol
+                       tmp_c = tmp_c+CONJG(vec(ig,lbnd,iks))*amat(ig,lbnd,iks,ip)
+                    ENDDO
+                 ENDDO
+                 !$acc end parallel
+                 !
+              ENDDO
+              !
+              zbraket(ip) = tmp_c
+              !
+           ENDDO
+           !
+        ENDIF
         !
         CALL mp_sum(zbraket(j_local:m_local_end),intra_bgrp_comm)
         CALL mp_sum(zbraket(j_local:m_local_end),inter_bgrp_comm)
@@ -818,8 +1044,8 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
         ncol = m_local_end-j_local+1
         !
         !$acc host_data use_device(vec,zbraket,amat)
-        CALL ZGERU(npwx*band_group%nlocx*kpt_pool%nloc,ncol,mone,vec,1,zbraket(j_local),1,&
-        & amat(1,1,1,j_local),npwx*band_group%nlocx*kpt_pool%nloc)
+        CALL ZGERU(npwx*npol*band_group%nlocx*kpt_pool%nloc,ncol,mone,vec,1,zbraket(j_local),1,&
+        & amat(1,1,1,j_local),npwx*npol*band_group%nlocx*kpt_pool%nloc)
         !$acc end host_data
         !
      ENDIF
@@ -831,11 +1057,7 @@ SUBROUTINE wbse_do_mgs (amat,m_global_start,m_global_end,sf)
   DEALLOCATE(vec)
   DEALLOCATE(zbraket)
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('paramgs')
-#else
   CALL stop_clock('paramgs')
-#endif
   !
 END SUBROUTINE
 !
@@ -930,7 +1152,8 @@ SUBROUTINE wbse_vc_initialize(amat,mglobalstart,mglobalend,sf)
   USE io_global,            ONLY : stdout
   USE wavefunctions,        ONLY : evc
   USE buffers,              ONLY : get_buffer
-  USE pwcom,                ONLY : npwx,nbnd,et,nspin
+  USE pwcom,                ONLY : npwx,nbnd,et
+  USE noncollin_module,     ONLY : npol,nspin_lsda
   USE mp_global,            ONLY : inter_image_comm,my_image_id,inter_pool_comm,my_pool_id,&
                                  & my_bgrp_id
   USE mp,                   ONLY : mp_sum,mp_bcast,mp_max
@@ -943,7 +1166,7 @@ SUBROUTINE wbse_vc_initialize(amat,mglobalstart,mglobalend,sf)
   ! I/O
   !
   INTEGER,INTENT(IN) :: mglobalstart,mglobalend
-  COMPLEX(DP),INTENT(INOUT) :: amat(npwx,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
+  COMPLEX(DP),INTENT(INOUT) :: amat(npwx*npol,band_group%nlocx,kpt_pool%nloc,pert%nlocx)
   LOGICAL,INTENT(IN) :: sf
   !
   ! Workspace
@@ -965,7 +1188,7 @@ SUBROUTINE wbse_vc_initialize(amat,mglobalstart,mglobalend,sf)
   !
   ! get global copy of occupation
   !
-  ALLOCATE(occ(nspin))
+  ALLOCATE(occ(nspin_lsda))
   !
   occ(:) = 0._DP
   DO is = 1, kpt_pool%nloc
@@ -980,13 +1203,13 @@ SUBROUTINE wbse_vc_initialize(amat,mglobalstart,mglobalend,sf)
   nbnd_c_window = MIN(CEILING(SQRT(REAL(4*nvec,KIND=DP))), nbnd-MAXVAL(occ))
   npair = nbnd_v_window*nbnd_c_window
   !
-  ALLOCATE(e_diff(nspin*npair))
-  ALLOCATE(e_diff_order(nspin*npair))
+  ALLOCATE(e_diff(nspin_lsda*npair))
+  ALLOCATE(e_diff_order(nspin_lsda*npair))
   !
   IF(my_pool_id == 0) THEN
      !
      ib = 0
-     DO iks = 1,nspin
+     DO iks = 1,nspin_lsda
         !
         IF(sf) THEN
            iks_do = flks(iks)
@@ -1006,7 +1229,7 @@ SUBROUTINE wbse_vc_initialize(amat,mglobalstart,mglobalend,sf)
         !
      ENDDO
      !
-     CALL heapsort(nspin*npair,e_diff,e_diff_order)
+     CALL heapsort(nspin_lsda*npair,e_diff,e_diff_order)
      !
   ENDIF
   !

@@ -27,9 +27,9 @@ assume_isolated = 'mp'
 diago_full_acc = .true.
 /
 ATOMIC_SPECIES
-C 12.0107  C_ONCV_PBE-1.2.upf
-H 1.0079  H_ONCV_PBE-1.2.upf
-O 16.00  O_ONCV_PBE-1.2.upf
+C  12.0107  C_ONCV_PBE-1.2.upf
+H   1.0079  H_ONCV_PBE-1.2.upf
+O  16.00    O_ONCV_PBE-1.2.upf
 ATOMIC_POSITIONS crystal
 C        0.452400000   0.500000000   0.500000000
 H        0.397141530   0.411608770   0.500000000
@@ -70,4 +70,7 @@ wbse_control:
   l_pre_shift: True
   l_forces: True
   forces_state: 1
+  l_eenac: True
+  eenac_stateI: 1
+  eenac_stateJ: 2
 EOF

@@ -23,10 +23,10 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
                              & qlist,wfreq_calculation,n_pdep_eigen_to_use,qp_bandrange,qp_bands,&
                              & macropol_calculation,n_lanczos,n_imfreq,n_refreq,ecut_imfreq,&
                              & ecut_refreq,wfreq_eta,n_secant_maxiter,trev_secant,l_enable_lanczos,&
-                             & l_qdet_verbose,l_enable_off_diagonal,ecut_spectralf,n_spectralf,&
-                             & qdet_dc,westpp_calculation,westpp_range,westpp_format,westpp_sign,&
-                             & westpp_n_pdep_eigen_to_use,westpp_r0,westpp_nr,westpp_rmax,&
-                             & westpp_epsinfty,westpp_box,westpp_n_liouville_to_use,&
+                             & l_qdet_verbose,l_qdet_fcidump,l_enable_off_diagonal,ecut_spectralf,&
+                             & n_spectralf,qdet_dc,westpp_calculation,westpp_range,westpp_format,&
+                             & westpp_sign,westpp_n_pdep_eigen_to_use,westpp_r0,westpp_nr,&
+                             & westpp_rmax,westpp_epsinfty,westpp_box,westpp_n_liouville_to_use,&
                              & westpp_l_spin_flip,westpp_l_compute_tdm,westpp_wannier_tr_rel,&
                              & westpp_l_dipole_realspace,document,wbse_init_calculation,solver,&
                              & bse_method,localization,wannier_tr_rel,wfc_from_qbox,bisection_info,&
@@ -36,7 +36,8 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
                              & trev_liouville_rel,wbse_ipol,l_dipole_realspace,wbse_epsinfty,&
                              & spin_excitation,l_preconditioning,l_pre_shift,l_spin_flip,&
                              & l_spin_flip_kernel,l_spin_flip_alda0,l_print_spin_flip_kernel,&
-                             & spin_flip_cut,l_forces,forces_state,forces_zeq_cg_tr,&
+                             & spin_flip_cut,noncolin_cut,l_forces,forces_state,forces_zeq_cg_tr,&
+                             & l_genac,l_eenac,genac_state,eenac_stateI,eenac_stateJ,&
                              & forces_zeq_n_cg_maxiter,ddvxc_fd_coeff,forces_inexact_krylov,&
                              & forces_inexact_krylov_tr,main_input_file,logfile
   USE kinds,            ONLY : DP
@@ -220,6 +221,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
         IERR = return_dict%getitem(trev_secant, 'trev_secant')
         IERR = return_dict%getitem(l_enable_lanczos, 'l_enable_lanczos')
         IERR = return_dict%getitem(l_qdet_verbose, 'l_qdet_verbose')
+        IERR = return_dict%getitem(l_qdet_fcidump, 'l_qdet_fcidump')
         IERR = return_dict%getitem(l_enable_off_diagonal, 'l_enable_off_diagonal')
         IERR = return_dict%getitem(tmp_obj, 'ecut_spectralf')
         IERR = cast(tmp_list,tmp_obj)
@@ -389,7 +391,13 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
         IERR = return_dict%getitem(l_spin_flip_alda0, 'l_spin_flip_alda0')
         IERR = return_dict%getitem(l_print_spin_flip_kernel, 'l_print_spin_flip_kernel')
         IERR = return_dict%getitem(spin_flip_cut, 'spin_flip_cut')
+        IERR = return_dict%getitem(noncolin_cut, 'noncolin_cut')
         IERR = return_dict%getitem(l_forces, 'l_forces')
+        IERR = return_dict%getitem(l_genac, 'l_genac')
+        IERR = return_dict%getitem(l_eenac, 'l_eenac')
+        IERR = return_dict%get(genac_state, 'genac_state', DUMMY_DEFAULT)
+        IERR = return_dict%get(eenac_stateI, 'eenac_stateI', DUMMY_DEFAULT)
+        IERR = return_dict%get(eenac_stateJ, 'eenac_stateJ', DUMMY_DEFAULT)
         IERR = return_dict%get(forces_state, 'forces_state', DUMMY_DEFAULT)
         IERR = return_dict%getitem(forces_zeq_cg_tr, 'forces_zeq_cg_tr')
         IERR = return_dict%get(forces_zeq_n_cg_maxiter, 'forces_zeq_n_cg_maxiter', DUMMY_DEFAULT)
@@ -491,6 +499,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      CALL mp_bcast(trev_secant,root,world_comm)
      CALL mp_bcast(l_enable_lanczos,root,world_comm)
      CALL mp_bcast(l_qdet_verbose,root,world_comm)
+     CALL mp_bcast(l_qdet_fcidump,root,world_comm)
      CALL mp_bcast(l_enable_off_diagonal,root,world_comm)
      CALL mp_bcast(ecut_spectralf,root,world_comm)
      CALL mp_bcast(n_spectralf,root,world_comm)
@@ -523,7 +532,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      IF(wfreq_eta <= 0._DP) CALL errore('fetch_input','Err: wfreq_eta<0.',1)
      IF(n_secant_maxiter < 0) CALL errore('fetch_input','Err: n_secant_maxiter<0',1)
      IF(trev_secant <= 0._DP) CALL errore('fetch_input','Err: trev_secant<0.',1)
-     IF(l_enable_off_diagonal .AND. .NOT. gamma_only) CALL errore('fetch_input','Err: off-diagonal implemented for gamma only',1)
+     IF(l_enable_off_diagonal .AND. .NOT. gamma_only) CALL errore('fetch_input','Err: off-diagonal requires gamma_only',1)
      IF(n_pdep_eigen_to_use == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_pdep_eigen_to_use',1)
      IF(n_lanczos == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_lanczos',1)
      IF(n_imfreq == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_imfreq',1)
@@ -577,6 +586,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      IF(westpp_box(1) > westpp_box(2) .OR. westpp_box(3) > westpp_box(4) .OR. westpp_box(5) > westpp_box(6)) &
      & CALL errore('fetch_input','Err: invalid westpp_box',1)
      IF(westpp_n_liouville_to_use == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch westpp_n_liouville_to_use',1)
+     IF(westpp_l_dipole_realspace .AND. .NOT. gamma_only) CALL errore('fetch_input','Err: dipole real space requires gamma_only',1)
      !
   ENDIF
   !
@@ -614,7 +624,6 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      !
      ! CHECKS
      !
-     IF(.NOT. gamma_only) CALL errore('fetch_input','Err: BSE requires gamma_only',1)
      IF(n_pdep_eigen_to_use < 1) CALL errore('fetch_input','Err: n_pdep_eigen_to_use<1',1)
      IF(n_trunc_bands < 0) CALL errore('fetch_input','Err: n_trunc_bands<0',1)
      IF(n_pdep_eigen_to_use == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_pdep_eigen_to_use',1)
@@ -622,7 +631,9 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      IF(n_trunc_bands == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_trunc_bands',1)
      !
      SELECT CASE(TRIM(solver))
-     CASE('BSE','bse','TDDFT','tddft')
+     CASE('BSE','bse')
+        IF(.NOT. gamma_only) CALL errore('fetch_input','Err: BSE requires gamma_only',1)
+     CASE('TDDFT','tddft')
      CASE DEFAULT
         CALL errore('fetch_input','Err: solver must be BSE or TDDFT',1)
      END SELECT
@@ -634,7 +645,9 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      END SELECT
      !
      SELECT CASE(localization)
-     CASE('N','n','W','w')
+     CASE('N','n')
+     CASE('W','w')
+        IF(.NOT. gamma_only) CALL errore('fetch_input','Err: Wannier localization requires gamma_only',1)
      CASE('B','b')
         SELECT CASE(TRIM(bse_method))
         CASE('PDEP','pdep')
@@ -674,7 +687,13 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      CALL mp_bcast(l_spin_flip_alda0,root,world_comm)
      CALL mp_bcast(l_print_spin_flip_kernel,root,world_comm)
      CALL mp_bcast(spin_flip_cut,root,world_comm)
+     CALL mp_bcast(noncolin_cut,root,world_comm)
      CALL mp_bcast(l_forces,root,world_comm)
+     CALL mp_bcast(l_genac,root,world_comm)
+     CALL mp_bcast(l_eenac,root,world_comm)
+     CALL mp_bcast(genac_state,root,world_comm)
+     CALL mp_bcast(eenac_stateI,root,world_comm)
+     CALL mp_bcast(eenac_stateJ,root,world_comm)
      CALL mp_bcast(forces_state,root,world_comm)
      CALL mp_bcast(forces_zeq_cg_tr,root,world_comm)
      CALL mp_bcast(forces_zeq_n_cg_maxiter,root,world_comm)
@@ -685,8 +704,6 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      CALL mp_bcast(n_exx_lowrank,root,world_comm)
      !
      ! CHECKS
-     !
-     IF(.NOT. gamma_only) CALL errore('fetch_input','Err: BSE requires gamma_only',1)
      !
      SELECT CASE(wbse_calculation)
      CASE('D','d')
@@ -700,24 +717,33 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
         & CALL errore('fetch_input','Err: n_liouville_read_from_file>n_liouville_eigen',1)
         IF(trev_liouville <= 0._DP) CALL errore('fetch_input','Err: trev_liouville<0.',1)
         IF(trev_liouville_rel <= 0._DP) CALL errore('fetch_input','Err: trev_liouville_rel<0.',1)
+        IF(l_forces .AND. .NOT. gamma_only) CALL errore('fetch_input','Err: forces calculation requires gamma_only',1)
         IF(forces_zeq_n_cg_maxiter < 1) CALL errore('fetch_input','Err: forces_zeq_n_cg_maxiter<1',1)
         IF(forces_inexact_krylov < 0 .OR. forces_inexact_krylov > 5) &
         & CALL errore('fetch_input','Err: invalid forces_inexact_krylov',1)
         IF(n_liouville_eigen == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_liouville_eigen',1)
         IF(n_liouville_times == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_liouville_times',1)
         IF(n_liouville_maxiter == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_liouville_maxiter',1)
-        IF(n_liouville_read_from_file == DUMMY_DEFAULT) &
-        & CALL errore('fetch_input','Err: cannot fetch n_liouville_read_from_file',1)
+        IF(n_liouville_read_from_file == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_liouville_read_from_file',1)
         IF(forces_state == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch forces_state',1)
-        IF(forces_zeq_n_cg_maxiter == DUMMY_DEFAULT) &
-        & CALL errore('fetch_input','Err: cannot fetch forces_zeq_n_cg_maxiter',1)
-        IF(forces_inexact_krylov == DUMMY_DEFAULT) &
-        & CALL errore('fetch_input','Err: cannot fetch forces_inexact_krylov',1)
+        IF((l_genac .OR. l_eenac) .AND. .NOT. gamma_only) CALL errore('fetch_input','Err: NAC calculation requires gamma_only',1)
+        IF(genac_state == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch genac_state',1)
+        IF(eenac_stateI == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch eenac_stateI',1)
+        IF(eenac_stateJ == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch eenac_stateJ',1)
+        IF(genac_state < 1) CALL errore('fetch_input','Err: genac_state<1',1)
+        IF(eenac_stateI < 1) CALL errore('fetch_input','Err: eenac_stateI<1',1)
+        IF(eenac_stateJ < 1) CALL errore('fetch_input','Err: eenac_stateJ<1',1)
+        IF(eenac_stateI == eenac_stateJ) CALL errore('fetch_input','Err: eenac_state I and J must be different',1)
+        IF(forces_zeq_n_cg_maxiter == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch forces_zeq_n_cg_maxiter',1)
+        IF(forces_inexact_krylov == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch forces_inexact_krylov',1)
      CASE('L','l')
+        IF(.NOT. gamma_only) CALL errore('fetch_input','Err: Lanczos requires gamma_only',1)
         IF(l_spin_flip) CALL errore('fetch_input','Err: spin flip must use Davidson',1)
         IF(n_lanczos < 1) CALL errore('fetch_input','Err: n_lanczos<1',1)
         IF(n_lanczos == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_lanczos',1)
-        IF(l_forces) CALL errore('fetch_input', 'Err: forces calculation must use Davidson', 1)
+        IF(l_forces) CALL errore('fetch_input','Err: forces must use Davidson',1)
+        IF(l_genac) CALL errore('fetch_input','Err: non-adiabatic must use Davidson',1)
+        IF(l_eenac) CALL errore('fetch_input','Err: non-adiabatic must use Davidson',1)
      CASE DEFAULT
         CALL errore('fetch_input','Err: wbse_calculation/=(D,L)',1)
      END SELECT
@@ -731,6 +757,7 @@ SUBROUTINE fetch_input_yml(num_drivers, driver, verbose)
      IF(n_steps_write_restart == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_steps_write_restart',1)
      IF(wbse_epsinfty < 1._DP) CALL errore('fetch_input','Err: wbse_epsinfty<1.',1)
      IF(n_exx_lowrank == DUMMY_DEFAULT) CALL errore('fetch_input','Err: cannot fetch n_exx_lowrank',1)
+     IF(l_dipole_realspace .AND. .NOT. gamma_only) CALL errore('fetch_input','Err: dipole real space requires gamma_only',1)
      !
   ENDIF
   !

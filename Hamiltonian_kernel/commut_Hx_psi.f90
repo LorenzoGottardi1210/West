@@ -76,11 +76,7 @@ SUBROUTINE commut_Hx_psi(ik, m, ipol, psi, dpsi, l_skip_nlpp)
   COMPLEX(DP), PARAMETER :: iota = (0._DP,1._DP)
   COMPLEX(DP), PARAMETER :: two_iota = (0._DP,2._DP)
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('commut_Hx_psi')
-#else
   CALL start_clock('commut_Hx_psi')
-#endif
   !
 #if !defined(__CUDA)
   ALLOCATE(gk(3,npwx))
@@ -345,10 +341,6 @@ SUBROUTINE commut_Hx_psi(ik, m, ipol, psi, dpsi, l_skip_nlpp)
      !
   ENDIF
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('commut_Hx_psi')
-#else
   CALL stop_clock('commut_Hx_psi')
-#endif
   !
 END SUBROUTINE

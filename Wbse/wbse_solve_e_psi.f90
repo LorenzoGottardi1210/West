@@ -21,11 +21,7 @@ SUBROUTINE solve_e_psi()
   !
   IF(okvan) CALL errore('solve_e_psi','Real space dipole + USPP not supported',1)
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('solve_e_psi')
-#else
   CALL start_clock('solve_e_psi')
-#endif
   !
   ! Compute dipole in the R space. This option can be used
   ! only for finite systems (e.g. molecules).
@@ -36,11 +32,7 @@ SUBROUTINE solve_e_psi()
      CALL compute_d0psi_dfpt()
   ENDIF
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('solve_e_psi')
-#else
   CALL stop_clock('solve_e_psi')
-#endif
   !
 END SUBROUTINE
 !
@@ -298,6 +290,7 @@ END SUBROUTINE
 SUBROUTINE compute_d0psi_dfpt()
   !
   USE kinds,                ONLY : DP
+  USE control_flags,        ONLY : gamma_only
   USE mp_global,            ONLY : my_image_id,inter_image_comm
   USE mp,                   ONLY : mp_bcast
   USE buffers,              ONLY : get_buffer
@@ -404,7 +397,7 @@ SUBROUTINE compute_d0psi_dfpt()
      !
   ENDDO
   !
-  IF(gstart == 2) THEN
+  IF(gamma_only .AND. gstart == 2) THEN
      kpt_pool_nloc = kpt_pool%nloc
      band_group_nloc = band_group%nloc
      !

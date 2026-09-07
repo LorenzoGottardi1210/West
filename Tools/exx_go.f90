@@ -29,11 +29,11 @@ SUBROUTINE exx_go()
   USE buffers,                ONLY : open_buffer,close_buffer
   USE control_flags,          ONLY : io_level
   USE westcom,                ONLY : l_minimize_exx_if_active,n_exx_lowrank,westpp_l_compute_tdm,&
-                                   & westpp_l_spin_flip,westpp_l_dipole_realspace
+                                   & westpp_l_spin_flip,westpp_l_dipole_realspace,code
   USE mp_global,              ONLY : inter_image_comm,my_image_id,intra_bgrp_comm
   USE mp_exx,                 ONLY : mp_start_exx
   USE mp,                     ONLY : mp_bcast
-  USE command_line_options,   ONLY : ntg_,command_line
+  USE command_line_options,   ONLY : ntg_
 #if defined(__CUDA)
   USE exx,                    ONLY : xi_d
 #endif
@@ -42,24 +42,20 @@ SUBROUTINE exx_go()
   !
   ! Workspace
   !
-  LOGICAL :: is_westpp
-  LOGICAL :: is_wbse_init
   LOGICAL :: do_exxinit
   LOGICAL :: exst
-  LOGICAL, EXTERNAL :: matches
   !
   ! Disable band parallelization (egrp) in vexx, as WEST handles band parallelization separately
   !
   CALL mp_start_exx(1,ntg_,intra_bgrp_comm)
   !
-  is_westpp = matches('westpp.x',command_line)
-  is_wbse_init = matches('wbse_init.x',command_line)
-  !
   ! Initialize EXX only if calling h_psi
   !
-  IF(is_westpp .OR. is_wbse_init) THEN
+  IF(TRIM(code) == 'WBSE_INIT') THEN
      do_exxinit = .FALSE.
-     IF(is_westpp .AND. westpp_l_compute_tdm .AND. (.NOT. westpp_l_spin_flip) &
+  ELSEIF(TRIM(code) == 'WESTPP') THEN
+     do_exxinit = .FALSE.
+     IF(westpp_l_compute_tdm .AND. (.NOT. westpp_l_spin_flip) &
      & .AND. (.NOT. westpp_l_dipole_realspace)) do_exxinit = .TRUE.
   ELSE
      do_exxinit = .TRUE.

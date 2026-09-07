@@ -15,6 +15,7 @@ SUBROUTINE wbse_dot(x,y,m,dotp)
   !-----------------------------------------------------------------------
   !
   USE kinds,                ONLY : DP
+  USE control_flags,        ONLY : gamma_only
   USE mp_global,            ONLY : inter_pool_comm,inter_bgrp_comm,intra_bgrp_comm
   USE mp,                   ONLY : mp_sum
   USE pwcom,                ONLY : wg,nspin,npw,npwx,ngk
@@ -35,6 +36,7 @@ SUBROUTINE wbse_dot(x,y,m,dotp)
   !
   INTEGER :: ig, lbnd, ibnd, iks, iks_g, nbndval, band_group_myoffset
   REAL(DP) :: tmp_r
+  COMPLEX(DP) :: tmp_c
   !
   band_group_myoffset = band_group%myoffset
   !
@@ -45,34 +47,57 @@ SUBROUTINE wbse_dot(x,y,m,dotp)
      iks_g = kpt_pool%l2g(iks)
      npw = ngk(iks)
      nbndval = nbnd_occ(iks)
-     tmp_r = 0._DP
      !
-     !$acc parallel loop collapse(2) reduction(+:tmp_r) present(wg,x,y) copy(tmp_r)
-     DO lbnd = 1, m
-        DO ig = 1, npw
-           !
-           ibnd = band_group_myoffset+lbnd+n_trunc_bands
-           !
-           tmp_r = tmp_r + wg(ibnd,iks)*2._DP*(REAL(x(ig,lbnd,iks),KIND=DP)*REAL(y(ig,lbnd,iks),KIND=DP) &
-           & + AIMAG(x(ig,lbnd,iks))*AIMAG(y(ig,lbnd,iks)))
-           !
-        ENDDO
-     ENDDO
-     !$acc end parallel
-     !
-     IF(gstart == 2) THEN
-        !$acc parallel loop reduction(+:tmp_r) present(wg,x,y) copy(tmp_r)
+     IF(gamma_only) THEN
+        !
+        tmp_r = 0._DP
+        !
+        !$acc parallel loop collapse(2) reduction(+:tmp_r) present(wg,x,y) copy(tmp_r)
         DO lbnd = 1, m
-           !
-           ibnd = band_group_myoffset+lbnd+n_trunc_bands
-           !
-           tmp_r = tmp_r - wg(ibnd,iks)*REAL(x(1,lbnd,iks),KIND=DP)*REAL(y(1,lbnd,iks),KIND=DP)
-           !
+           DO ig = 1, npw
+              !
+              ibnd = band_group_myoffset+lbnd+n_trunc_bands
+              !
+              tmp_r = tmp_r + wg(ibnd,iks)*2._DP*(REAL(x(ig,lbnd,iks),KIND=DP)*REAL(y(ig,lbnd,iks),KIND=DP) &
+              & + AIMAG(x(ig,lbnd,iks))*AIMAG(y(ig,lbnd,iks)))
+              !
+           ENDDO
         ENDDO
         !$acc end parallel
+        !
+        IF(gstart == 2) THEN
+           !$acc parallel loop reduction(+:tmp_r) present(wg,x,y) copy(tmp_r)
+           DO lbnd = 1, m
+              !
+              ibnd = band_group_myoffset+lbnd+n_trunc_bands
+              !
+              tmp_r = tmp_r - wg(ibnd,iks)*REAL(x(1,lbnd,iks),KIND=DP)*REAL(y(1,lbnd,iks),KIND=DP)
+              !
+           ENDDO
+           !$acc end parallel
+        ENDIF
+        !
+        dotp(iks_g) = CMPLX(tmp_r*nspin/2._DP,KIND=DP)
+        !
+     ELSE
+        !
+        tmp_c = 0._DP
+        !
+        !$acc parallel loop collapse(2) reduction(+:tmp_c) present(wg,x,y) copy(tmp_c)
+        DO lbnd = 1, m
+           DO ig = 1, npw
+              !
+              ibnd = band_group_myoffset+lbnd+n_trunc_bands
+              !
+              tmp_c = tmp_c + wg(ibnd,iks)*CONJG(x(ig,lbnd,iks))*y(ig,lbnd,iks)
+              !
+           ENDDO
+        ENDDO
+        !$acc end parallel
+        !
+        dotp(iks_g) = tmp_c*nspin/2._DP
+        !
      ENDIF
-     !
-     dotp(iks_g) = CMPLX(tmp_r*nspin/2._DP,KIND=DP)
      !
   ENDDO
   !

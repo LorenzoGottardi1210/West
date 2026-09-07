@@ -32,6 +32,7 @@ SUBROUTINE do_exc_drho()
   USE types_bz_grid,         ONLY : k_grid
   USE wbse_bgrp,             ONLY : init_gather_bands,gather_bands
   USE west_mp,               ONLY : west_mp_wait
+  USE noncollin_module,      ONLY : noncolin
   USE wavefunctions,         ONLY : evc,psic
 #if defined(__CUDA)
   USE west_gpu,              ONLY : allocate_gpu,deallocate_gpu
@@ -54,6 +55,7 @@ SUBROUTINE do_exc_drho()
   & CALL errore('do_exc_drho','westpp_range(2) > westpp_n_liouville_to_use',1)
   IF(.NOT. gamma_only) &
   & CALL errore('do_exc_drho','unrelaxed differential density requires gamma_only',1)
+  IF(noncolin) CALL errore('do_exc_drho','noncolin not supported',1)
   !
   ! ... DISTRIBUTE
   !

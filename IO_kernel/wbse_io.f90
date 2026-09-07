@@ -21,6 +21,7 @@ MODULE wbse_io
   SUBROUTINE read_bse_pots_g(rhog,fixed_band_i,fixed_band_j,ispin)
     !
     USE kinds,          ONLY : DP
+    USE control_flags,  ONLY : gamma_only
     USE pwcom,          ONLY : npwx
     USE mp_global,      ONLY : npool
     USE pdep_io,        ONLY : pdep_read_G_and_distribute
@@ -45,8 +46,13 @@ MODULE wbse_io
     lspin = ispin
     IF(npool == 2) lspin = 1
     !
-    band_i = MIN(fixed_band_i,fixed_band_j)
-    band_j = MAX(fixed_band_i,fixed_band_j)
+    IF(gamma_only) THEN
+       band_i = MIN(fixed_band_i,fixed_band_j)
+       band_j = MAX(fixed_band_i,fixed_band_j)
+    ELSE
+       band_i = fixed_band_i
+       band_j = fixed_band_j
+    ENDIF
     !
     iread = tau_is_read(band_i,band_j,lspin)
     IF(iread > 0) THEN

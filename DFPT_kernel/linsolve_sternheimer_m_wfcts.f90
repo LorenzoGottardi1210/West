@@ -85,11 +85,7 @@ SUBROUTINE linsolve_sternheimer_m_wfcts(nbndval,m,b,x,e,eprec,tr2,ierr)
   LOGICAL,ALLOCATABLE :: is_conv(:)
 #endif
   !
-#if defined(__CUDA)
-  CALL start_clock_gpu('linstern')
-#else
   CALL start_clock('linstern')
-#endif
   !
 #if !defined(__CUDA)
   ALLOCATE(g(npwx*npol,m))
@@ -344,11 +340,7 @@ SUBROUTINE linsolve_sternheimer_m_wfcts(nbndval,m,b,x,e,eprec,tr2,ierr)
   DEALLOCATE(is_conv)
 #endif
   !
-#if defined(__CUDA)
-  CALL stop_clock_gpu('linstern')
-#else
   CALL stop_clock('linstern')
-#endif
   !
 END SUBROUTINE
 !

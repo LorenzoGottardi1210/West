@@ -30,6 +30,7 @@ SUBROUTINE do_exc_resp()
   USE distribution_center,   ONLY : pert,kpt_pool,band_group
   USE class_idistribute,     ONLY : idistribute
   USE types_bz_grid,         ONLY : k_grid
+  USE noncollin_module,      ONLY : noncolin
   USE wavefunctions,         ONLY : evc,psic
 #if defined(__CUDA)
   USE west_gpu,              ONLY : allocate_gpu,deallocate_gpu
@@ -43,13 +44,14 @@ SUBROUTINE do_exc_resp()
   INTEGER :: barra_load
   REAL(DP) :: w1
   REAL(DP), ALLOCATABLE :: rho(:)
-  COMPLEX(DP), ALLOCATABLE :: psic_aux(:)
+  COMPLEX(DP), ALLOCATABLE :: psic2(:)
   CHARACTER(LEN=512) :: fname
   TYPE(bar_type) :: barra
   !
   IF(westpp_n_liouville_to_use < 1) CALL errore('do_exc_resp','westpp_n_liouville_to_use < 1',1)
   IF(westpp_range(2) > westpp_n_liouville_to_use) &
   & CALL errore('do_exc_resp','westpp_range(2) > westpp_n_liouville_to_use',1)
+  IF(noncolin) CALL errore('do_exc_resp','noncolin not supported',1)
   !
   ! ... DISTRIBUTE
   !
@@ -71,8 +73,8 @@ SUBROUTINE do_exc_resp()
   ALLOCATE(rho(dffts%nnr))
   !$acc enter data create(rho) copyin(dvg_exc)
   IF(.NOT. gamma_only) THEN
-     !$acc enter data create(psic_aux)
-     ALLOCATE(psic_aux(dffts%nnr))
+     !$acc enter data create(psic2)
+     ALLOCATE(psic2(dffts%nnr))
   ENDIF
   !
   dffts_nnr = dffts%nnr
@@ -94,7 +96,7 @@ SUBROUTINE do_exc_resp()
      !
      iexc = pert%l2g(lexc)
      !
-     DO iks = 1, k_grid%nps  ! KPOINT-SPIN LOOP
+     DO iks = 1,k_grid%nps  ! KPOINT-SPIN LOOP
         !
         ! ... Set k-point, spin, kinetic energy, needed by Hpsi
         !
@@ -118,7 +120,7 @@ SUBROUTINE do_exc_resp()
         rho(:) = 0._DP
         !$acc end kernels
         !
-        DO ibnd = 1, nbndval
+        DO ibnd = 1,nbndval
            !
            w1 = wg(ibnd,iks)/omega
            !
@@ -127,19 +129,19 @@ SUBROUTINE do_exc_resp()
               CALL double_invfft_gamma(dffts,npw,npwx,evc(:,ibnd),dvg_exc(:,ibnd,iks,lexc),psic,'Wave')
               !
               !$acc parallel loop present(rho,psic)
-              DO ir = 1, dffts_nnr
-                 rho(ir) = rho(ir) + w1 * REAL(psic(ir),KIND=DP)*AIMAG(psic(ir))
+              DO ir = 1,dffts_nnr
+                 rho(ir) = rho(ir) + w1*REAL(psic(ir),KIND=DP)*AIMAG(psic(ir))
               ENDDO
               !$acc end parallel
               !
            ELSE
               !
               CALL single_invfft_k(dffts,npw,npwx,evc(:,ibnd),psic,'Wave',igk_k(:,current_k))
-              CALL single_invfft_k(dffts,npw,npwx,dvg_exc(:,ibnd,iks,lexc),psic_aux,'Wave',igk_k(:,current_k))
+              CALL single_invfft_k(dffts,npw,npwx,dvg_exc(:,ibnd,iks,lexc),psic2,'Wave',igk_k(:,current_k))
               !
-              !$acc parallel loop present(rho,psic,psic_aux)
-              DO ir = 1, dffts_nnr
-                 rho(ir) = rho(ir) + w1 * CONJG(psic(ir))*psic_aux(ir)
+              !$acc parallel loop present(rho,psic,psic2)
+              DO ir = 1,dffts_nnr
+                 rho(ir) = rho(ir) + w1*CONJG(psic(ir))*psic2(ir)
               ENDDO
               !$acc end parallel
               !
@@ -162,8 +164,8 @@ SUBROUTINE do_exc_resp()
   !$acc exit data delete(rho,dvg_exc)
   DEALLOCATE(rho)
   IF(.NOT. gamma_only) THEN
-     !$acc exit data delete(psic_aux)
-     DEALLOCATE(psic_aux)
+     !$acc exit data delete(psic2)
+     DEALLOCATE(psic2)
   ENDIF
   !
 #if defined(__CUDA)

@@ -31,6 +31,7 @@ MODULE plep_io
       USE westcom,             ONLY : nbndval0x,n_trunc_bands
       USE gvect,               ONLY : ig_l2g
       USE pwcom,               ONLY : npwx
+      USE noncollin_module,    ONLY : npol
       USE base64_module,       ONLY : islittleendian
       USE west_io,             ONLY : HD_LENGTH,HD_VERSION,HD_ID_VERSION,HD_ID_LITTLE_ENDIAN,HD_ID_DIMENSION
       USE mp_wave,             ONLY : mergewf
@@ -42,7 +43,7 @@ MODULE plep_io
       ! I/O
       !
       CHARACTER(LEN=*),INTENT(IN) :: fname
-      COMPLEX(DP),INTENT(IN) :: plepg(npwx,nbndval0x-n_trunc_bands,kpt_pool%nglob)
+      COMPLEX(DP),INTENT(IN) :: plepg(npwx*npol,nbndval0x-n_trunc_bands,kpt_pool%nglob)
       !
       ! Workspae
       !
@@ -58,12 +59,10 @@ MODULE plep_io
       !
       IF(me_bgrp == root_bgrp) THEN
          !
-         header = 0
+         header(:) = 0
          header(HD_ID_VERSION) = HD_VERSION
          header(HD_ID_DIMENSION) = npwx_g
-         IF(islittleendian()) THEN
-            header(HD_ID_LITTLE_ENDIAN) = 1
-         ENDIF
+         IF(islittleendian()) header(HD_ID_LITTLE_ENDIAN) = 1
          !
          OPEN(NEWUNIT=iun,FILE=TRIM(fname),ACCESS='STREAM',FORM='UNFORMATTED')
          offset = 1
@@ -74,28 +73,34 @@ MODULE plep_io
       !
       ! Resume all components
       !
-      ALLOCATE(tmp_vec(npwx_g))
+      ALLOCATE(tmp_vec(npwx_g*npol))
       !
       DO ik = 1,kpt_pool%nglob
          DO ibnd = 1,nbndval0x-n_trunc_bands
             !
-            tmp_vec = 0._DP
+            tmp_vec(:) = 0._DP
             !
-            CALL mergewf(plepg(:,ibnd,ik),tmp_vec,npwx,ig_l2g(1:npwx),me_bgrp,nproc_bgrp,root_bgrp,intra_bgrp_comm)
+            IF(npol == 2) THEN
+               CALL mergewf(plepg(1:npwx,ibnd,ik),tmp_vec(1:npwx_g),npwx,ig_l2g(1:npwx),me_bgrp,&
+               & nproc_bgrp,root_bgrp,intra_bgrp_comm)
+               CALL mergewf(plepg(npwx+1:npwx*2,ibnd,ik),tmp_vec(npwx_g+1:npwx_g*2),npwx,&
+               & ig_l2g(1:npwx),me_bgrp,nproc_bgrp,root_bgrp,intra_bgrp_comm)
+            ELSE
+               CALL mergewf(plepg(:,ibnd,ik),tmp_vec,npwx,ig_l2g(1:npwx),me_bgrp,nproc_bgrp,&
+               & root_bgrp,intra_bgrp_comm)
+            ENDIF
             !
             ! ONLY ROOT W/IN BGRP WRITES
             !
             IF(me_bgrp == root_bgrp) THEN
-               WRITE(iun,POS=offset) tmp_vec(1:npwx_g)
+               WRITE(iun,POS=offset) tmp_vec(1:npwx_g*npol)
                offset = offset+SIZEOF(tmp_vec)
             ENDIF
             !
          ENDDO
       ENDDO
       !
-      IF(me_bgrp == root_bgrp) THEN
-         CLOSE(iun)
-      ENDIF
+      IF(me_bgrp == root_bgrp) CLOSE(iun)
       !
       DEALLOCATE(tmp_vec)
       !
@@ -116,6 +121,7 @@ MODULE plep_io
       USE westcom,             ONLY : nbndval0x,n_trunc_bands
       USE gvect,               ONLY : ig_l2g
       USE pwcom,               ONLY : npwx
+      USE noncollin_module,    ONLY : npol
       USE base64_module,       ONLY : islittleendian
       USE west_io,             ONLY : HD_LENGTH,HD_VERSION,HD_ID_VERSION,HD_ID_LITTLE_ENDIAN,HD_ID_DIMENSION
       USE mp_wave,             ONLY : splitwf
@@ -127,7 +133,7 @@ MODULE plep_io
       ! I/O
       !
       CHARACTER(LEN=*),INTENT(IN) :: fname
-      COMPLEX(DP),INTENT(OUT) :: plepg(npwx,nbndval0x-n_trunc_bands,kpt_pool%nglob)
+      COMPLEX(DP),INTENT(OUT) :: plepg(npwx*npol,nbndval0x-n_trunc_bands,kpt_pool%nglob)
       !
       ! Workspace
       !
@@ -143,29 +149,25 @@ MODULE plep_io
       !
       ! Resume all components
       !
-      ALLOCATE(tmp_vec(npwx_g))
-      tmp_vec = 0._DP
-      plepg = 0._DP
+      ALLOCATE(tmp_vec(npwx_g*npol))
+      tmp_vec(:) = 0._DP
+      plepg(:,:,:) = 0._DP
       !
       IF(me_bgrp == root_bgrp) THEN
          !
          OPEN(NEWUNIT=iun,FILE=TRIM(fname),ACCESS='STREAM',FORM='UNFORMATTED',STATUS='OLD',IOSTAT=ierr)
-         IF(ierr /= 0) THEN
-            CALL errore('plep_read','Cannot read file: '//TRIM(fname),1)
-         ENDIF
+         IF(ierr /= 0) CALL errore('plep_read','Cannot read file: '//TRIM(fname),1)
          !
          offset = 1
          READ(iun,POS=offset) header
-         IF(HD_VERSION /= header(HD_ID_VERSION)) THEN
-            CALL errore('plep_read','Unknown file format: '//TRIM(fname),1)
-         ENDIF
-         IF(npwx_g /= header(HD_ID_DIMENSION)) THEN
-            CALL errore('plep_read','Dimension mismatch: '//TRIM(fname),1)
-         ENDIF
+         !
+         IF(HD_VERSION /= header(HD_ID_VERSION)) &
+         & CALL errore('plep_read','Unknown file format: '//TRIM(fname),1)
+         IF(npwx_g /= header(HD_ID_DIMENSION)) &
+         & CALL errore('plep_read','Dimension mismatch: '//TRIM(fname),1)
          IF((islittleendian() .AND. (header(HD_ID_LITTLE_ENDIAN) == 0)) &
-            .OR. (.NOT. islittleendian() .AND. (header(HD_ID_LITTLE_ENDIAN) == 1))) THEN
-            CALL errore('plep_read','Endianness mismatch: '//TRIM(fname),1)
-         ENDIF
+         & .OR. (.NOT. islittleendian() .AND. (header(HD_ID_LITTLE_ENDIAN) == 1))) &
+         & CALL errore('plep_read','Endianness mismatch: '//TRIM(fname),1)
          !
          offset = offset+SIZEOF(header)
          !
@@ -177,18 +179,24 @@ MODULE plep_io
             ! ONLY ROOT W/IN BGRP READS
             !
             IF(me_bgrp == root_bgrp) THEN
-               READ(iun,POS=offset) tmp_vec(1:npwx_g)
+               READ(iun,POS=offset) tmp_vec(1:npwx_g*npol)
                offset = offset+SIZEOF(tmp_vec)
             ENDIF
             !
-            CALL splitwf(plepg(:,ibnd,ik),tmp_vec,npwx,ig_l2g(1:npwx),me_bgrp,nproc_bgrp,root_bgrp,intra_bgrp_comm)
+            IF(npol == 2) THEN
+               CALL splitwf(plepg(1:npwx,ibnd,ik),tmp_vec(1:npwx_g),npwx,ig_l2g(1:npwx),me_bgrp,&
+               & nproc_bgrp,root_bgrp,intra_bgrp_comm)
+               CALL splitwf(plepg(npwx+1:npwx*2,ibnd,ik),tmp_vec(npwx_g+1:npwx_g*2),npwx,&
+               & ig_l2g(1:npwx),me_bgrp,nproc_bgrp,root_bgrp,intra_bgrp_comm)
+            ELSE
+               CALL splitwf(plepg(:,ibnd,ik),tmp_vec,npwx,ig_l2g(1:npwx),me_bgrp,nproc_bgrp,&
+               & root_bgrp,intra_bgrp_comm)
+            ENDIF
             !
          ENDDO
       ENDDO
       !
-      IF(me_bgrp == root_bgrp) THEN
-         CLOSE(iun)
-      ENDIF
+      IF(me_bgrp == root_bgrp) CLOSE(iun)
       !
       DEALLOCATE(tmp_vec)
       !

@@ -111,6 +111,7 @@ MODULE westin
   CHARACTER(LEN=512) :: savedir         ! outdir/west_prefix.code.save
   CHARACTER(LEN=512) :: main_input_file ! input file
   CHARACTER(LEN=512) :: logfile         ! savedir/logfile.json
+  CHARACTER(LEN=9)   :: code
   !
 END MODULE
 !
@@ -227,6 +228,7 @@ MODULE wfreq_center
 #endif
   COMPLEX(DP), ALLOCATABLE :: eri_w(:,:,:,:)
   LOGICAL :: l_qdet_verbose
+  LOGICAL :: l_qdet_fcidump
   !
   ! output
   !
@@ -342,16 +344,21 @@ MODULE wbse_center
   LOGICAL :: l_spin_flip_alda0
   LOGICAL :: l_print_spin_flip_kernel
   REAL(DP) :: spin_flip_cut
+  REAL(DP) :: noncolin_cut
   REAL(DP) :: wbse_epsinfty
   CHARACTER(LEN=1) :: spin_excitation
   LOGICAL :: l_forces
-  LOGICAL :: do_forces
   INTEGER :: forces_state
   REAL(DP) :: forces_zeq_cg_tr
   INTEGER :: forces_zeq_n_cg_maxiter
   REAL(DP) :: ddvxc_fd_coeff
   INTEGER :: forces_inexact_krylov
   REAL(DP) :: forces_inexact_krylov_tr
+  LOGICAL :: l_genac
+  LOGICAL :: l_eenac
+  INTEGER :: genac_state
+  INTEGER :: eenac_stateI
+  INTEGER :: eenac_stateJ
   !
   ! FOR global variables
   !
@@ -366,6 +373,8 @@ MODULE wbse_center
   REAL(DP) :: sigma_c_head
   REAL(DP) :: sigma_x_head
   LOGICAL :: do_inexact_krylov
+  LOGICAL :: do_forces
+  LOGICAL :: do_eenac
   !
   ! FOR global Lanzcos diago vars
   !
@@ -383,6 +392,7 @@ MODULE wbse_center
   COMPLEX(DP), ALLOCATABLE :: u_matrix(:,:,:)
   REAL(DP),    ALLOCATABLE :: ovl_matrix(:,:,:)
   COMPLEX(DP), ALLOCATABLE :: evc1_all(:,:,:)
+  COMPLEX(DP), ALLOCATABLE :: evc1J_all(:,:,:)
   INTEGER,     ALLOCATABLE :: n_bse_idx(:)
   INTEGER,     ALLOCATABLE :: idx_matrix(:,:,:)
   INTEGER,     ALLOCATABLE :: tau_is_read(:,:,:)
@@ -427,6 +437,21 @@ MODULE occ_center
 END MODULE
 !
 !
+MODULE wann_center
+  !
+  USE kinds, ONLY : DP
+  !
+  IMPLICIT NONE
+  !
+  REAL(DP) :: wann_b(3,3)
+  REAL(DP) :: wann_g(3,4)
+  REAL(DP) :: wann_w(4)
+  REAL(DP) :: wann_m(3,3)
+  INTEGER  :: wann_ng
+  !
+END MODULE
+!
+!
 MODULE westcom
   !
   USE scratch_area
@@ -438,5 +463,6 @@ MODULE westcom
   USE wbse_init_center
   USE wbse_center
   USE occ_center
+  USE wann_center
   !
 END MODULE

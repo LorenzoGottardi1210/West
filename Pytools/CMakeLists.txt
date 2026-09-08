@@ -18,7 +18,7 @@ endforeach()
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/install_timestamp
     # Il tuo $(PYT) -m pip install --user .
-    COMMAND ${Python3_EXECUTABLE} -m pip install .
+    COMMAND ${Python3_EXECUTABLE} -m pip install  .
 
     # Il tuo @touch $@ (usando la versione cross-platform integrata in CMake)
     COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/install_timestamp
